@@ -251,7 +251,7 @@ BEGIN
     RAISE NOTICE 'seed_system: admin 用户联系方式已加密写入（aes256）+ HMAC 盲索引';
 END $$;
 
--- 存量库兼容兜底段，面向历史存量库的原地修正，对空库/现行种子均为幂等空操作
+-- 兼容兜底段，明文联系方式按主密钥加密回写并补盲索引，仅命中明文形态，幂等空操作
 DO $$
 DECLARE
     v_mkey  text;
@@ -288,32 +288,34 @@ INSERT INTO wf.definitions (company_id, code, name, version, form_type, node_jso
 VALUES
     ('00000000-0000-7000-0000-000000000010', 'expense_reimburse', '费用报销审批流', 1,
      'expense_reimbursement',
-     '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"pay","type":"APPROVE","assignee_role":"cashier"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
      'ACTIVE'),
     ('00000000-0000-7000-0000-000000000010', 'voucher_approve', '凭证审核流', 1,
      'voucher',
-     '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'payment_approve', '付款审批流', 1,
      'payment',
-     '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"pay","type":"APPROVE","assignee_role":"cashier"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"pay","type":"APPROVE","assignee_role":"cashier"},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'budget_adjust', '预算调整审批流', 1,
      'budget_adjustment',
-     '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'asset_dispose', '资产处置审批流', 1,
      'asset',
-     '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT')
 ON CONFLICT (company_id, code) DO NOTHING;
 
--- 存量迁移，把早期以占位角色（dept_manager/finance_manager，无实体角色）预设的报销流
--- 升级为真实职责角色，保证任务能派到持 wf.instance.approve 的用户，幂等仅改一次
+-- 报销 ACTIVE 定义统一为单审批段（审批后实例即 APPROVED，付款由业务报销状态机承担，
+-- 不激活出纳 wf 任务，避免与引擎逐节点推进双轨）。匹配含 pay 出纳节点或无实体角色
+-- （dept_manager/finance_manager）的定义收敛为规范形态，规范形态不命中，幂等
 UPDATE wf.definitions
-   SET node_json = '[{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"pay","type":"APPROVE","assignee_role":"cashier"},{"node_code":"end","type":"END","assignee_role":null}]'::jsonb
+   SET node_json = '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb
  WHERE company_id = '00000000-0000-7000-0000-000000000010'
    AND code = 'expense_reimburse'
-   AND node_json::text LIKE '%dept_manager%';
+   AND (node_json::text LIKE '%dept_manager%' OR node_json::text LIKE '%finance_manager%'
+        OR node_json::text LIKE '%"pay"%');
 
 RESET ROLE;

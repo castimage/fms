@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS wf.definitions (
     name        TEXT    NOT NULL,                -- 流程名称
     version     INT     NOT NULL DEFAULT 1,
     form_type   TEXT,                            -- 关联表单类型
-    node_json   JSONB   NOT NULL DEFAULT '{}'::jsonb,  -- 节点编排 [{node_code,assignee_role,type}]
+    node_json   JSONB   NOT NULL DEFAULT '{}'::jsonb,  -- 节点编排数组，APPROVE 支持旧式 assignee_role 与新式 strategy+handlers，START/END 仅 node_code/type
     status      TEXT    NOT NULL DEFAULT 'DRAFT'
                 CHECK (status IN ('DRAFT','ACTIVE','DISABLED')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS wf.definitions (
     CONSTRAINT uk_wf_def UNIQUE (company_id, code)
 );
 COMMENT ON TABLE  wf.definitions IS '工作流流程定义（node_json 编排审批节点）';
-COMMENT ON COLUMN wf.definitions.node_json IS '节点编排 JSONB，如 [{"node_code":"apply","type":"START","assignee_role":"applicant"},{"node_code":"dept_approve","type":"APPROVE","assignee_role":"dept_manager"}]';
+COMMENT ON COLUMN wf.definitions.node_json IS '节点编排 JSONB 数组，元素含 node_code 与 type；APPROVE 可为旧式单角色 {"type":"APPROVE","assignee_role":"approver"} 或新式 {"type":"APPROVE","strategy":"countersign","handlers":[{"source":"role","code":"approver"},{"source":"user","userId":"<uuid>"},{"source":"applicant"}]}，START/END 不携带处理人';
 
 -- 1.2 wf.instances 流程实例
 CREATE TABLE IF NOT EXISTS wf.instances (
@@ -599,36 +599,292 @@ BEGIN
 END
 $$;
 
--- 6.4 wf.fn_auto_activate_next(p_instance_id) 实例推进，实例无 PENDING/CLAIMED/REJECTED 任务时置 APPROVED，全部通过，REJECT 走 fn_complete_task 直接置实例 REJECTED
-CREATE OR REPLACE FUNCTION wf.fn_auto_activate_next(p_instance_id uuid)
+-- 6.4 节点级推进引擎（多处理人/会签/或签），由 fn_start_instance 与 fn_complete_task 调用
+-- 实例推进由 fn_node_done 与 fn_advance_instance 承担，单任务实例推进函数无调用方，移除以免误用
+DROP FUNCTION IF EXISTS wf.fn_auto_activate_next(uuid);
+-- wf.fn_activate_node(p_instance_id, p_node) 依节点 strategy 与 handlers 展开处理人并生成任务集。
+-- 节点兼容两形态，单 assignee_role 等价于 approve 单角色；含 strategy 与 handlers 数组
+-- （source 为 applicant/role/user 可混合）。单审 approve 生成 1 条任务，角色源取该公司下
+-- 最早授权的 ACTIVE 成员，集合空按公司首个 ACTIVE 用户再发起人兜底；
+-- 会签 countersign 与或签 orsign 展开全部处理人各 1 条任务，applicant 即发起人，角色成员按
+-- company_id 过滤且 ACTIVE，同一用户重复命中只派一票，集合为空则 RAISE P0001。
+-- 任务到期时限读 um.params wf.task.due.days，缺省 3 天。
+CREATE OR REPLACE FUNCTION wf.fn_activate_node(p_instance_id uuid, p_node jsonb)
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = wf, um, auth, pg_catalog
+AS $$
+DECLARE
+    v_inst       wf.instances%ROWTYPE;
+    v_strategy   text;
+    v_handlers   jsonb;
+    v_item       jsonb;
+    v_assignee   uuid;
+    v_assignees  uuid[] := '{}';
+    v_uids       uuid[];
+    v_member     uuid;
+    v_due_days   int := 3;
+    v_param      jsonb;
+    v_cnt        int := 0;
+BEGIN
+    SELECT * INTO v_inst FROM wf.instances
+     WHERE id = p_instance_id AND deleted_at IS NULL;
+    IF v_inst.id IS NULL OR v_inst.status <> 'RUNNING' THEN
+        RETURN 0;
+    END IF;
+    BEGIN
+        SELECT value INTO v_param FROM um.params
+         WHERE code = 'wf.task.due.days' AND deleted_at IS NULL;
+        IF v_param IS NOT NULL THEN
+            IF jsonb_typeof(v_param) = 'number' THEN
+                v_due_days := v_param::int;
+            ELSE
+                v_due_days := COALESCE(NULLIF(v_param->>'v',''), '3')::int;
+            END IF;
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        v_due_days := 3;
+    END;
+
+    v_strategy := COALESCE(NULLIF(p_node->>'strategy',''), 'approve');
+    IF v_strategy NOT IN ('approve','countersign','orsign') THEN
+        v_strategy := 'approve';
+    END IF;
+    IF jsonb_typeof(p_node->'handlers') = 'array' THEN
+        v_handlers := p_node->'handlers';
+    ELSIF p_node ? 'assignee_role' THEN
+        IF lower(p_node->>'assignee_role') = 'applicant' THEN
+            v_handlers := '[{"source":"applicant"}]'::jsonb;
+        ELSE
+            v_handlers := jsonb_build_array(
+                jsonb_build_object('source', 'role', 'code', p_node->>'assignee_role'));
+        END IF;
+    ELSE
+        v_handlers := '[]'::jsonb;
+    END IF;
+
+    IF v_strategy = 'approve' THEN
+        FOR v_item IN
+            SELECT value FROM jsonb_array_elements(v_handlers) WITH ORDINALITY AS h(value, ord)
+            ORDER BY ord
+        LOOP
+            IF v_item->>'source' = 'applicant' THEN
+                v_assignee := v_inst.initiator_id;
+                EXIT;
+            ELSIF v_item->>'source' = 'user' THEN
+                IF EXISTS (SELECT 1 FROM um.users u
+                            WHERE u.id = (v_item->>'userId')::uuid
+                              AND u.company_id = v_inst.company_id
+                              AND u.status = 'ACTIVE' AND u.deleted_at IS NULL) THEN
+                    v_assignee := (v_item->>'userId')::uuid;
+                    EXIT;
+                END IF;
+            ELSIF v_item->>'source' = 'role' THEN
+                SELECT ur.user_id INTO v_assignee
+                  FROM um.user_role ur
+                  JOIN um.roles r ON r.id = ur.role_id
+                  JOIN um.users u ON u.id = ur.user_id
+                 WHERE lower(r.code) = lower(v_item->>'code')
+                   AND u.company_id = v_inst.company_id
+                   AND u.status = 'ACTIVE'
+                   AND r.deleted_at IS NULL AND ur.deleted_at IS NULL AND u.deleted_at IS NULL
+                 ORDER BY ur.created_at
+                 LIMIT 1;
+                IF v_assignee IS NOT NULL THEN
+                    EXIT;
+                END IF;
+            END IF;
+        END LOOP;
+        IF v_assignee IS NULL THEN
+            SELECT id INTO v_assignee FROM um.users
+             WHERE company_id = v_inst.company_id
+               AND status = 'ACTIVE' AND deleted_at IS NULL
+             ORDER BY created_at
+             LIMIT 1;
+        END IF;
+        IF v_assignee IS NULL THEN
+            v_assignee := v_inst.initiator_id;
+        END IF;
+        INSERT INTO wf.tasks (company_id, instance_id, node_code, assignee_id, task_type,
+                              status, due_at, version)
+        VALUES (v_inst.company_id, p_instance_id, p_node->>'node_code', v_assignee,
+                'APPROVE', 'PENDING', now() + make_interval(days => v_due_days), 0);
+        RETURN 1;
+    END IF;
+
+    FOR v_item IN
+        SELECT value FROM jsonb_array_elements(v_handlers) WITH ORDINALITY AS h(value, ord)
+        ORDER BY ord
+    LOOP
+        IF v_item->>'source' = 'applicant' THEN
+            IF array_position(v_assignees, v_inst.initiator_id) IS NULL THEN
+                v_assignees := array_append(v_assignees, v_inst.initiator_id);
+            END IF;
+        ELSIF v_item->>'source' = 'user' THEN
+            IF EXISTS (SELECT 1 FROM um.users u
+                        WHERE u.id = (v_item->>'userId')::uuid
+                          AND u.company_id = v_inst.company_id
+                          AND u.status = 'ACTIVE' AND u.deleted_at IS NULL)
+               AND array_position(v_assignees, (v_item->>'userId')::uuid) IS NULL THEN
+                v_assignees := array_append(v_assignees, (v_item->>'userId')::uuid);
+            END IF;
+        ELSIF v_item->>'source' = 'role' THEN
+            SELECT array_agg(ur.user_id) INTO v_uids
+              FROM um.user_role ur
+              JOIN um.roles r ON r.id = ur.role_id
+              JOIN um.users u ON u.id = ur.user_id
+             WHERE lower(r.code) = lower(v_item->>'code')
+               AND u.company_id = v_inst.company_id
+               AND u.status = 'ACTIVE'
+               AND r.deleted_at IS NULL AND ur.deleted_at IS NULL AND u.deleted_at IS NULL;
+            IF v_uids IS NOT NULL THEN
+                FOREACH v_member IN ARRAY v_uids LOOP
+                    IF array_position(v_assignees, v_member) IS NULL THEN
+                        v_assignees := array_append(v_assignees, v_member);
+                    END IF;
+                END LOOP;
+            END IF;
+        END IF;
+    END LOOP;
+    IF array_length(v_assignees, 1) IS NULL THEN
+        RAISE EXCEPTION '流程节点 % 无可用处理人', p_node->>'node_code'
+            USING ERRCODE = 'P0001';
+    END IF;
+    FOREACH v_assignee IN ARRAY v_assignees LOOP
+        INSERT INTO wf.tasks (company_id, instance_id, node_code, assignee_id, task_type,
+                              status, due_at, version)
+        VALUES (v_inst.company_id, p_instance_id, p_node->>'node_code', v_assignee,
+                CASE v_strategy WHEN 'countersign' THEN 'COUNTERSIGN' ELSE 'OR_SIGN' END,
+                'PENDING', now() + make_interval(days => v_due_days), 0);
+        v_cnt := v_cnt + 1;
+    END LOOP;
+    RETURN v_cnt;
+END
+$$;
+
+-- wf.fn_node_done(p_instance_id) 判定实例当前节点任务集是否满足完成条件，
+-- 会签 countersign 无否决无未决且全部现役票通过（TIMEOUT/TRANSFERRED 视为弃权不计分母，
+-- 至少 1 票同意，全弃权不自动过）；单审 approve 与或签 orsign 任一票通过即过，
+-- 或签通过时软删其余 PENDING/CLAIMED 候选票
+CREATE OR REPLACE FUNCTION wf.fn_node_done(p_instance_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = wf, pg_catalog
+AS $$
+DECLARE
+    v_inst      wf.instances%ROWTYPE;
+    v_def       wf.definitions%ROWTYPE;
+    v_node      jsonb;
+    v_strategy  text;
+    v_a int; v_p int; v_r int; v_live int;
+BEGIN
+    SELECT * INTO v_inst FROM wf.instances
+     WHERE id = p_instance_id AND deleted_at IS NULL;
+    IF v_inst.id IS NULL OR v_inst.status <> 'RUNNING' OR v_inst.current_node IS NULL THEN
+        RETURN false;
+    END IF;
+    SELECT * INTO v_def FROM wf.definitions
+     WHERE id = v_inst.definition_id AND deleted_at IS NULL;
+    IF v_def.id IS NULL THEN
+        RETURN false;
+    END IF;
+    SELECT value INTO v_node
+      FROM jsonb_array_elements(v_def.node_json) AS e(value)
+     WHERE value->>'node_code' = v_inst.current_node
+     LIMIT 1;
+    IF v_node IS NULL THEN
+        RETURN false;
+    END IF;
+    v_strategy := COALESCE(NULLIF(v_node->>'strategy',''), 'approve');
+
+    SELECT count(*) FILTER (WHERE status = 'APPROVED'),
+           count(*) FILTER (WHERE status IN ('PENDING','CLAIMED')),
+           count(*) FILTER (WHERE status = 'REJECTED'),
+           count(*) FILTER (WHERE status IN ('APPROVED','PENDING','CLAIMED'))
+      INTO v_a, v_p, v_r, v_live
+      FROM wf.tasks
+     WHERE instance_id = p_instance_id
+       AND node_code = v_inst.current_node
+       AND deleted_at IS NULL;
+
+    IF v_strategy = 'countersign' THEN
+        RETURN v_r = 0 AND v_p = 0 AND v_a >= 1 AND v_a = v_live;
+    END IF;
+    IF v_a >= 1 THEN
+        IF v_strategy = 'orsign' THEN
+            UPDATE wf.tasks
+               SET deleted_at = now(), updated_at = now()
+             WHERE instance_id = p_instance_id
+               AND node_code = v_inst.current_node
+               AND status IN ('PENDING','CLAIMED')
+               AND deleted_at IS NULL;
+        END IF;
+        RETURN true;
+    END IF;
+    RETURN false;
+END
+$$;
+
+-- wf.fn_advance_instance(p_instance_id) 当前节点通过后沿 node_json 找下一个 APPROVE 节点
+-- 激活（更新 current_node 并生成该节点任务集），向后已无 APPROVE 则实例置 APPROVED
+CREATE OR REPLACE FUNCTION wf.fn_advance_instance(p_instance_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = wf, pg_catalog
 AS $$
+DECLARE
+    v_inst     wf.instances%ROWTYPE;
+    v_def      wf.definitions%ROWTYPE;
+    v_elem     jsonb;
+    v_next     jsonb;
+    v_found    boolean := false;
 BEGIN
+    SELECT * INTO v_inst FROM wf.instances
+     WHERE id = p_instance_id AND deleted_at IS NULL;
+    IF v_inst.id IS NULL OR v_inst.status <> 'RUNNING' THEN
+        RETURN;
+    END IF;
+    SELECT * INTO v_def FROM wf.definitions
+     WHERE id = v_inst.definition_id AND deleted_at IS NULL;
+    IF v_def.id IS NULL THEN
+        RETURN;
+    END IF;
+    FOR v_elem IN
+        SELECT value FROM jsonb_array_elements(v_def.node_json) WITH ORDINALITY AS e(value, ord)
+        ORDER BY ord
+    LOOP
+        IF v_elem->>'type' <> 'APPROVE' THEN
+            CONTINUE;
+        END IF;
+        IF v_found THEN
+            v_next := v_elem;
+            EXIT;
+        END IF;
+        IF v_elem->>'node_code' = v_inst.current_node THEN
+            v_found := true;
+        END IF;
+    END LOOP;
+    IF v_next IS NULL THEN
+        UPDATE wf.instances
+           SET status = 'APPROVED', updated_at = now()
+         WHERE id = p_instance_id AND status = 'RUNNING' AND deleted_at IS NULL;
+        RETURN;
+    END IF;
     UPDATE wf.instances
-       SET status = 'APPROVED',
-           current_node = COALESCE(
-               (SELECT node_code FROM wf.tasks
-                 WHERE instance_id = p_instance_id AND status = 'APPROVED'
-                   AND deleted_at IS NULL
-                 ORDER BY id DESC LIMIT 1),
-               current_node),
-           updated_at = now()
-     WHERE id = p_instance_id AND status = 'RUNNING' AND deleted_at IS NULL
-       AND NOT EXISTS (SELECT 1 FROM wf.tasks
-                        WHERE instance_id = p_instance_id
-                          AND status IN ('PENDING','CLAIMED')
-                          AND deleted_at IS NULL)
-       AND NOT EXISTS (SELECT 1 FROM wf.tasks
-                        WHERE instance_id = p_instance_id AND status = 'REJECTED'
-                          AND deleted_at IS NULL);
+       SET current_node = v_next->>'node_code', updated_at = now()
+     WHERE id = p_instance_id AND status = 'RUNNING' AND deleted_at IS NULL;
+    PERFORM wf.fn_activate_node(p_instance_id, v_next);
 END
 $$;
 
 -- 6.5 wf.fn_complete_task(p_task_id, p_assignee_id, p_action, p_remark) 任务办结，推进状态机，
--- APPROVE 则任务置 APPROVED 并经 fn_auto_activate_next 推进实例，实例内无剩余待办且无拒绝则实例置 APPROVED；REJECT 则任务置 REJECTED 且实例直接置 REJECTED；TRANSFER 则任务置 TRANSFERRED，若 p_remark 为纯 uuid 即新处理人 id，则同节点新建 PENDING 任务完成转办，否则仅记事件
+-- APPROVE 则任务置 APPROVED 后经 fn_node_done 判定当前节点完成条件，会签/或签多票按策略判定，
+-- 通过则 fn_advance_instance 沿 node_json 激活下一节点直至 END；REJECT 则任务置 REJECTED 且实例
+-- 直接置 REJECTED，同节点其余 PENDING/CLAIMED 票一并软删；TRANSFER 则任务置 TRANSFERRED，
+-- 若 p_remark 为纯 uuid 即新处理人 id，则同节点新建 PENDING 任务完成转办，否则仅记事件
 -- 幂等，任务已办结（非 PENDING/CLAIMED）返回 false，非本人任务 RAISE，办结后向 pgmq q_notify_task 投递通知，队列由 queues_cron.sql 预创建，失败静默
 CREATE OR REPLACE FUNCTION wf.fn_complete_task(
     p_task_id    uuid,
@@ -708,6 +964,14 @@ BEGIN
            SET status = 'REJECTED', current_node = v_task.node_code,
                updated_at = now()
          WHERE id = v_task.instance_id AND status = 'RUNNING' AND deleted_at IS NULL;
+        -- 驳回即整实例终止，软删同节点其余待办票，避免他人仍可在待办中处理
+        UPDATE wf.tasks
+           SET deleted_at = now(), updated_at = now()
+         WHERE instance_id = v_task.instance_id
+           AND node_code = v_task.node_code
+           AND status IN ('PENDING','CLAIMED')
+           AND id <> p_task_id
+           AND deleted_at IS NULL;
     ELSIF p_action = 'TRANSFER' THEN
         BEGIN
             v_new_assignee := NULLIF(COALESCE(p_remark,''),'')::uuid;
@@ -722,7 +986,9 @@ BEGIN
                     now() + make_interval(days => v_due_days), 0, '转办自任务 ' || p_task_id);
         END IF;
     ELSE
-        PERFORM wf.fn_auto_activate_next(v_task.instance_id);
+        IF wf.fn_node_done(v_task.instance_id) THEN
+            PERFORM wf.fn_advance_instance(v_task.instance_id);
+        END IF;
     END IF;
 
     -- 4) pgmq 通知（queues_cron.sql 预创建 q_notify_task，pgmq 不可用时静默降级）
@@ -1221,12 +1487,10 @@ SELECT 'FIX_BUDGET_ADJ_IDEM' AS k,
 -- wf 流程实例发起链路（POST /api/wf/instances 后端支撑），
 --   1) uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
 --      （发起幂等 + 并发双保险，冲突 23505 映射 40900），
---   2) wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例 +
---      首个审批节点（跳过 START/END）PENDING 任务，处理人按节点 assignee_role
---      解析（applicant=发起人，先按角色 code 匹配（lower 不敏感），再公司内首个
---      ACTIVE 用户，发起人兜底）。SECURITY DEFINER 以属主（fms_admin，本文件
---      SET ROLE）身份执行，规避 um.users / um.user_role 的 rls 空集，fms_operator
---      对 um.users 仅可见本人。
+--   2) wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
+--      首个 APPROVE 节点任务集（处理人解析与策略展开见 fn_activate_node）。
+--      SECURITY DEFINER 以属主（fms_admin，本文件 SET ROLE）身份执行，规避
+--      um.users / um.user_role 的 rls 空集，fms_operator 对 um.users 仅可见本人。
 -- 幂等，CREATE OR REPLACE FUNCTION + CREATE UNIQUE INDEX IF NOT EXISTS + GRANT
 -- 重复执行无害。
 
@@ -1235,92 +1499,69 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_wf_inst_business
     ON wf.instances (business_type, business_id)
     WHERE deleted_at IS NULL;
 
--- 2) 流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 处理人解析
+-- 2) 流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
+-- 读 ACTIVE 定义 node_json，取首个 APPROVE 节点为当前节点，任务集经 fn_activate_node
+-- 依节点策略生成（单审 1 票，会签/或签多票），处理人解析见 fn_activate_node。
+-- 单节点单角色入参重载无调用方，删除以免绕过节点策略直派单票
+DROP FUNCTION IF EXISTS wf.fn_start_instance(uuid, uuid, text, uuid, uuid, text, text);
 CREATE OR REPLACE FUNCTION wf.fn_start_instance(
     p_company_id    uuid,
     p_definition_id uuid,
     p_business_type text,
     p_business_id   uuid,
-    p_initiator_id  uuid,
-    p_node_code     text,
-    p_assignee_role text)
+    p_initiator_id  uuid)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = wf, auth, pg_catalog
 AS $$
 DECLARE
-    v_assignee uuid;
+    v_def      wf.definitions%ROWTYPE;
+    v_first    jsonb;
     v_inst_id  uuid;
-    v_due_days int := 3;
-    v_param    jsonb;
 BEGIN
-    -- 首任务到期时限（um.params wf.task.due.days 可配，缺省 3 天，读取语义同本文件 wf.fn_complete_task 的参数读取）
-    BEGIN
-        SELECT value INTO v_param FROM um.params
-         WHERE code = 'wf.task.due.days' AND deleted_at IS NULL;
-        IF v_param IS NOT NULL THEN
-            IF jsonb_typeof(v_param) = 'number' THEN
-                v_due_days := v_param::int;
-            ELSE
-                v_due_days := COALESCE(NULLIF(v_param->>'v',''), '3')::int;
-            END IF;
-        END IF;
-    EXCEPTION WHEN OTHERS THEN
-        v_due_days := 3;                         -- 参数表异常，回落现状缺省
-    END;
     IF p_company_id IS NULL OR p_definition_id IS NULL OR p_business_id IS NULL
-       OR p_initiator_id IS NULL OR p_node_code IS NULL THEN
-        RAISE EXCEPTION '发起流程参数缺失（公司/定义/业务单号/发起人/节点必填）'
+       OR p_initiator_id IS NULL THEN
+        RAISE EXCEPTION '发起流程参数缺失（公司/定义/业务单号/发起人必填）'
+            USING ERRCODE = 'P0001';
+    END IF;
+    SELECT * INTO v_def FROM wf.definitions
+     WHERE id = p_definition_id
+       AND company_id = p_company_id
+       AND status = 'ACTIVE'
+       AND deleted_at IS NULL;
+    IF v_def.id IS NULL THEN
+        RAISE EXCEPTION '流程定义不存在或未启用'
+            USING ERRCODE = 'P0001';
+    END IF;
+    SELECT value INTO v_first FROM (
+        SELECT value, ord FROM jsonb_array_elements(v_def.node_json) WITH ORDINALITY AS e(value, ord)
+         WHERE value->>'type' = 'APPROVE'
+         ORDER BY ord
+         LIMIT 1) s;
+    IF v_first IS NULL THEN
+        RAISE EXCEPTION '流程定义 % 未配置审批节点', v_def.code
             USING ERRCODE = 'P0001';
     END IF;
 
-    -- 处理人解析，applicant 取发起人，否则按角色 code 匹配（lower 不敏感），
-    -- 未命中则取公司内首个 ACTIVE 用户，仍无则发起人兜底
-    IF p_assignee_role IS NOT NULL AND lower(p_assignee_role) = 'applicant' THEN
-        v_assignee := p_initiator_id;
-    ELSE
-        SELECT ur.user_id INTO v_assignee
-          FROM um.user_role ur
-          JOIN um.roles r ON r.id = ur.role_id
-         WHERE lower(r.code) = lower(COALESCE(p_assignee_role, ''))
-           AND r.deleted_at IS NULL
-           AND ur.deleted_at IS NULL
-         ORDER BY ur.created_at
-         LIMIT 1;
-        IF v_assignee IS NULL THEN
-            SELECT id INTO v_assignee FROM um.users
-             WHERE company_id = p_company_id
-               AND status = 'ACTIVE' AND deleted_at IS NULL
-             ORDER BY created_at
-             LIMIT 1;
-        END IF;
-        IF v_assignee IS NULL THEN
-            v_assignee := p_initiator_id;
-        END IF;
-    END IF;
-
-    -- 实例（RUNNING，current_node=首个审批节点）+ 首任务（PENDING，due 3 天）同事务
+    -- 实例（RUNNING，current_node=首个审批节点）同事务，任务集由 fn_activate_node 生成
     INSERT INTO wf.instances (company_id, definition_id, business_type, business_id,
                               initiator_id, current_node, status)
     VALUES (p_company_id, p_definition_id, p_business_type, p_business_id,
-            p_initiator_id, p_node_code, 'RUNNING')
+            p_initiator_id, v_first->>'node_code', 'RUNNING')
     RETURNING id INTO v_inst_id;
 
-    INSERT INTO wf.tasks (company_id, instance_id, node_code, assignee_id, task_type,
-                          status, due_at, version)
-    VALUES (p_company_id, v_inst_id, p_node_code, v_assignee, 'APPROVE', 'PENDING',
-            now() + make_interval(days => v_due_days), 0);
+    PERFORM wf.fn_activate_node(v_inst_id, v_first);
 
     RETURN v_inst_id;
 END
 $$;
 
-COMMENT ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid, text, text)
-    IS '流程发起：创建 RUNNING 实例 + 首个审批节点 PENDING 任务，处理人按 assignee_role 解析（applicant=发起人/角色 code/公司兜底 ACTIVE 用户）';
+COMMENT ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
+    IS '流程发起：创建 RUNNING 实例并激活首个审批节点任务集，节点策略见 fn_activate_node';
 
 -- 3) 授权，运行时连接角色经 SET ROLE fms_operator 调用
-GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid, text, text)
+GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     TO fms_operator;
 
 
