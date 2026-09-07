@@ -1,0 +1,96 @@
+# FMS 数据库主从流复制编排，可选，独立文件，不影响现有一键部署
+# 【用途】仅编排数据库主从，fms-db，主，读写+ fms-db-replica（从，standby
+#        只读）。pgbouncer 连接池属另一部署件，本文件不含其服务。
+# 【组合方式】
+#   单独使用，仅起主从库，
+#       docker compose -f docker-compose.pg-repl.yml up -d
+#   与主编排叠加（-f 顺序后者覆盖同名服务，fms-db 段与 docker-compose.yml
+#   保持同步，仅多注入 FMS_REPL_PASSWORD），
+#       docker compose -f docker-compose.yml -f docker-compose.pg-repl.yml up -d
+# 【前置】.env 需新增 FMS_REPL_PASSWORD（replicator 复制用户密码，
+#   fms_init.sh 末段据此创建角色、对齐密码并追加 pg_hba 复制授权，
+#   均为从库 pg_basebackup 的前置条件）。
+
+networks:
+  fms-network:
+    driver: bridge
+
+volumes:
+  # 主库数据卷（与 docker-compose.yml 同名，叠加部署时复用同一卷）
+  fms-db-data:
+  fms-pglog:
+  # 从库数据卷（pg_basebackup 全量副本 + WAL 持久化）
+  fms-db-replica-data:
+
+services:
+  # fms-db， 主库（与 docker-compose.yml fms-db 保持同步，仅增 FMS_REPL_PASSWORD）
+  fms-db:
+    build: ./deploy/pg
+    image: fms-postgres:18
+    container_name: fms-db
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 数据库不发布宿主机端口，仅 fms-network 内可达，签名校验必须前置网关
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      # init 脚本（fms_init.sh）末尾以该值 ALTER ROLE fms_app 对齐 .env 密码
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      # init 脚本以该值对齐 sec.app_secrets.jwt.secret
+      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      # 列加密主密钥外部注入（可选，空 = seed 内建占位值，注入须早于种子数据加密写入）
+      FMS_MASTER_KEY: ${FMS_MASTER_KEY:-}
+      # init 脚本末段以该值 ALTER ROLE replicator 对齐复制用户密码
+      FMS_REPL_PASSWORD: ${FMS_REPL_PASSWORD:?请在 .env 设置 FMS_REPL_PASSWORD}
+    volumes:
+      # PG18 官方镜像数据目录为 /var/lib/postgresql/18/docker 子路径，必须挂父目录
+      - fms-db-data:/var/lib/postgresql
+      # PG 日志独立卷（pgaudit 审计日志随 PG 日志落盘，供外部采集/归档）
+      - fms-pglog:/var/log/postgresql
+      # SQL 脚本源（只读，供 init 脚本按顺序执行）
+      - ./fms_db_pg:/fms-init:ro
+      # 唯一 init 入口，只读挂载进官方镜像初始化目录
+      - ./deploy/init/fms_init.sh:/docker-entrypoint-initdb.d/fms_init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+
+  # fms-db-replica， 从库（standby，只读）
+  # 复用主库定制镜像 fms-postgres:18（业务扩展随 pg_basebackup 从主库带来，
+  # 免二次构建），覆盖 entrypoint 为挂载脚本 entrypoint-replica.sh（等待主库
+  # 就绪 → pg_basebackup -R -X stream → standby.signal → exec postgres）。
+  # 不发布端口，仅 fms-network 内可访问，healthcheck 仅验进程存活
+  # （pg_isready 不校验复制延迟）。
+  fms-db-replica:
+    image: fms-postgres:18
+    container_name: fms-db-replica
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 以 /bin/sh 前缀执行，Windows/Docker Desktop 下 bind mount 文件无执行位
+    # 时仍可运行（挂载脚本 :ro，无需 chmod）
+    entrypoint: ["/bin/sh", "/entrypoint-replica.sh"]
+    volumes:
+      - fms-db-replica-data:/var/lib/postgresql
+      - ./deploy/pg-replica/entrypoint-replica.sh:/entrypoint-replica.sh:ro
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      # 复制用户密码（entrypoint 读 REPL_PASSWORD，缺省回退本变量）
+      FMS_REPL_PASSWORD: ${FMS_REPL_PASSWORD:?请在 .env 设置 FMS_REPL_PASSWORD}
+      REPL_USER: replicator
+      PRIMARY_HOST: fms-db
+      PRIMARY_PORT: "5432"
+    depends_on:
+      # 等主库初始化完成（含 replicator 角色与 pg_hba 授权）再 basebackup
+      fms-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s

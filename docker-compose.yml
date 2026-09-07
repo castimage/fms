@@ -1,0 +1,354 @@
+# FMS 财务管理系统， 单机一键部署编排（docker compose up -d）
+# 【形态】单机模式，fms-db / fms-pgbouncer / fms-redis / fms-backend /
+#       fms-web-build / fms-rgw 六服务共处 bridge 网络 fms-network，
+#       生产运行期无独立 web 容器，前端采用方案 A（网关 fms-rgw 以
+#       /app/static 只读挂载 dist 静态承载，API 走同源相对路径 /api，免 CORS）。
+#       后端数据源经 fms-pgbouncer（transaction 池）访问 fms-db、会话共享
+#       存储用 fms-redis，与集群形态（docker-compose.cluster.yml）同一套
+#       连接语义，单机↔集群切换零行为差异。
+# 【前置依赖】
+#   1. 根目录 .env 必须存在（密钥/密码全部仅来自 .env，缺失时 docker compose
+#      up 直接报错拒绝启动，请先执行: cp .env.example .env 并填写真实值，
+#      本形态强制要求 FMS_REDIS_PASSWORD，redis requirepass 与后端共用，
+#      .env.example 已含说明）。
+#   2. TLS 自签证书必须位于 deploy/certs/fms_rgw.pem 与
+#      deploy/certs/fms_rgw_key.pem（缺证书时网关启动即失败，
+#      deploy/fms_rgw.yaml 中 tls.allow_insecure_fallback=false），
+#      自签命令见证书生成说明。
+#   3. 前端构建产物由 fms-web-build 一次性容器自动产出（fms_web/Dockerfile
+#      阶段一执行 npm ci && npm run build，产物 /app/dist 拷入命名卷
+#      fms-static），无需手工构建，如手工构建参考命令为:
+#        cd fms_web && npm ci && npm run build
+# 【安全】单机模式下仅 fms-rgw 发布宿主机端口 8443:8443（TLS 入口），
+#        fms-db 与 fms-backend 不发布任何宿主机端口，仅网络内可达，
+#        满足"签名校验必须前置网关"的要求。
+# 【部署形态互斥，重要】本文件与 docker-compose.cluster.yml /
+#   docker-compose.multi.yml 是三种互斥的部署形态，不得在同一台机器上
+#   同时运行，更不得用本文件对集群形态（cluster）执行 up/--force-recreate，
+#   - 本文件显式声明项目名 name: fms-single（区别于集群形态的 name: fms），
+#     因此"docker compose up -d"，本文件不会作用到集群项目的容器，
+#   - 若集群形态已在运行，再对本文件执行 up 会因 container_name 冲突
+#     （fms-db/fms-backend/fms-rgw 等名称已被集群项目占用）快速失败报错，
+#     而不是静默接管网关上游，这正是期望的防护行为，
+#   - 严禁用"-f docker-compose.yml -f docker-compose.cluster.yml"合并两文件
+#     up/--force-recreate，合并栈项目名取后文件（fms），会把本文件的独立
+#     fms-backend 单实例并入集群项目（重复消费 pgmq/定时任务的历史事故）。
+#     cluster 文件内已设同名的 profiles 守卫占位服务，合并后该单实例不会
+#     被启动，但正确做法仍是只用单个形态文件，
+#   - 切换形态必须先"docker compose -f <另一形态文件> down"再 up。
+#   各形态文件互斥，禁止合并。
+
+name: fms-single
+
+# 共享日志策略锚点，json-file 驱动，单文件 10m、保留 5 个（fms-db/fms-backend/
+# fms-rgw 三服务引用，180 天留存需外部采集 syslog/ELK）
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+networks:
+  # 单机版唯一网络，所有服务共处同一 bridge 网络，服务名（fms-db 等）即 DNS
+  fms-network:
+    driver: bridge
+
+volumes:
+  # PostgreSQL 数据目录（命名卷，跨平台与 uid 一致，PG18 官方镜像数据位于
+  # /var/lib/postgresql/18/docker 子路径，故必须挂载父目录）
+  fms-db-data:
+  fms-pglog:
+  # Redis AOF 持久化卷（共享会话/防重放/黑名单存储，appendonly yes）
+  fms-redis-data:
+  # 前端构建产物共享卷，fms-web-build 写入、fms-rgw 只读服务（方案 A）
+  fms-static:
+  # 网关访问日志卷（避免 bind mount 与 uid 10001 的权限问题）
+  fms-logs:
+  # 附件存储卷（文件存储模块，fms-backend /app/data/files 持久化，容器重建不丢文件）
+  fms-files:
+
+services:
+  # fms-db， PostgreSQL 18 数据库
+  # 职责，承载 FMS 全部业务数据，镜像基于官方 postgres:18 扩展
+  #       （pgaudit/pg_cron/pg_partman/pgjwt 等，见 deploy/pg/Dockerfile），
+  #       初始化唯一入口 deploy/init/fms_init.sh（按 bootstrap_base→um_org_base→
+  #       …→grants_base 顺序执行并 ALTER ROLE fms_app 对齐 .env 密码）。
+  # 注意，不发布任何宿主机端口，仅 fms-network 内可被 fms-backend 访问。
+  fms-db:
+    build: ./deploy/pg
+    image: fms-postgres:18
+    container_name: fms-db
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 单机版不写 ports 段，数据库绝不暴露到宿主机，满足签名校验必须前置网关
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      # init 脚本（fms_init.sh）末尾以该值 ALTER ROLE fms_app 对齐 .env 密码
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      # init 脚本以该值对齐 sec.app_secrets.jwt.secret（PG 签发/后端/网关三处同值）
+      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      # 列加密主密钥外部注入（可选，空 = seed 内建占位值，注入须早于种子数据加密写入）
+      FMS_MASTER_KEY: ${FMS_MASTER_KEY:-}
+    volumes:
+      # PG18 官方镜像数据目录为 /var/lib/postgresql/18/docker 子路径，必须挂父目录
+      - fms-db-data:/var/lib/postgresql
+      # PG 日志独立卷（pgaudit 审计日志随 PG 日志落盘，供外部采集/归档）
+      - fms-pglog:/var/log/postgresql
+      # SQL 脚本源（只读，供 init 脚本按 00→…→08 顺序 source 执行）
+      - ./fms_db_pg:/fms-init:ro
+      # 唯一 init 入口，只读挂载进官方镜像初始化目录
+      - ./deploy/init/fms_init.sh:/docker-entrypoint-initdb.d/fms_init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # fms-redis， Redis 7，多实例共享会话存储
+  # 职责，后端 fms.session-store=redis 时承载 nonce 防重放/2FA 票据/备用码/
+  #       token 黑名单/WS 推送广播等跨实例共享状态。单机版虽仅一个后端实例，
+  #       仍开启 redis 存储，与集群形态（docker-compose.cluster.yml）共用
+  #       同一会话语义，避免"单机内存、集群 redis"两套行为切换，更稳。
+  # 密码，requirepass 与后端 SPRING_DATA_REDIS_PASSWORD 共用 .env 的
+  #       FMS_REDIS_PASSWORD（强密码 ≥16 字符），appendonly 落 /data 卷，
+  #       防重启丢会话键（TTL 键容忍丢失，AOF 是零成本保险）。
+  fms-redis:
+    image: redis:7-alpine
+    container_name: fms-redis
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 不发布宿主机端口，仅 fms-network 内被 fms-backend 访问
+    # 【转义层次说明】command 是 exec 形式 argv，必须实值，故这里用
+    #   ${FMS_REDIS_PASSWORD} 由 compose 解析期从 .env 展开（缺失即报错拒绝
+    #   启动），而下方 healthcheck 里用 $${...} 双重转义，compose 不展开、
+    #   留给容器 shell 运行时从注入的 environment 取值。同一变量两处转义
+    #   层级不同，改错会得到字面 "FMS_REDIS_PASSWORD" 或解析期缺值。
+    command:
+      - redis-server
+      - --requirepass
+      - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    environment:
+      # 注入供 healthcheck 使用（healthcheck 继承服务 environment，CMD-SHELL
+      # 内以 $${FMS_REDIS_PASSWORD} 由容器 shell 展开，密码不进 compose 渲染）
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
+    volumes:
+      # AOF 持久化目录（appendonly yes，重启不丢键）
+      - fms-redis-data:/data
+    healthcheck:
+      # -a 传密码探活，auth 失败返回 NOAUTH 非零退出 → unhealthy
+      test: ["CMD-SHELL", "redis-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 5s
+    logging: *default-logging
+
+  # fms-pgbouncer， PgBouncer 1.24（transaction 连接池，后端 DB 访问唯一入口）
+  # 职责，fms-backend 不再直连 fms-db:5432，一律经 6432 transaction 池，
+  #       每事务归还前 DISCARD ALL 复位会话（SET ROLE/GUC/临时表不跨事务
+  #       残留），并把 Hikari 连接数上限从 PG 后端连接数解耦，为集群形态
+  #       （backend×2）平滑铺路，entrypoint 以 .env 密码生成 userlist.txt
+  #       （fms_app/postgres 两用户），DB_HOST 默认 fms-db，单机服务名，
+  #       多机版由 FMS_DB_HOST 覆盖指向 db 主机 LAN IP。
+  # 懒连接，pgbouncer 启动不依赖主库可达，事务时才按需建连，depends_on
+  #       仅保证主库完成初始化（replicator 角色/pg_hba 等就绪）。
+  # 不发布端口，仅 fms-network 内被 fms-backend 访问（与 fms-db 同等收敛）。
+  fms-pgbouncer:
+    build: ./deploy/pgbouncer
+    image: fms-pgbouncer:1.24
+    container_name: fms-pgbouncer
+    networks:
+      - fms-network
+    restart: unless-stopped
+    environment:
+      # 生成 userlist.txt 的两用户密码（entrypoint 明文写入 userlist.txt，
+      # 故 .env 密码应避免双引号，见 deploy/pgbouncer/entrypoint.sh）
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      # 单机版恒为服务名 fms-db（硬编码不读 FMS_DB_HOST，.env.example 预填的
+      # 多机 IP 若被引用会让单机一键部署误连外网 IP），多机版在
+      # docker-compose.multi.yml 中以 ${FMS_DB_HOST} 覆盖为本变量
+      DB_HOST: fms-db
+    depends_on:
+      # 等主库初始化完成（pg_isready）再对外供池，transaction 池建连时
+      # 主库已就绪，避免认证/库缺失错误刷满日志
+      fms-db:
+        condition: service_healthy
+    healthcheck:
+      # 探活经池直连后端执行 SELECT 1（同时验证 pgbouncer 建连与主库可达，
+# 不采用 SHOW VERSION，该命令经池透传后端会报 unrecognized parameter）
+      # pgbouncer 存活），PGPASSWORD 环境变量传密码，避免密码进 psql 进程参数，
+      # $${...} 容器内展开（healthcheck 继承服务 environment）
+      test: ["CMD-SHELL", "PGPASSWORD=$${FMS_DB_PASSWORD} psql -h 127.0.0.1 -p 6432 -U fms_app -d fms -tAc 'SELECT 1'"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    logging: *default-logging
+
+  # fms-backend， Spring Boot 后端，8081
+  # 职责，业务 API 与签名校验（GatewaySignatureFilter 在网关侧完成验签，
+  #       后端 FMS_SECURITY_BYPASS_GATEWAY 恒为 false 表示强制走网关）。
+  # 注意，不发布任何宿主机端口，仅网关 fms-rgw 可达（http://fms-backend:8081）。
+  fms-backend:
+    build: ./fms_backend
+    container_name: fms-backend
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 单机版不写 ports 段，后端仅网关可达，杜绝绕过签名校验的直连
+    environment:
+      # 数据源经 fms-pgbouncer:6432（transaction 池）而非直连 fms-db:5432，
+      # PgBouncer 每事务 DISCARD ALL 复位会话（SET ROLE/GUC/临时表不跨事务
+      # 残留，与后端 Hikari 初始化 SQL "RESET ALL" 双重保险），并把 Hikari
+      # 连接数上限从 PG 后端连接数解耦，集群形态（backend×2）与单机共用
+      # 同一连接语义，pgbouncer 懒连接，无需等主库
+      # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句
+      #（PG JDBC 默认 prepareThreshold=5 会触发 PREPARE 协议报错），禁用后
+      # 客户端侧模拟预编译，功能等价仅少一次服务端缓存（FMS 规模无感）
+      SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
+      SPRING_DATASOURCE_USERNAME: fms_app
+      SPRING_DATASOURCE_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      # 与网关共享的 HMAC 对称密钥（FMS_JWT_SECRET/FMS_RGW_JWT_SECRET 同值）
+      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      # 与网关共享的请求签名密钥（FMS_SIGN_SECRET/FMS_RGW_SIGN_SECRET 同值）
+      FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+      # 恒为 false，签名校验必须前置网关，禁止绕过
+      FMS_SECURITY_BYPASS_GATEWAY: "false"
+      # 网关内部端点 token（/internal/log-batch 头 X-FMS-Int-Token 校验，可选，
+      # 默认空 = 内部端点禁用 fail-closed，网关投递配置开启时须在 .env 设置）
+      FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
+      # 共享会话存储（fms.session-store=redis），nonce 防重放/2FA 票据/
+      # 备用码/token 黑名单/WS 推送广播等内存态收敛于 Redis，任意实例写入
+      # 全局可见，集群形态多后端实例必需的会话一致性，单机同样开启，与
+      # 集群行为完全一致（避免"单机内存、集群 redis"两套语义切换）。
+      # 注，SPRING_DATA_REDIS_* 是 Spring Boot 宽松绑定环境变量（优先级高于
+      # application.yaml 中 ${FMS_REDIS_HOST:127.0.0.1} 默认值），统一以
+      # SPRING_DATA_REDIS_* 注入，密码与 redis requirepass 同源 .env
+      SPRING_DATA_REDIS_HOST: fms-redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
+      FMS_SESSION_STORE: redis
+      # JVM 堆上限，双实例内存大头，防单实例吃满宿主机
+      JAVA_TOOL_OPTIONS: -Xmx2g -Xms1g
+      # 附件本地卷目录（fms-files 命名卷持久化）
+      FMS_FILE_STORAGE_DIR: /app/data/files
+      # 邮件接入，可选，默认不发送，SMTP 配置后找回密码邮件自动生效，未配置静默跳过
+      FMS_SMTP_HOST: ${FMS_SMTP_HOST:-}
+      FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
+      FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
+      FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+    volumes:
+      # 附件存储命名卷，文件存储模块，上传字节持久化，容器重建不丢
+      - fms-files:/app/data/files
+    depends_on:
+      # 等连接池与共享存储就绪再启动（pgbouncer 已依赖 fms-db 健康，
+      # 此处不直接依赖 fms-db，连接语义与集群形态一致）
+      fms-pgbouncer:
+        condition: service_healthy
+      fms-redis:
+        condition: service_healthy
+    # 严禁挂载 fms_backend/config 目录！config/application.yaml 会把
+    # server.port 覆盖为 8083 并注入明文 DB 密码，破坏 8081/网关约定。
+    healthcheck:
+      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/internal/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # fms-backend-1 / fms-backend-2， 合并栈守卫占位服务（默认不启动，勿手工 up）
+  # 职责，与 cluster 文件内的同名占位服务成对，机械化杜绝"把本文件与
+  #   docker-compose.cluster.yml 用 -f 合并"的双向误操作，
+  #   - 顺序「-f docker-compose.yml -f docker-compose.cluster.yml」，
+  #     合并后 fms-backend 被 cluster 的占位覆盖（profiles 门控），网关
+  #     depends_on 引用 profile 服务 → docker compose config/up 直接报错
+  #     "depends on undefined service fms-backend"，不会创建任何容器，
+  #   - 顺序「-f docker-compose.cluster.yml -f docker-compose.yml」，
+  #     合并后 fms-backend-1/2 被本占位覆盖（profiles 门控），双后端实例
+  #     不会启动，杜绝"8+1 容器混跑、重复消费 pgmq/定时任务"的部署漂移。
+  #   本文件单独部署，单机形态时两者同样不启动，无任何影响。
+  fms-backend-1:
+    image: busybox:stable
+    profiles: ["fms-merge-guard"]
+    restart: "no"
+    command: ["true"]
+
+  fms-backend-2:
+    image: busybox:stable
+    profiles: ["fms-merge-guard"]
+    restart: "no"
+    command: ["true"]
+
+  # fms-web-build， 前端构建一次性服务（方案 A 产物交付）
+  # 职责，仅执行构建（npm ci && npm run build）并把 /app/dist 拷贝进命名卷
+  #       fms-static，正常退出（exit 0）即产物已持久化，供 fms-rgw 只读挂载。
+  # 注意，restart: "no" 一次性容器，每次 docker compose up -d 幂等重拷 dist，
+  #       生产运行期无独立 web 容器。
+  fms-web-build:
+    build: ./fms_web
+    container_name: fms-web-build
+    volumes:
+      # 构建产物写入命名卷（fms_web/Dockerfile ENTRYPOINT: cp -r /app/dist/. /static/）
+      - fms-static:/static
+    restart: "no"
+    networks:
+      - fms-network
+
+  # fms-rgw， Rust 网关（8443 TLS 入口，唯一对外服务）
+  # 职责，TLS 终结 + JWT 验签 + HMAC 请求签名注入 + 静态资源服务（方案 A，
+  #       dist 只读挂载 /app/static）+ 反代后端 http://fms-backend:8081。
+  # 注意，8443:8443 为单机模式唯一宿主机对外端口，证书缺失时启动即失败
+  #       （tls.allow_insecure_fallback=false），健康检查沿用镜像内置
+  #       HEALTHCHECK（每 30s 探测 /healthz），compose 不重复定义。
+  fms-rgw:
+    build: ./fms_rgw
+    image: fms_rgw:0.1.0
+    container_name: fms-rgw
+    networks:
+      - fms-network
+    restart: unless-stopped
+    # 唯一对外端口（TLS 入口），浏览器/客户端一律先过网关再做签名校验
+    ports:
+      - "8443:8443"
+    volumes:
+      # 前端 dist（方案 A，只读静态承载，与 fms-web-build 共用命名卷）
+      - fms-static:/app/static:ro
+      # 网关配置覆盖镜像内模板（cors.allowed_origins 必须非空，空列表
+      # 会被网关 run 校验拒绝 exit，1，该字段无环境变量覆盖点）
+      - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
+      # TLS 自签证书只读挂载（缺失 → 启动失败，不依赖 HEALTHCHECK 兜底）
+      - ./deploy/certs:/app/certs:ro
+      # 访问日志命名卷（/app/logs/access.log，避免 bind mount 与 uid 10001 权限问题）
+      - fms-logs:/app/logs
+    environment:
+      FMS_RGW_CONFIG: /app/config/fms_rgw.yaml
+      FMS_RGW_LISTEN: 0.0.0.0:8443
+      # 容器内必须为服务名而非 127.0.0.1:8081
+      FMS_RGW_UPSTREAM: http://fms-backend:8081
+      # 与后端共享密钥（网关 lib.rs:47-68 校验 ≥32 字符且非占位符，违者 exit，1）
+      FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+      FMS_RGW_STATIC_DIR: /app/static
+      FMS_RGW_LOG_FILE: /app/logs/access.log
+      # PGMQ 审计链路内部 token（X-FMS-Int-Token 请求头值，必须与后端
+      # FMS_INTERNAL_TOKEN 同值，否则后端 40300 拒收、投递仅 WARN 静默丢弃），
+      # 空 = 网关日志 PGMQ 投递禁用，默认
+      FMS_RGW_LOG_TOKEN: ${FMS_INTERNAL_TOKEN:-}
+    depends_on:
+      # 等后端健康（service_healthy）且前端产物就绪，构建容器正常退出再启动
+      fms-backend:
+        condition: service_healthy
+      fms-web-build:
+        condition: service_completed_successfully
+    # 不重复定义 healthcheck，沿用镜像内置（每 30s 探测 /healthz）
+    logging: *default-logging

@@ -1,0 +1,22 @@
+# 集成测试 profile（@ActiveProfiles("test") 激活）：连测试机 fms-db（经 SSH 隧道
+# 127.0.0.1:15432 -> 测试机 fms-db 容器 5432），沙箱角色 fms_app 直连——与生产
+# 连接模型一致（prepareThreshold=0 适配 PgBouncer transaction 池语义）。
+# 运行前置：隧道在线 + 测试机 fms 库已初始化（种子含 admin/users/params/凭证）。
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:15432/fms?prepareThreshold=0
+    username: fms_app
+    password: ${FMS_TEST_DB_PASSWORD:FmsApp_2026_r7Xk#9mQ2vLpZ4sD}
+    hikari:
+      maximum-pool-size: 5
+      connection-init-sql: "RESET ALL"    # 连接归池复位沙箱会话（SET ROLE/GUC 不跨用例残留）
+      auto-commit: false
+
+fms:
+  session-store: in-memory                # 不依赖 Redis（WsNotifyRedisBridge 走 no-op 广播器）
+  datasource-ro:
+    enabled: false                        # 单源直连，不测读写分离路由
+  security:
+    # 签名密钥独立于生产/网关默认值（≥32 字符），测试内 HMAC 构造须与本值一致
+    sign-secret: itest-sign-secret-0123456789abcdef0123456789
+    bypass-gateway: false                 # 签名链路为被测对象，恒 false

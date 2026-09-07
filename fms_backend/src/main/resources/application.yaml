@@ -1,0 +1,186 @@
+server:
+  port: 8081                          # fms_rgw upstream.base_url=http://127.0.0.1:8081
+  shutdown: graceful
+
+spring:
+  application:
+    name: fms_backend
+  threads:
+    virtual:
+      enabled: true              # 网关模型 IO 密集（JDBC/PG 函数/HMAC），虚拟线程收益大；
+                                 # RequestContext/MDC 由过滤链 finally 清理（逐请求隔离，无泄漏）；
+                                 # SET ROLE 沙箱为连接级状态（Hikari 池线程持有），与请求线程无关
+  datasource:
+    url: jdbc:postgresql://192.168.1.151:5432/fms
+    username: fms_app                 # 唯一运行时连接角色（沙箱空壳：无任何业务表权限）
+    password: "${FMS_DB_PASSWORD:FmsApp_2026_r7Xk#9mQ2vLpZ4sD}"   # 无明文回退（与 sign-secret/jwt-secret 同款占位）；部署与测试均须以环境变量覆盖，未设置时连接即失败（fail-fast）
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: fms-hikari
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-init-sql: "RESET ALL"   # 模拟 PgBouncer server_reset_query，防连接池沙箱上下文残留；DISCARD ALL 在 auto-commit:false 下会以事务内执行报错（PG: DISCARD ALL cannot run inside a transaction block），RESET ALL 事务安全且重置全部 GUC（fms.user_id 等；SET ROLE 由 SandboxSessionInterceptor 每语句注入覆盖）
+      auto-commit: false
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+    default-property-inclusion: non_null   # ApiResponse.data 字段单独 @JsonInclude(ALWAYS) 保证恒渲染
+    # 注意：Boot 4 运行时为 Jackson 3，SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
+    # 已移至 DateTimeFeature 且默认即 false（日期输出 ISO-8601 字符串），故不再配置
+    # write-dates-as-timestamps（Jackson 3 的 SerializationFeature 枚举已无此键，绑定会失败）
+  mail:
+    # SMTP（密码找回邮件；全部环境变量占位、无默认明文——未配置时 MailSenderAutoConfiguration
+    # 不产出 JavaMailSender，MailService 经 ObjectProvider 兜底跳过，不影响启动）
+    host: ${FMS_SMTP_HOST:}
+    port: ${FMS_SMTP_PORT:465}
+    username: ${FMS_SMTP_USERNAME:}
+    password: ${FMS_SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+  data:
+    redis:
+      host: ${FMS_REDIS_HOST:127.0.0.1}        # 多实例共享存储（仅 fms.session-store=redis 时使用；
+                                               # nonce/票据/黑名单等内存态收敛于此，任意实例写入全局可见）
+      port: ${FMS_REDIS_PORT:6379}
+      password: ${FMS_REDIS_PASSWORD:}        # 未设密码留空；生产必须设置（错误密码连接即失败，fail-fast）
+      timeout: 3s                             # 连接/读写超时：redis 不可达快速失败（fail-closed），
+                                              # 不拖死请求线程；宁可拒不可放
+      # Redis 哨兵集群模式经 profile「sentinel」条件加载（application-sentinel.yml）：
+      # 默认无 sentinel 段（单节点），SPRING_PROFILES_ACTIVE=sentinel 时启用——
+      # 静态空 sentinel 段会触发 Boot 哨兵连接工厂构建（master 空即报错）
+
+management:
+  endpoints:
+    web:
+      base-path: /internal           # fms_rgw health_path=/internal/health 对齐
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  health:
+    mail:
+      enabled: false                 # SMTP 未配置时 MailHealthIndicator 会尝试连占位 host 致
+                                     # /internal/health DOWN（容器 healthcheck 失败实测）；邮件为
+                                     # 可选增强，失败已由 MailService WARN 日志覆盖，不参与存活判定
+
+mybatis-plus:
+  type-handlers-package: net.castimage.fms_backend.common.handler   # UuidTypeHandler：MyBatis 默认注册表无 UUID 处理器，注解式 Mapper 参数映射必需
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: input                  # uuid 主键：INPUT，由 PG DEFAULT uuidv7 生成（Java 侧显式
+                                      # 生成后随 INSERT 写入，无 @Options/useGeneratedKeys——PG 仅
+                                      # INSERT...RETURNING 可回传生成键，见 Utils.UuidV7 说明）
+
+fms:
+  alert:                              # 安全告警检测（AlertService 定时；暴力破解/审计链/主从复制/nonce 水位）
+    interval-ms: 300000               # 检测周期（毫秒，默认 5 分钟）
+    login-fail-threshold: 20          # 暴力破解判定：窗口内同 IP 登录失败次数达到即告警（admin 站内信）
+    login-fail-window-min: 15         # 暴力破解统计窗口（分钟）
+    nonce-watermark-ratio: 0.7        # nonce 水位告警比率（近似条目数/期望容量，超过即 WARN 日志）
+    replica-expected: 0               # 期望从库数（0=未启用主从监控；集群形态填 1，从库缺失/降级/延迟超阈值告警）
+    replica-lag-threshold-ms: 5000    # 从库复制延迟告警阈值（毫秒，streaming 最大 replay_lag 超过即告警）
+  datasource-ro:                      # 从库只读分流（读写分离路由，集群形态启用）
+    enabled: false                    # false = 单源直连主库（单机/多机形态）；true = readOnly 事务走只读 URL
+    url: ""                           # 只读连接 URL（如 jdbc:postgresql://fms-pgbouncer-ro:6433/fms?prepareThreshold=0）；
+                                      # 空 = 回退主库 URL（防配置疏漏，从库不可用降级主库）
+  security:
+    sign-secret: ${FMS_SIGN_SECRET:change-me-at-least-32-chars-0123456789abcdef}  # 与 fms_rgw sign.sign_secret 一致，≥32 字符
+    replay-window-secs: 300           # ±5min 防重放窗口（fms_rgw sign.replay_window_secs=300）
+    nonce-capacity: 10000             # 内存 NonceStore 容量上限（fail-closed；显式配置优先；未配置时按 nonce-peak-qps × replay-window-secs 动态计算）
+    nonce-peak-qps: 1000              # 期望峰值 QPS（× replay-window-secs 推导动态容量，如 1000×300=300000；压测教训：6 万 QPS 击穿 10000）
+    bypass-gateway: false             # 仅本地开发可用 true（跳过签名校验；生产必须 false）
+    max-body-bytes: 10485760          # P7 收敛：网关请求体上限（默认 10MB，与 fms_rgw 对齐，超限 413/40001）
+    internal-token: ${FMS_INTERNAL_TOKEN:}   # 网关内部端点 token（/internal/log-batch 头 X-FMS-Int-Token 校验；默认空=端点禁用 fail-closed）
+    password-min-length: 8            # P9 收敛：密码最小长度（默认 8；仅允许收紧，Service 层取 max(配置,8)）
+    password-max-length: 64           # P9 收敛：密码最大长度（默认 64，与 DTO @Size 对齐）
+    bcrypt-strength: 10               # P8 收敛：BCrypt 成本因子（默认 10，与 SQL 种子 gen_salt('bf',10) 对齐；幂等启动配置）
+    weak-password:                    # 弱密码布隆过滤器预检
+      enabled: true                   # 总开关（默认开；预检纯只读、零误伤，可安全默认开）
+      expected-insertions: 1024       # 布隆预期元素数（推导 m/k：1024/0.01 -> m≈9816、k=7，内置 ~180 项留 ~5 倍余量）
+      false-positive-rate: 0.01       # 布隆误判率（默认 1%；误判仅多一次 HashSet 查询，无拒绝风险）
+      mark-on-login: true             # 登录成功弱密码标记 requirePasswordChange（默认开：命中弱密码集合即提示改密；关闭需显式配置）
+  jwt:
+    secret: ${FMS_JWT_SECRET:change-me-at-least-32-chars-0123456789abcdef}        # 与 fms_rgw auth.jwt_secret 及 PG um.params['jwt.secret'] 一致
+    issuer: fms                       # 与 fms_rgw expected_iss 对齐
+    audience: fms-gateway             # 与 fms_rgw expected_aud 对齐
+    access-ttl: 2h                    # ：access 2h（会话 TTL 已配置化）
+    refresh-ttl: 7d                   # refresh 7d
+    expiry: 24h                       # DB 侧 auth.jwt_sign 兜底签发有效期期望值（init/um_org_base.sql 缺省 interval '24 hours'；非协议值，issuer/audience/算法不动——铁律①仅涉有效期；后端签发恒显式注入 exp，DB 兜底缺省按本配置保留）
+  mfa:
+    issuer: FMS                       # TOTP otpauth URI issuer
+    ticket-ttl: 5m                    # 2FA 两步登录票据有效期
+    recovery-ticket-ttl: 30m
+    totp-max-fails: 5                 # P1 收敛：TOTP 连续失败锁定阈值（默认 5 次）
+    totp-fail-window: 5m              # P2 收敛：TOTP 失败窗口（默认 5min，Duration 绑定必须带单位）
+    totp-window: 1                    # P5 收敛：TOTP 校验时钟偏移步数（±1 步）
+    pending-secret-ttl: 10m           # P3 收敛：TOTP setup 待启用密钥有效期（默认 10min）
+    backup-code-count: 10             # P4 收敛：2FA 备用恢复码数量（默认 10 个）
+    backup-code-length: 8             # P4 收敛：备用恢复码位数（默认 8 位）
+    backup-code-valid-days: 30        # 备用恢复码有效期（默认 30 天；DB 盲索引落盘 auth.issue/consume_backup_code 闸口，核销留 used_at 审计）
+  login:
+    max-failures: 6                   # 6 次失败锁定（；锁定阈值/分钟已配置化）
+    lock-minutes: 15m                 # 锁定 15 分钟（Duration 绑定必须带单位）
+  log:                                # 访问日志批接收（内部端点 /internal/log-batch）
+    batch-max-items: 1000             # 单批上限（超限 40001 拒绝；与网关 log.batch_size 联动：网关 batch_size 调大后不得超过本值）
+    path-max-len: 1024                # path 兜底截断长度（与网关 log.path_max_len 同值，网关已截断此处防异常体）
+    ua-max-len: 256                   # ua 兜底截断长度（与网关 log.ua_max_len 同值，网关已截断此处防异常体）
+  cache-cleanup-interval-ms: 300000   # P6 收敛：内存票据/黑名单兜底清扫周期（默认 5min，@Scheduled 占位符读取）
+  session-store: in-memory            # CachePort 实现选择：in-memory | redis（多实例共享存储，nonce/票据/黑名单等内存态收敛于此）
+  role-map:                           # JWT role 短名 -> PG 职责角色（，映射常量，不可由请求注入）
+    operator: fms_operator
+    viewer: fms_viewer
+    auditor: fms_auditor
+    report: fms_report
+    admin: fms_operator
+  file:                               # 文件存储模块（附件上传/下载）
+    storage-dir: ${FMS_FILE_STORAGE_DIR:./data/files}   # 本地卷根目录（容器内 /app/data/files + compose fms-files 命名卷持久化）
+    max-size-bytes: 8388608           # 单文件上限 8MB（低于网关 10MB 请求体上限，留 multipart 开销余量；与 docs.documents CHECK 对齐；DB 侧不重复定义，CHECK 恒随本键同值）
+    allowed-extensions: [pdf, jpg, jpeg, png, gif, doc, docx, xls, xlsx, csv, txt, tsv]  # 扩展名白名单（唯一类型裁决；tsv 对齐前端对账单导入白名单 ReconcilePage，前端 accept 改由本键下发）
+  audit:
+    export-page-size: 2000            # 审计 CSV 导出游标循环每页取数行数（运维级性能/内存旋钮：控制单次结果集与连接占用）
+  db:
+    trgm-similarity-threshold: 0.3    # pg_trgm.similarity_threshold GUC 期望值（DB 环境级：init/bootstrap_base.sql ALTER DATABASE 登记，对账候选集 % 下界过滤依赖；语义无损仅收敛登记）
+    connection-limit: 100             # 运行时连接角色 fms_app 的 CONNECTION LIMIT 期望值（部署/容量运维参数，与 Hikari 池上限联动；init/bootstrap_base.sql 角色重建生效）
+  pgmq:
+    retry-threshold: 5                # PGMQ 消息消费失败重试阈值（read_ct 超限转死信队列 q_sys_retry）
+    notify-consumer-enabled: true     # 通知生成源消费者开关（q_notify_task/q_budget_warning -> notify.notifications）；
+                                      # 2026-08 起消费者内置 pgmq 可用性自探测：pg_extension 无 pgmq 的部署自动降级停用
+                                      # （消息留队、限频 WARN），扩展补齐自动恢复；本开关为显式硬关停（最高优先级）
+    notify-consumer-interval-ms: 30000  # 消费者轮询周期（独立于 cache-cleanup；pgmq.read vt=30s 内消息对消费者不可见）
+  mail:
+    enabled: false                    # 邮件总开关（默认关：SMTP 未配置时不发送，仅返回票据，兼容旧契约）
+    from: ${FMS_SMTP_FROM:no-reply@fms.local}
+    reset-subject: "FMS 密码重置"
+    reset-body-template: "您好 {loginName}：\n您正在找回 FMS 财务系统登录密码。\n重置票据：{ticket}\n有效期至：{expiresAt}\n请妥善保管，勿转发他人。"
+  rate-limit:
+    internal-batch-per-min: 600       # /internal/log-batch 每 IP 每分钟上限（网关已有首道限流，后端为绕过网关直连时的补充闸）
+    login-per-min: 20                 # /api/auth/login 每 IP 每分钟上限（宽松默认，防密码爆破直连后端）
+    recovery-per-min: 10              # /api/auth/recovery 每 IP 每分钟上限（防找回接口被当邮件轰炸器）
+  ui:
+    page-sizes: [10, 20, 50]          # 列表分页每页条数选项（DataTable/Pager 经 /api 下发收敛，删除前端硬编码）
+  report:
+    enabled-types: [trial-balance, income-statement, balance-sheet, cash-flow, ar-aging, dept-expense]  # 报表导出白名单（RptServiceImpl 校验 + 前端选项经 /api 下发，未知值 40001）
+  schedule:
+    cron:                             # 9 个 pg_cron 调度周期期望值登记（init/queues_cron.sql 与 yaml 保持一致；值含时区随部署环境差异，运维按环境调整后重新注册 cron）
+      voucher-number-check: "0 6 * * *"
+      fa-depreciation: "0 2 1 * *"
+      fx-adjustment: "0 3 1 * *"
+      close-check: "0 4 1 * *"
+      budget-warning: "*/15 * * * *"
+      wf-timeout: "* * * * *"
+      partman-maintenance: "0 2 * * *"
+      audit-chain-check: "0 5 * * *"
+      log-consumer: "* * * * *"
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"

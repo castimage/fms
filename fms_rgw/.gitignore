@@ -1,0 +1,23 @@
+# Rust 构建产物
+/target
+
+# 本地配置（含真实密钥，绝不提交）
+# 示例模板 config/rgw.yaml 可提交；带真实密钥的本地覆盖文件一律忽略
+/config/*.local.yaml
+/config/local.yaml
+
+# 密钥与证书（自签/生产证书不入库）
+/certs/
+*.key
+*.pem
+
+# 运行产物：访问日志、运行时数据
+/logs/
+*.jsonl
+
+# 本地环境变量
+.env
+.env.local
+
+# 前端构建产物（静态目录由 CI/构建机产出）
+/static/dist

@@ -1,0 +1,40 @@
+/* FMS 全局 CSS 变量——断点唯一事实源（与 utils/breakpoint.ts 注释互指），深色模式经 html.dark 覆盖 */
+:root {
+  /* 品牌色：财务蓝 */
+  --fms-primary: #1677ff;
+  --fms-primary-hover: #4096ff;
+  --fms-primary-pressed: #0958d9;
+  --fms-success: #18a058;
+  --fms-warning: #faad14;
+  --fms-error: #f5222d;
+
+  /* 中性色 */
+  --fms-text: #1f2329;
+  --fms-text-secondary: #646a73;
+  --fms-text-muted: #8f959e;
+  --fms-border: #e5e6eb;
+  --fms-bg: #f5f6f7;
+  --fms-bg-card: #ffffff;
+
+  /* 间距 / 圆角 / 阴影 */
+  --fms-radius: 8px;
+  --fms-radius-lg: 12px;
+  --fms-shadow-card: 0 2px 8px rgba(31, 35, 41, 0.08);
+
+  /* 断点（唯一事实源；JS 侧见 src/utils/breakpoint.ts，两处注释互指） */
+  --fms-bp-sm: 576px;
+  --fms-bp-md: 768px;
+  --fms-bp-lg: 992px;
+  --fms-bp-xl: 1200px;
+}
+
+/* 深色模式变量覆盖（html.dark 由 index.html FOUC 脚本 / stores/theme 驱动） */
+html.dark {
+  --fms-text: #e5e6eb;
+  --fms-text-secondary: #a8abb2;
+  --fms-text-muted: #6f737b;
+  --fms-border: #3a3d44;
+  --fms-bg: #141619;
+  --fms-bg-card: #1d1f24;
+  --fms-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4);
+}

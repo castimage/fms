@@ -1,0 +1,258 @@
+# FMS 财务管理系统， 自定义数量形态编排，各模块副本数可调
+# 【用途】基于集群形态（docker-compose.cluster.yml）的可扩展变体，后端
+#   fms-backend 与网关 fms-rgw **不设 container_name**（compose 自动命名，
+#   --scale 才可水平扩展），副本数经 up 命令实时指定，
+#   # 后端 2 副本 + 网关 1 副本，默认，等价集群形态的负载能力
+#   docker compose -f docker-compose.custom.yml up -d
+#   # 后端 4 副本（水平扩展无状态业务层，会话/限流/nonce 经 redis 共享，
+#   #   网关 least-conn 自动分发，无需改任何代码或配置）
+#   docker compose -f docker-compose.custom.yml up -d --scale fms-backend=4
+#   # 网关 2 副本（多网关实例需各自宿主端口，-p 覆盖首实例端口，第二实例
+#   #   用 --scale 时端口映射相同会冲突，多网关场景推荐外层 LB/独立端口方案，
+#   #   或保持单网关，8443 唯一入口+ 后端多副本，负载能力瓶颈在无状态层）
+#   docker compose -f docker-compose.custom.yml up -d --scale fms-backend=3 --scale fms-rgw=1
+# 【副本数上限建议】fms-backend 无状态可任意扩展（连接数经 pgbouncer 池收敛、
+#   PG 连接上限 fms.db.connection-limit 登记），建议不超过机器核数×2，
+#   与 pgbouncer 池容量（deploy/pgbouncer/pgbouncer.ini max_client_conn）匹配。
+# 【与集群形态的关系】本文件是 cluster.yml 的"无 container_name + 可 scale"
+#   变体（name: fms-custom，与 fms/fms-single/fms-multi 互斥，不得同机混跑），
+#   其余结构（数据库主从/只读分流/共享 Redis/网关双上游自动切换）与集群一致。
+# 【环境变量】同 docker-compose.cluster.yml（.env 必填 FMS_DB_PASSWORD /
+#   FMS_REPL_PASSWORD / FMS_REDIS_PASSWORD / FMS_JWT_SECRET / FMS_SIGN_SECRET）。
+
+name: fms-custom
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-backend-env: &backend-env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
+  SPRING_DATASOURCE_USERNAME: fms_app
+  SPRING_DATASOURCE_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+  FMS_DATASOURCE_RO_ENABLED: "true"
+  FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
+  FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+  FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+  FMS_SECURITY_BYPASS_GATEWAY: "false"
+  FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
+  SPRING_DATA_REDIS_HOST: fms-redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
+  FMS_SESSION_STORE: redis
+  FMS_FILE_STORAGE_DIR: /app/data/files
+  FMS_SMTP_HOST: ${FMS_SMTP_HOST:-}
+  FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
+  FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
+  FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+
+networks:
+  fms-network:
+    driver: bridge
+
+volumes:
+  fms-db-data:
+  fms-pglog:
+  fms-db-replica-data:
+  fms-redis-data:
+  fms-static:
+  fms-logs:
+  fms-files:
+
+services:
+  # 基础设施（与 docker-compose.cluster.yml 完全一致，container_name 保留）
+  fms-db:
+    build: ./deploy/pg
+    image: fms-postgres:18
+    container_name: fms-db
+    networks:
+      - fms-network
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      FMS_MASTER_KEY: ${FMS_MASTER_KEY:-}
+      FMS_REPL_PASSWORD: ${FMS_REPL_PASSWORD:?请在 .env 设置 FMS_REPL_PASSWORD}
+    volumes:
+      - fms-db-data:/var/lib/postgresql
+      - fms-pglog:/var/log/postgresql
+      - ./fms_db_pg:/fms-init:ro
+      - ./deploy/init/fms_init.sh:/docker-entrypoint-initdb.d/fms_init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  fms-pgbouncer:
+    build: ./deploy/pgbouncer
+    image: fms-pgbouncer:1.24
+    container_name: fms-pgbouncer
+    networks:
+      - fms-network
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      DB_HOST: fms-db
+    depends_on:
+      fms-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${FMS_DB_PASSWORD} psql -h 127.0.0.1 -p 6432 -U fms_app -d fms -tAc 'SELECT 1'"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    logging: *default-logging
+
+  fms-pgbouncer-ro:
+    build: ./deploy/pgbouncer
+    image: fms-pgbouncer:1.24
+    container_name: fms-pgbouncer-ro
+    networks:
+      - fms-network
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
+      DB_HOST: fms-db-replica
+    depends_on:
+      fms-db-replica:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=$${FMS_DB_PASSWORD} psql -h 127.0.0.1 -p 6432 -U fms_app -d fms -tAc 'SELECT 1'"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  fms-redis:
+    image: redis:7-alpine
+    container_name: fms-redis
+    networks:
+      - fms-network
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    environment:
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
+    volumes:
+      - fms-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 5s
+    logging: *default-logging
+
+  fms-db-replica:
+    image: fms-postgres:18
+    container_name: fms-db-replica
+    networks:
+      - fms-network
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/entrypoint-replica.sh"]
+    volumes:
+      - fms-db-replica-data:/var/lib/postgresql
+      - ./deploy/pg-replica/entrypoint-replica.sh:/entrypoint-replica.sh:ro
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
+      FMS_REPL_PASSWORD: ${FMS_REPL_PASSWORD:?请在 .env 设置 FMS_REPL_PASSWORD}
+      REPL_USER: replicator
+      PRIMARY_HOST: fms-db
+      PRIMARY_PORT: "5432"
+    depends_on:
+      fms-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+    logging: *default-logging
+
+  fms-web-build:
+    build: ./fms_web
+    container_name: fms-web-build
+    volumes:
+      - fms-static:/static
+    restart: "no"
+    networks:
+      - fms-network
+
+  # fms-backend， 无状态后端（无 container_name → --scale 可水平扩展）
+  # 副本间无状态差异，会话/nonce/黑名单经 redis 共享，附件挂同一命名卷，
+  # 连接经 pgbouncer 池收敛，网关 least-conn 自动分发
+  fms-backend:
+    build: ./fms_backend
+    networks:
+      - fms-network
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - fms-files:/app/data/files
+    depends_on:
+      fms-pgbouncer:
+        condition: service_healthy
+      fms-pgbouncer-ro:
+        condition: service_healthy
+      fms-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/internal/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # fms-rgw， 网关（无 container_name，8443 唯一对外端口。多副本需各自
+  # 宿主端口/上层 LB，见文件头说明，后端副本扩展已覆盖主要扩容场景）
+  fms-rgw:
+    build: ./fms_rgw
+    image: fms_rgw:0.1.0
+    networks:
+      - fms-network
+    restart: unless-stopped
+    ports:
+      - "8443:8443"
+    volumes:
+      - fms-static:/app/static:ro
+      - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
+      - ./deploy/certs:/app/certs:ro
+      - fms-logs:/app/logs
+    environment:
+      FMS_RGW_CONFIG: /app/config/fms_rgw.yaml
+      FMS_RGW_LISTEN: 0.0.0.0:8443
+      FMS_RGW_UPSTREAM_MODE: auto
+      # 后端副本地址由 compose DNS 解析（fms-backend 服务名 → 全部副本 IP，
+      # least-conn 自动健康管理，单 URL 也由 DNS 轮询覆盖多副本）
+      FMS_RGW_UPSTREAM: http://fms-backend:8081
+      FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+      FMS_RGW_STATIC_DIR: /app/static
+      FMS_RGW_LOG_FILE: /app/logs/access.log
+      FMS_RGW_LOG_TOKEN: ${FMS_INTERNAL_TOKEN:-}
+    depends_on:
+      fms-backend:
+        condition: service_healthy
+      fms-web-build:
+        condition: service_completed_successfully
+    logging: *default-logging
+
+# 【遗留风险】同 docker-compose.cluster.yml，附件卷单机共享、redis 单点、
+#   主从同机演练形态，本文件与集群/单机/多机形态互斥（name: fms-custom）。

@@ -1,0 +1,130 @@
+# FMS Redis 哨兵集群叠加文件，可选增强，按需求以集群方式部署 Redis
+# 用法，与主编排合并，项目名随主编排，
+#   docker compose -f docker-compose.cluster.yml -f docker-compose.redis-cluster.yml up -d
+#   docker compose -f docker-compose.yml         -f docker-compose.redis-cluster.yml up -d
+# 拓扑，1 主 + 1 从 + 3 哨兵，quorum=2，主故障多数派自动故障转移，从库提升为
+#       新主，后端经哨兵发现新主，会话/限流/nonce 状态不因主节点切换而丢失
+# 后端切换，本文件经 compose 服务合并为 backend 注入哨兵连接，environment
+#       与主编排合并追加，SPRING_PROFILES_ACTIVE=sentinel 加载
+#       application-sentinel.yml，经哨兵自动发现当前主节点，
+#       FMS_REDIS_PASSWORD 同时作用于数据节点与哨兵，masterauth/auth-pass
+# 说明，叠加后单节点 fms-redis 停用（replicas=0），哨兵集群接管数据存储，
+#       容量监控在 Web「系统管理」页，/api/admin/system-info，后端经哨兵连接，
+#       Redis 信息采集同样经哨兵自动发现当前主节点
+# 内存说明，会话/限流/nonce 数据量小，Redis 默认无内存上限，数据量由键容量
+#       （nonce 10000 / 限流表上限）自然约束，不设 maxmemory
+
+services:
+  # 叠加哨兵集群后停用单节点 fms-redis，减少容器数量与内存占用
+  fms-redis:
+    deploy:
+      replicas: 0
+
+  fms-redis-master:
+    image: redis:7-alpine
+    container_name: fms-redis-master
+    restart: unless-stopped
+    networks:
+      - fms-network
+    environment:
+      # 注入供 healthcheck 使用，healthcheck 继承服务 environment，
+      # CMD-SHELL 内以 $${FMS_REDIS_PASSWORD} 由容器 shell 展开
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?redis 集群必须设置 FMS_REDIS_PASSWORD}
+    # command 用数组形式，密码含 & 等特殊字符时字符串形式会被 shell 解释破坏
+    command:
+      - redis-server
+      - --requirepass
+      - "${FMS_REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  fms-redis-replica:
+    image: redis:7-alpine
+    container_name: fms-redis-replica
+    restart: unless-stopped
+    networks:
+      - fms-network
+    environment:
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?redis 集群必须设置 FMS_REDIS_PASSWORD}
+    depends_on:
+      fms-redis-master:
+        condition: service_healthy
+    # 不加固定 --replicaof，故障转移后哨兵 reconfig 驱动主从关系，
+    # 容器重启后为独立节点，主从关系由哨兵或人工 REPLICAOF 恢复，
+    # 避免固定 replicaof 在故障转移后指向自身导致无限重连端口风暴
+    command:
+      - redis-server
+      - --requirepass
+      - "${FMS_REDIS_PASSWORD}"
+      - --masterauth
+      - "${FMS_REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 哨兵，conf 由 entrypoint 动态生成，auth-pass 注入 .env 密码，announce-ip 供
+  # 客户端跨容器发现，3 哨兵 quorum=2 才能触发故障转移
+  fms-redis-sentinel-1: &sentinel
+    image: redis:7-alpine
+    container_name: fms-redis-sentinel-1
+    restart: unless-stopped
+    networks:
+      - fms-network
+    depends_on:
+      fms-redis-master:
+        condition: service_healthy
+    environment:
+      SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-1
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
+    command: >
+      sh -c 'printf "port 26379\nsentinel resolve-hostnames yes\nsentinel monitor fms-redis-master fms-redis-master 6379 2\nsentinel auth-pass fms-redis-master %s\nsentinel announce-ip %s\nsentinel down-after-milliseconds fms-redis-master 5000\nsentinel failover-timeout fms-redis-master 15000\nsentinel parallel-syncs fms-redis-master 1\n" "$$FMS_REDIS_PASSWORD" "$$SENTINEL_ANNOUNCE_IP" > /tmp/sentinel.conf && redis-server /tmp/sentinel.conf --sentinel'
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 26379 ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  fms-redis-sentinel-2:
+    <<: *sentinel
+    container_name: fms-redis-sentinel-2
+    environment:
+      SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-2
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
+
+  fms-redis-sentinel-3:
+    <<: *sentinel
+    container_name: fms-redis-sentinel-3
+    environment:
+      SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-3
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
+
+  # 后端切换哨兵连接，compose 合并语义，同名服务 environment 与主编排合并，
+  #   集群形态 backend-1/2 与单机形态 backend 均覆盖，未合并本文件则不受影响
+  # 切换变量放 .env，本段仅做 .env 到容器的桥接，
+  #   未在 .env 设置时变量为空，Spring 不加载 sentinel profile，保持单节点直连
+  fms-backend-1: &backend-sentinel
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      FMS_REDIS_SENTINEL_MASTER: ${FMS_REDIS_SENTINEL_MASTER:-}
+      FMS_REDIS_SENTINEL_NODES: ${FMS_REDIS_SENTINEL_NODES:-}
+      FMS_REDIS_SENTINEL_PASSWORD: ${FMS_REDIS_PASSWORD}
+    depends_on:
+      fms-redis-master:
+        condition: service_healthy
+
+  fms-backend-2:
+    <<: *backend-sentinel
+    container_name: fms-backend-2
+
+  fms-backend:
+    <<: *backend-sentinel
+    container_name: fms-backend

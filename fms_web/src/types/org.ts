@@ -1,0 +1,74 @@
+/**
+ * 组织模块类型，与后端 CompanyView/DepartmentView/UserView/RoleView/ModuleNode/
+ * PermissionView/SodResult 逐字段一致。本批仅定义类型 + api 函数，管理后台消费。
+ */
+
+/** 公司视图 */
+export interface CompanyView {
+  id: string
+  code: string
+  name: string
+  currency: string
+  fiscalYearStart: string
+  status: string
+  createdAt: string
+}
+
+/** 部门视图 */
+export interface DepartmentView {
+  id: string
+  companyId: string
+  code: string
+  name: string
+  parentId: string | null
+  status: string
+  createdAt: string
+}
+
+/** 用户视图，roles 为 jwt role 短名列表 */
+export interface UserView {
+  id: string
+  loginName: string
+  displayName: string
+  status: string
+  mfaEnabled: boolean
+  mustChangePwd: boolean
+  lastLoginAt: string | null
+  companyId: string | null
+  roles: string[]
+}
+
+/** 角色视图，非分页列表 */
+export interface RoleView {
+  id: string
+  companyId: string | null
+  code: string
+  name: string
+  isSystem: boolean
+  permissionCount: number
+}
+
+/** 权限点视图 */
+export interface PermissionView {
+  id: string
+  code: string
+  name: string
+  description: string | null
+}
+
+/** 模块树节点，权限挂树 */
+export interface ModuleNode {
+  id: string
+  identifier: string
+  name: string
+  description: string | null
+  parentId: string | null
+  permissions: PermissionView[]
+  children: ModuleNode[]
+}
+
+/** 职责分离（SoD）冲突检测结果 */
+export interface SodResult {
+  conflict: boolean
+  pairs: { permA: string; permB: string }[]
+}
