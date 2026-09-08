@@ -2,17 +2,17 @@
 //! 支持round-robin / random / least-conn / ip-hash / auto五种模式，转发失败自动重试
 //! 下一个健康实例，连续失败 ≥3标记down，故障剔除，健康探测成功恢复，重新纳入。
 //!
-//! 设计要点，WHY，
-//! -无新外部依赖，random用原子计数驱动xorshift64，不引入rand，ip-hash用
-//!   FNV-1a自实现，无新依赖，均确定性可复现。
-//! -兼容性铁律，servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
+//! 设计要点，
+//! -无新外部依赖，random 用原子计数驱动 xorshift64 伪随机，ip-hash 用 FNV-1a
+//!   自实现，均确定性可复现。
+//! -兼容约束，servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
 //!   现有`FMS_RGW_UPSTREAM`单url部署行为不变。
 //! -熔断粒度，全局`CircuitBreaker`保留为整体兜底(forward任一实例成功即成功，
 //!   最后一次错误才失败)，实例级故障剔除/恢复由本池的健康位管理(健康探测 + 转发
 //!   连续失败共用`mark_healthy` / `record_failure`)。
 //!
-//! 调用关系，`AppState`.upstream(`state.rs`) 供 `proxy_handler`/`ws_handler`(`proxy.rs/ws.rs`) 使用
-//! 转发，`circuit::health_probe_loop`调`probe_all`周期探测
+//! 调用关系，`AppState` 的 upstream 字段(`state.rs`)供 `proxy_handler`/`ws_handler`
+//! 转发使用(`proxy.rs`/`ws.rs`)，`circuit::health_probe_loop` 调 `probe_all` 周期探测
 #![forbid(unsafe_code)]
 
 use crate::config::UpstreamCfg;
@@ -26,8 +26,8 @@ use std::time::Duration;
 use tracing::{info, warn};
 
 /// 连续转发失败达到此阈值即标记down，故障剔除，等待健康探测恢复。
-/// 为什么是3，一次偶发超时/抖动不剔除，避免抖动导致全池抖动，3次连续失败基本
-/// 可判定实例不可用，与健康探测周期，默认5s配合，剔除后探测失败也维持down
+/// 连续 3 次失败即剔除，单次偶发超时或抖动不触发，避免抖动导致全池反复剔除，
+/// 3 次连续失败基本可判定实例不可用；与健康探测周期，默认 5s，配合，剔除后探测失败也维持 down
 const CONSECUTIVE_FAIL_THRESHOLD: u64 = 3;
 
 /// 负载均衡模式，配置字符串解析，未知值回退round-robin并告警
@@ -37,7 +37,7 @@ enum LbMode {
     Random,
     LeastConn,
     IpHash,
-    /// auto = least-conn + 自动健康管理，本池默认启用探测/剔除，注释说明语义
+    /// auto = least-conn，池默认启用健康探测与故障剔除，单上游时任何模式行为一致
     Auto,
 }
 
@@ -85,8 +85,8 @@ impl UpstreamEntry {
         self.healthy.load(Ordering::Acquire)
     }
 
-    /// 更新健康位(`health_probe_loop`探测结果 / 转发连续失败共用)，
-    /// 转healthy时清零连续失败计数，重新计数，转unhealthy仅置位
+    /// 更新健康位(`health_probe_loop`探测结果与转发连续失败共用)，
+    /// 转 `healthy` 时清零连续失败计数重新累计，转不健康仅置位
     fn mark_healthy(&self, ok: bool) {
         let prev = self.healthy.swap(ok, Ordering::AcqRel);
         if ok {
@@ -117,8 +117,8 @@ impl UpstreamEntry {
     }
 
     /// 发送前调用，在途计数 +1，返回守卫(`Drop`时自动归还)。
-    /// 为什么用guard而非显式`fetch_sub`，async发送可能在await点被取消/中断，
-    /// guard的`Drop`保证计数必归还，语义等价显式finally，least-conn的计数
+    /// 用守卫而非显式 `fetch_sub` 归还，async 发送可能在 await 点被取消或中断，
+    /// 守卫的 `Drop` 保证计数必归还，语义等价显式 finally，least-conn 的计数
     /// 不因取消而漂移
     fn begin_request(&self) -> InFlightGuard<'_> {
         self.in_flight.fetch_add(1, Ordering::Relaxed);
@@ -376,8 +376,8 @@ impl UpstreamPool {
         Err(last_err)
     }
 
-    /// ws握手目标选取，按ip-hash，有ip时或round-robin选择并固定，
-    /// 长连接粘性(握手后双向泵全程同一实例，不参与重试，实例down时握手失败
+    /// ws 握手目标选取，有 ip 时按 ip-hash，无 ip 时按 round-robin，选定后固定，
+    /// 长连接粘性(握手后双向泵全程同一实例，不参与重试，实例 down 时握手失败
     /// 由全局熔断兜底)。无健康实例则返回 `None`
     pub fn ws_target(&self, client_ip: Option<&str>) -> Option<WsTarget> {
         let idx = match client_ip {
@@ -396,8 +396,8 @@ impl UpstreamPool {
         })
     }
 
-    /// ws握手发送，发往`ws_target`选定的实例，固定粘性，返回，响应, 上游authority。
-    /// 请求由调用方按`WsTarget`的`base_url`/authority重建(`Host`已重写)，此处直发
+    /// ws 握手发送，发往 `ws_target` 选定的实例，固定粘性，返回响应与上游 authority。
+    /// 请求由调用方按 `WsTarget` 的 `base_url`/authority 重建(`Host` 已重写)，此处直发
     pub async fn send_for_ws(
         &self,
         req: Request<Body>,
@@ -411,9 +411,9 @@ impl UpstreamPool {
     }
 
     /// 主动健康探测(`circuit::health_probe_loop`调用)，遍历池内全部实例，每实例
-    /// GET {`base_url`}{`health_path`}(超时`health_timeout`，直连不经安全链)，成功
-    /// `mark_healthy`，true、失败`mark_healthy`，false，故障实例持续被探测，恢复后
-    /// 自动重新纳入选择集。返回探测后健康实例数(供全局熔断`record_probe`判断)
+    /// GET {`base_url`}{`health_path`}(超时 `health_timeout`，直连不经安全链)，
+    /// 结果成功则置健康、失败则置不健康，故障实例持续被探测，恢复后自动重新
+    /// 纳入选择集。返回探测后健康实例数(供全局熔断 `record_probe` 判断)
     pub async fn probe_all(&self, health_path: &str, timeout: Duration) -> usize {
         let path = health_path.trim();
 
