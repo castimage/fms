@@ -247,13 +247,11 @@ public class WfServiceImpl implements WfService {
         if (!"ACTIVE".equals(d.getStatus())) {
             throw new ConflictException("流程定义未激活，无法发起（当前 " + d.getStatus() + "）");
         }
-        NodeInfo first = firstActionNode(d.getNodeJson());
         if (instanceMapper.selectByBusiness(req.businessType().trim(), req.businessId()) != null) {
             throw new ConflictException("该业务单据已存在审批实例，请勿重复发起");
         }
         UUID instanceId = instanceMapper.startInstance(d.getCompanyId(), d.getId(),
-                req.businessType().trim(), req.businessId(), uid,
-                first.nodeCode(), first.assigneeRole());
+                req.businessType().trim(), req.businessId(), uid);
         if (instanceId == null) {
             throw new ConflictException("发起失败：业务单据已存在审批实例或数据不可见");
         }
@@ -397,9 +395,35 @@ public class WfServiceImpl implements WfService {
             if ("END".equals(type)) endCnt++;
             if ("APPROVE".equals(type)) {
                 approveCnt++;
-                String role = o.getString("assignee_role");
-                if (role == null || role.isBlank()) {
-                    throw new BadRequestException("审批节点处理人角色不能为空: " + code);
+                // APPROVE 节点结构，strategy 白名单 + 非空 handlers，每项来源 role/user/applicant，
+                // role 需 code、user 需 userId，缺 handlers 即拒绝
+                if (!o.containsKey("handlers")) {
+                    throw new BadRequestException("审批节点须含 handlers（strategy + 处理人来源数组）: " + code);
+                }
+                String strategy = o.getString("strategy");
+                if (strategy == null
+                        || !java.util.Set.of("approve", "countersign", "orsign").contains(strategy)) {
+                    throw new BadRequestException("审批节点 strategy 非法: " + code);
+                }
+                Object hs = o.get("handlers");
+                if (!(hs instanceof JSONArray handlers) || handlers.isEmpty()) {
+                    throw new BadRequestException("审批节点 handlers 不能为空: " + code);
+                }
+                for (int j = 0; j < handlers.size(); j++) {
+                    Object hel = handlers.get(j);
+                    if (!(hel instanceof JSONObject h)) {
+                        throw new BadRequestException("审批节点处理人须为对象: " + code);
+                    }
+                    String source = h.getString("source");
+                    if (source == null
+                            || !java.util.Set.of("role", "user", "applicant").contains(source)) {
+                        throw new BadRequestException("审批节点处理人来源非法: " + code);
+                    }
+                    String val = "user".equals(source) ? h.getString("userId") : h.getString("code");
+                    if (val == null || val.isBlank()) {
+                        throw new BadRequestException(
+                                "审批节点处理人缺少取值（role 需 code，user 需 userId）: " + code);
+                    }
                 }
             }
         }
@@ -412,42 +436,6 @@ public class WfServiceImpl implements WfService {
         if (approveCnt < 1) {
             throw new BadRequestException("节点编排须至少一个 APPROVE");
         }
-    }
-
-    /**
-     * 取节点编排中首个可审批节点（跳过 START/END）：非法 JSON / 空编排 / 无审批节点
-     * 均回 40001。返回 node_code 与 assignee_role（供发起时创建首任务并解析处理人）。
-     */
-    private NodeInfo firstActionNode(String nodeJson) {
-        Object parsed;
-        try {
-            parsed = JSON.parse(nodeJson);
-        } catch (Exception e) {
-            throw new BadRequestException("node_json 非法 JSON");
-        }
-        if (!(parsed instanceof JSONArray arr) || arr.isEmpty()) {
-            throw new BadRequestException("节点编排不能为空 JSON 数组");
-        }
-        for (int i = 0; i < arr.size(); i++) {
-            Object el = arr.get(i);
-            if (!(el instanceof JSONObject o)) {
-                throw new BadRequestException("节点编排元素须为 JSON 对象");
-            }
-            String type = o.getString("type");
-            if ("START".equalsIgnoreCase(type) || "END".equalsIgnoreCase(type)) {
-                continue;
-            }
-            String nodeCode = o.getString("node_code");
-            if (nodeCode == null || nodeCode.isBlank()) {
-                throw new BadRequestException("节点编排缺少 node_code");
-            }
-            return new NodeInfo(nodeCode, o.getString("assignee_role"));
-        }
-        throw new BadRequestException("流程定义无审批节点（编排全为 START/END）");
-    }
-
-    /** 首个可审批节点（node_code + assignee_role） */
-    private record NodeInfo(String nodeCode, String assigneeRole) {
     }
 
     /** 实体转视图 */

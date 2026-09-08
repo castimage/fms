@@ -133,7 +133,7 @@ public class GlobalExceptionHandler {
                 }
                 if (List.of("balance", "借贷", "period", "closed", "锁定", "immutable", "不可变",
                         "leaf", "末级", "期间", "过账", "冲销", "结账", "审核", "凭证", "科目",
-                        "白名单", "whitelist", "软删除")
+                        "处理人", "白名单", "whitelist", "软删除")
                         .stream().anyMatch(message::contains)) {
                     yield buildError(FmsBaseException.CODE_CONFLICT, "业务规则校验失败", traceId);
                 }

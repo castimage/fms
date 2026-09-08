@@ -1,8 +1,5 @@
 package net.castimage.fms_backend.Service.impl;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -345,9 +342,9 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     /**
      * 启动报销审批实例并回填 wf_instance_id（幂等：已挂接跳过）：按公司查 ACTIVE 报销
-     * 审批流定义（code=expense_reimburse，seed_data 种子），取节点编排首个审批节点
-     * （跳过 START/END），经 wf.fn_start_instance（SECURITY DEFINER）原子创建 RUNNING
-     * 实例 + 首节点 PENDING 任务（处理人按 assignee_role 解析）；定义缺失/未激活跳过。
+     * 审批流定义（code=expense_reimburse，seed_data 种子），经 wf.fn_start_instance
+     * （SECURITY DEFINER）原子创建 RUNNING 实例并激活首个 APPROVE 节点任务集，首节点
+     * 与处理人展开由引擎读定义 node_json 完成；定义缺失/未激活跳过。
      */
     private void startWfInstance(UUID id) {
         Reimbursement r = reimbursementMapper.selectById(id);
@@ -364,14 +361,8 @@ public class ExpenseServiceImpl implements ExpenseService {
                     id, r.getCompanyId());
             return;
         }
-        NodeInfo first = firstActionNode(def.getNodeJson());
-        if (first == null) {
-            log.warn("报销单 {} 审批流定义 {} 无审批节点编排，跳过 wf 挂接", id, def.getCode());
-            return;
-        }
         UUID instanceId = wfInstanceMapper.startInstance(r.getCompanyId(), def.getId(),
-                "REIMBURSEMENT", r.getId(), RequestContext.requireUserId(),
-                first.nodeCode(), first.assigneeRole());
+                "REIMBURSEMENT", r.getId(), RequestContext.requireUserId());
         if (instanceId == null) {
             log.warn("报销单 {} wf 实例发起返回空（业务单据已有实例或数据不可见），跳过回填", id);
             return;
@@ -402,38 +393,6 @@ public class ExpenseServiceImpl implements ExpenseService {
             log.warn("报销单 {} 同步 wf 实例 {} 状态 {} 未生效（实例不可见或已非 RUNNING）",
                     id, r.getWfInstanceId(), status);
         }
-    }
-
-    /** 节点编排首个审批节点（跳过 START/END）；非法 JSON/空编排返回 null（记录型，不阻断） */
-    private NodeInfo firstActionNode(String nodeJson) {
-        try {
-            Object parsed = JSON.parse(nodeJson);
-            if (!(parsed instanceof JSONArray arr)) {
-                return null;
-            }
-            for (int i = 0; i < arr.size(); i++) {
-                Object el = arr.get(i);
-                if (!(el instanceof JSONObject o)) {
-                    continue;
-                }
-                String type = o.getString("type");
-                if ("START".equalsIgnoreCase(type) || "END".equalsIgnoreCase(type)) {
-                    continue;
-                }
-                String nodeCode = o.getString("node_code");
-                if (nodeCode == null || nodeCode.isBlank()) {
-                    continue;
-                }
-                return new NodeInfo(nodeCode, o.getString("assignee_role"));
-            }
-        } catch (Exception e) {
-            log.warn("报销审批流 node_json 解析失败：{}", e.getMessage());
-        }
-        return null;
-    }
-
-    /** 首个审批节点（node_code + assignee_role，供 wf.fn_start_instance 创建首任务） */
-    private record NodeInfo(String nodeCode, String assigneeRole) {
     }
 
     // 私有方法

@@ -71,7 +71,8 @@ public interface WfService {
     /**
      * 发起流程实例（POST /api/wf/instances）：定义须 ACTIVE（40400/40900 前置预检）；
      * 同一业务单据仅允许一个未删除实例（uk_wf_inst_business 唯一索引兜底则 40900）；
-     * 原子创建 RUNNING 实例 + 首个审批节点 PENDING 任务（wf.fn_start_instance）。
+     * 原子创建 RUNNING 实例并激活首个 APPROVE 节点任务集（wf.fn_start_instance，
+     * 首节点与处理人策略由引擎读定义 node_json 完成）。
      */
     WfInstanceView startInstance(WfInstanceRequest req);
 

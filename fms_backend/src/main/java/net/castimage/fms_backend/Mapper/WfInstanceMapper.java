@@ -80,20 +80,18 @@ public interface WfInstanceMapper extends BaseMapper<WfInstance> {
 
     /**
      * 发起流程实例：调 wf.fn_start_instance（SECURITY DEFINER，规避 um.users/user_role
-     * RLS 空集）——原子创建 RUNNING 实例 + 首个审批节点 PENDING 任务（处理人按
-     * assignee_role 解析：applicant=发起人，先角色 code 匹配，再公司内兜底 ACTIVE 用户）。
+     * RLS 空集）——原子创建 RUNNING 实例并激活首个 APPROVE 节点任务集，首节点与
+     * 处理人展开由引擎读 ACTIVE 定义 node_json 完成（策略见 wf.fn_activate_node）。
      * 返回实例 id。
      */
     @Select("""
             SELECT wf.fn_start_instance(#{companyId}::uuid, #{definitionId}::uuid,
                                         #{businessType}, #{businessId}::uuid,
-                                        #{initiatorId}::uuid, #{nodeCode}, #{assigneeRole})
+                                        #{initiatorId}::uuid)
             """)
     UUID startInstance(@Param("companyId") UUID companyId,
                        @Param("definitionId") UUID definitionId,
                        @Param("businessType") String businessType,
                        @Param("businessId") UUID businessId,
-                       @Param("initiatorId") UUID initiatorId,
-                       @Param("nodeCode") String nodeCode,
-                       @Param("assigneeRole") String assigneeRole);
+                       @Param("initiatorId") UUID initiatorId);
 }
