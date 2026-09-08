@@ -1578,7 +1578,7 @@ DECLARE
     v_changed boolean := false;
 BEGIN
     FOR v_row IN
-        SELECT id, node_json FROM wf.definitions WHERE deleted_at IS NULL
+        SELECT id, node_json FROM wf.definitions
     LOOP
         v_out := '[]'::jsonb;
         v_changed := false;

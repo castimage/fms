@@ -373,7 +373,7 @@ SELECT '00000000-0000-7000-0000-000000000010', '中国工商银行北京中关�
        'CNY', 'CORPORATE', 'ACTIVE'
 ON CONFLICT (account_no_hash) DO NOTHING;
 
--- 费用报销审批流定义承载于系统种子 init/seed_system.sql（assignee_role 用真实职责角色），
+-- 费用报销审批流定义承载于系统种子 init/seed_system.sql（handlers 用真实职责角色），
 -- 本文件仅保留报销单据与审批实例的演示数据，不重复插定义
 
 -- expense 报销单（DRAFT）+ 明细
