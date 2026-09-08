@@ -118,7 +118,7 @@ ON CONFLICT (role_id, perm_id) DO NOTHING;
 
 -- ② gl.fn_fx_adjustment 期末调汇实现
 
--- 算法，设计决策，账务简化的 WHY，
+-- 调汇算法与账务简化设计决策，
 --   * 记账汇率不可得（voucher_lines 仅 currency 无 rate 列），账面本币无法精确还原，
 --     采用任务指定简化，期末本币价值 = 原币余额 × 期末汇率，账面按 1:1 计价（base=CNY 时
 --     即原币余额 × 1），差额 = 原币余额 ×（期末汇率 − 1），全部计入汇兑损益科目。
