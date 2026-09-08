@@ -8,6 +8,30 @@ export type WfDefinitionStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED'
 export type WfInstanceStatus = 'RUNNING' | 'APPROVED' | 'REJECTED'
 export type WfTaskStatus = 'PENDING' | 'CLAIMED' | 'APPROVED' | 'REJECTED' | 'TRANSFERRED'
 
+/** 节点类型，开始 / 审批 / 结束 */
+export type WfNodeType = 'START' | 'APPROVE' | 'END'
+
+/** 审批策略，单审 approve / 会签 countersign / 或签 orsign */
+export type WfNodeStrategy = 'approve' | 'countersign' | 'orsign'
+
+/** 处理人来源，角色全员 role / 指定用户 user / 实例发起人 applicant */
+export type WfHandlerSource = 'role' | 'user' | 'applicant'
+
+/** 处理人来源项，role 带 code，user 带 userId，applicant 不带取值 */
+export interface WfNodeHandler {
+  source: WfHandlerSource
+  code?: string
+  userId?: string
+}
+
+/** 节点编排行，START/END 仅 node_code 与 type，APPROVE 含 strategy 与 handlers */
+export interface WfNodeDef {
+  node_code: string
+  type: WfNodeType
+  strategy?: WfNodeStrategy
+  handlers?: WfNodeHandler[]
+}
+
 /** 流程定义创建/更新请求，code 公司内唯一且创建后不可变更 */
 export interface WfDefinitionRequest {
   companyId: string

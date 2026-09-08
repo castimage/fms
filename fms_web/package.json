@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
+    "@vue-flow/core": "^1.48.2",
     "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
     "dayjs": "^1.11.21",
