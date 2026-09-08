@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS wf.definitions (
     name        TEXT    NOT NULL,                -- 流程名称
     version     INT     NOT NULL DEFAULT 1,
     form_type   TEXT,                            -- 关联表单类型
-    node_json   JSONB   NOT NULL DEFAULT '{}'::jsonb,  -- 节点编排数组，APPROVE 支持旧式 assignee_role 与新式 strategy+handlers，START/END 仅 node_code/type
+    node_json   JSONB   NOT NULL DEFAULT '{}'::jsonb,  -- 节点编排数组，APPROVE 含 strategy 与 handlers，START/END 仅 node_code/type
     status      TEXT    NOT NULL DEFAULT 'DRAFT'
                 CHECK (status IN ('DRAFT','ACTIVE','DISABLED')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS wf.definitions (
     CONSTRAINT uk_wf_def UNIQUE (company_id, code)
 );
 COMMENT ON TABLE  wf.definitions IS '工作流流程定义（node_json 编排审批节点）';
-COMMENT ON COLUMN wf.definitions.node_json IS '节点编排 JSONB 数组，元素含 node_code 与 type；APPROVE 可为旧式单角色 {"type":"APPROVE","assignee_role":"approver"} 或新式 {"type":"APPROVE","strategy":"countersign","handlers":[{"source":"role","code":"approver"},{"source":"user","userId":"<uuid>"},{"source":"applicant"}]}，START/END 不携带处理人';
+COMMENT ON COLUMN wf.definitions.node_json IS '节点编排 JSONB 数组，元素含 node_code 与 type；APPROVE 节点含 strategy（approve/countersign/orsign）与 handlers 处理人来源数组（source 为 role/user/applicant）；START/END 不携带处理人';
 
 -- 1.2 wf.instances 流程实例
 CREATE TABLE IF NOT EXISTS wf.instances (
@@ -600,15 +600,15 @@ END
 $$;
 
 -- 6.4 节点级推进引擎（多处理人/会签/或签），由 fn_start_instance 与 fn_complete_task 调用
--- 实例推进由 fn_node_done 与 fn_advance_instance 承担，单任务实例推进函数无调用方，移除以免误用
+-- 实例推进由 fn_node_done 与 fn_advance_instance 承担
 DROP FUNCTION IF EXISTS wf.fn_auto_activate_next(uuid);
 -- wf.fn_activate_node(p_instance_id, p_node) 依节点 strategy 与 handlers 展开处理人并生成任务集。
--- 节点兼容两形态，单 assignee_role 等价于 approve 单角色；含 strategy 与 handlers 数组
--- （source 为 applicant/role/user 可混合）。单审 approve 生成 1 条任务，角色源取该公司下
--- 最早授权的 ACTIVE 成员，集合空按公司首个 ACTIVE 用户再发起人兜底；
--- 会签 countersign 与或签 orsign 展开全部处理人各 1 条任务，applicant 即发起人，角色成员按
--- company_id 过滤且 ACTIVE，同一用户重复命中只派一票，集合为空则 RAISE P0001。
--- 任务到期时限读 um.params wf.task.due.days，缺省 3 天。
+-- APPROVE 含 strategy（approve/countersign/orsign）与 handlers 数组
+-- （source 为 applicant/role/user 可混合），缺失 handlers 视为空集。单审 approve 生成
+-- 1 条任务，角色源取该公司下最早授权的 ACTIVE 成员，集合空按公司首个 ACTIVE 用户再
+-- 发起人兜底；会签 countersign 与或签 orsign 展开全部处理人各 1 条任务，applicant 即
+-- 发起人，角色成员按 company_id 过滤且 ACTIVE，同一用户重复命中只派一票，
+-- 集合为空则 RAISE P0001。任务到期时限读 um.params wf.task.due.days，缺省 3 天。
 CREATE OR REPLACE FUNCTION wf.fn_activate_node(p_instance_id uuid, p_node jsonb)
 RETURNS int
 LANGUAGE plpgsql
@@ -653,13 +653,6 @@ BEGIN
     END IF;
     IF jsonb_typeof(p_node->'handlers') = 'array' THEN
         v_handlers := p_node->'handlers';
-    ELSIF p_node ? 'assignee_role' THEN
-        IF lower(p_node->>'assignee_role') = 'applicant' THEN
-            v_handlers := '[{"source":"applicant"}]'::jsonb;
-        ELSE
-            v_handlers := jsonb_build_array(
-                jsonb_build_object('source', 'role', 'code', p_node->>'assignee_role'));
-        END IF;
     ELSE
         v_handlers := '[]'::jsonb;
     END IF;
@@ -1502,7 +1495,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_wf_inst_business
 -- 2) 流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
 -- 读 ACTIVE 定义 node_json，取首个 APPROVE 节点为当前节点，任务集经 fn_activate_node
 -- 依节点策略生成（单审 1 票，会签/或签多票），处理人解析见 fn_activate_node。
--- 单节点单角色入参重载无调用方，删除以免绕过节点策略直派单票
+-- 发起入口为 5 参，单节点单角色入参重载不保留（DROP 幂等清理）
 DROP FUNCTION IF EXISTS wf.fn_start_instance(uuid, uuid, text, uuid, uuid, text, text);
 CREATE OR REPLACE FUNCTION wf.fn_start_instance(
     p_company_id    uuid,
@@ -1572,6 +1565,61 @@ DO $$ BEGIN
         ALTER TABLE budget.budget_plans
             ADD CONSTRAINT uk_budget_plans UNIQUE (company_id, period, account_id, dept_id, version);
     END IF;
+END $$;
+
+-- 定义数据形态归一，APPROVE 节点补齐 strategy 与 handlers（source 按 assignee_role 推导为
+-- role/applicant），START/END 去除 assignee_role 键，目标形态行不命中，幂等
+DO $$
+DECLARE
+    v_row     record;
+    v_node    jsonb;
+    v_new     jsonb;
+    v_out     jsonb := '[]'::jsonb;
+    v_changed boolean := false;
+BEGIN
+    FOR v_row IN
+        SELECT id, node_json FROM wf.definitions WHERE deleted_at IS NULL
+    LOOP
+        v_out := '[]'::jsonb;
+        v_changed := false;
+        FOR v_node IN
+            SELECT value FROM jsonb_array_elements(v_row.node_json) AS e(value)
+        LOOP
+            IF v_node->>'type' = 'APPROVE' THEN
+                IF v_node ? 'handlers' THEN
+                    v_new := v_node;
+                    IF NOT (v_node ? 'strategy') THEN
+                        v_new := v_new || jsonb_build_object('strategy', 'approve');
+                        v_changed := true;
+                    END IF;
+                ELSIF v_node ? 'assignee_role' THEN
+                    IF lower(v_node->>'assignee_role') = 'applicant' THEN
+                        v_new := jsonb_build_object('node_code', v_node->>'node_code', 'type', 'APPROVE',
+                                    'strategy', 'approve',
+                                    'handlers', jsonb_build_array(jsonb_build_object('source', 'applicant')));
+                    ELSE
+                        v_new := jsonb_build_object('node_code', v_node->>'node_code', 'type', 'APPROVE',
+                                    'strategy', 'approve',
+                                    'handlers', jsonb_build_array(
+                                        jsonb_build_object('source', 'role', 'code', v_node->>'assignee_role')));
+                    END IF;
+                    v_changed := true;
+                ELSE
+                    v_new := v_node;
+                END IF;
+            ELSIF v_node ? 'assignee_role' THEN
+                v_new := v_node - 'assignee_role';
+                v_changed := true;
+            ELSE
+                v_new := v_node;
+            END IF;
+            v_out := v_out || v_new;
+        END LOOP;
+        IF v_changed THEN
+            UPDATE wf.definitions SET node_json = v_out, updated_at = now()
+             WHERE id = v_row.id;
+        END IF;
+    END LOOP;
 END $$;
 
 -- 文件末尾自查（配合 psql -v ON_ERROR_STOP=1，确认执行完整）

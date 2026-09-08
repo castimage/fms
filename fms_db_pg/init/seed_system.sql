@@ -251,7 +251,7 @@ BEGIN
     RAISE NOTICE 'seed_system: admin 用户联系方式已加密写入（aes256）+ HMAC 盲索引';
 END $$;
 
--- 兼容兜底段，明文联系方式按主密钥加密回写并补盲索引，仅命中明文形态，幂等空操作
+    -- 明文联系方式加密回写段，命中明文形态时按主密钥加密并补盲索引，幂等空操作
 DO $$
 DECLARE
     v_mkey  text;
@@ -280,7 +280,7 @@ BEGIN
     END IF;
 END $$;
 
--- 系统流程定义种子（wf.definitions），assignee_role 用真实职责角色（applicant=发起人，
+-- 系统流程定义种子（wf.definitions），处理人来源用真实职责角色（handlers source=role，
 -- approver/cashier 等持 wf.instance.approve 权限），避免无实体角色的流程定义导致任务无人承接。
 -- 费用报销 ACTIVE（业务已挂接）；其余为业务预留模板 DRAFT（对应单据仍走自有状态机，
 -- 待业务接入 wf 后由管理员启用）。幂等，重放不覆盖既有定义。
@@ -288,31 +288,31 @@ INSERT INTO wf.definitions (company_id, code, name, version, form_type, node_jso
 VALUES
     ('00000000-0000-7000-0000-000000000010', 'expense_reimburse', '费用报销审批流', 1,
      'expense_reimbursement',
-     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"end","type":"END"}]'::jsonb,
      'ACTIVE'),
     ('00000000-0000-7000-0000-000000000010', 'voucher_approve', '凭证审核流', 1,
      'voucher',
-     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'payment_approve', '付款审批流', 1,
      'payment',
-     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"pay","type":"APPROVE","assignee_role":"cashier"},{"node_code":"end","type":"END"}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"pay","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"cashier"}]},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'budget_adjust', '预算调整审批流', 1,
      'budget_adjustment',
-     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT'),
     ('00000000-0000-7000-0000-000000000010', 'asset_dispose', '资产处置审批流', 1,
      'asset',
-     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb,
+     '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"end","type":"END"}]'::jsonb,
      'DRAFT')
 ON CONFLICT (company_id, code) DO NOTHING;
 
--- 报销 ACTIVE 定义统一为单审批段（审批后实例即 APPROVED，付款由业务报销状态机承担，
--- 不激活出纳 wf 任务，避免与引擎逐节点推进双轨）。匹配含 pay 出纳节点或无实体角色
--- （dept_manager/finance_manager）的定义收敛为规范形态，规范形态不命中，幂等
+-- 报销 ACTIVE 定义为单审批段（审批后实例即 APPROVED，付款由业务报销状态机承担，
+-- 不激活出纳 wf 任务，避免与引擎逐节点推进双轨）。匹配含 pay 出纳节点或
+-- dept_manager/finance_manager 角色来源的定义改写，目标形态行不命中，幂等
 UPDATE wf.definitions
-   SET node_json = '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","assignee_role":"approver"},{"node_code":"end","type":"END"}]'::jsonb
+   SET node_json = '[{"node_code":"apply","type":"START"},{"node_code":"approve","type":"APPROVE","strategy":"approve","handlers":[{"source":"role","code":"approver"}]},{"node_code":"end","type":"END"}]'::jsonb
  WHERE company_id = '00000000-0000-7000-0000-000000000010'
    AND code = 'expense_reimburse'
    AND (node_json::text LIKE '%dept_manager%' OR node_json::text LIKE '%finance_manager%'
