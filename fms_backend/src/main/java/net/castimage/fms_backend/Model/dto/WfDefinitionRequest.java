@@ -7,8 +7,9 @@ import java.util.UUID;
 
 /**
  * 流程定义创建/更新请求：code 公司内唯一（uk_wf_def）且创建后不可变更；node_json 为 JSON
- * 数组文本（[{node_code, type, assignee_role}]，Java 仅校验 JSON 合法性，激活前须为非空数组）；
- * 状态经 DRAFT 启用 ACTIVE、可停用 DISABLED，由 activate/disable 端点推进。
+ * 数组文本，元素含 node_code 与 type，APPROVE 节点含 strategy 与 handlers，
+ * Java 仅校验 JSON 合法性，激活前须为非空数组；状态经 DRAFT 启用 ACTIVE、可停用 DISABLED，
+ * 由 activate/disable 端点推进。
  */
 public record WfDefinitionRequest(
         /** 所属公司（必填，须在当前用户可见范围内） */

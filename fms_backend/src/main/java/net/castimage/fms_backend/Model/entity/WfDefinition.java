@@ -11,10 +11,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * 工作流流程定义实体（wf.definitions）：node_json 节点编排 JSONB
- * （[{node_code, type, assignee_role}]，实体映射 String + fastjson2 解析校验）；
+ * 工作流流程定义实体（wf.definitions）：node_json 节点编排 JSONB 数组，元素含 node_code 与 type，
+ * APPROVE 节点含 strategy 与 handlers，实体映射 String + fastjson2 解析校验；
  * 状态机经 DRAFT 启用 ACTIVE、可停用 DISABLED（激活前校验节点编排非空）；(company_id, code) 唯一
- * （uk_wf_def）——code 创建后不可变更。
+ * （uk_wf_def），code 创建后不可变更。
  */
 @TableName(schema = "wf", value = "definitions")
 @Data

@@ -75,9 +75,10 @@ public interface WfTaskMapper extends BaseMapper<WfTask> {
     /**
      * 任务办结：调 wf.complete_task(taskId, action, remark)——PG 侧 require_permission
      * （wf.instance.approve/reject）+ assignee 归属校验（非本人 RAISE 42501 映射 40300）+
-     * 幂等（已办结返回 false 则 40900）+ 实例状态机推进（approve 走 fn_auto_activate_next，
-     * reject 直置实例 REJECTED，transfer 的 remark 为新处理人 uuid 文本即同节点新建
-     * PENDING 任务）+ 事件留痕 + PGMQ 通知（失败静默）。
+     * 幂等（已办结返回 false 则 40900）+ 实例状态机推进（approve 经 fn_node_done 判定节点通过
+     * 后由 fn_advance_instance 推进下一节点或置实例 APPROVED，reject 直置实例 REJECTED 并软删
+     * 同节点其余票，transfer 的 remark 为新处理人 uuid 文本即同节点新建 PENDING 任务）+
+     * 事件留痕 + PGMQ 通知（失败静默）。
      */
     @Select("SELECT wf.complete_task(#{taskId}::uuid, #{action}, #{remark})")
     boolean complete(@Param("taskId") UUID taskId,

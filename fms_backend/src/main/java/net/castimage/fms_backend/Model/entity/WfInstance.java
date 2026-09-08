@@ -11,7 +11,7 @@ import java.util.UUID;
 /**
  * 工作流实例实体（wf.instances）：业务单据通用挂接（business_type + business_id）；
  * 状态机 RUNNING 转 APPROVED/REJECTED/CANCELED（推进由 PG 函数 wf.fn_complete_task /
- * wf.fn_auto_activate_next 完成）；RLS SELECT 限定本人发起或终态（APPROVED/REJECTED）——
+ * wf.fn_advance_instance 完成）；RLS SELECT 限定本人发起或终态（APPROVED/REJECTED），
  * 他人 RUNNING 实例不可见。
  */
 @TableName(schema = "wf", value = "instances")

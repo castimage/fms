@@ -234,7 +234,7 @@ public class WfServiceImpl implements WfService {
     /**
      * 发起流程实例：Java 预检（定义可见 40400 / 须 ACTIVE 40900 / 节点编排合法 40001 /
      * 业务单据未重复发起 40900）后，委托 wf.fn_start_instance（SECURITY DEFINER）原子
-     * 创建 RUNNING 实例 + 首个审批节点 PENDING 任务（处理人按 assignee_role 解析）；
+     * 创建 RUNNING 实例 + 首个审批节点任务集（处理人按 strategy 与 handlers 展开）；
      * 并发重复发起由 uk_wf_inst_business 唯一索引兜底（23505 映射 40900）。
      */
     /** {@inheritDoc} */
@@ -419,7 +419,12 @@ public class WfServiceImpl implements WfService {
                             || !java.util.Set.of("role", "user", "applicant").contains(source)) {
                         throw new BadRequestException("审批节点处理人来源非法: " + code);
                     }
-                    String val = "user".equals(source) ? h.getString("userId") : h.getString("code");
+                    // applicant 不带取值，role 取 code、user 取 userId
+                    String val = switch (source) {
+                        case "role" -> h.getString("code");
+                        case "user" -> h.getString("userId");
+                        default -> "applicant";
+                    };
                     if (val == null || val.isBlank()) {
                         throw new BadRequestException(
                                 "审批节点处理人缺少取值（role 需 code，user 需 userId）: " + code);

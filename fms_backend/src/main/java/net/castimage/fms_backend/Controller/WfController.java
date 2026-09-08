@@ -132,8 +132,8 @@ public class WfController {
     }
 
     /**
-     * 发起流程实例（定义须 ACTIVE）：创建 RUNNING 实例 + 首个审批节点 PENDING 任务
-     * （处理人按节点 assignee_role 解析）；同一业务单据仅允许一个未删除实例（40900）。
+     * 发起流程实例（定义须 ACTIVE）：创建 RUNNING 实例 + 首个审批节点任务集
+     * （处理人按节点 strategy 与 handlers 展开）；同一业务单据仅允许一个未删除实例（40900）。
      */
     @PostMapping("/instances")
     public ApiResponse<WfInstanceView> startInstance(@RequestBody @Valid WfInstanceRequest req) {
