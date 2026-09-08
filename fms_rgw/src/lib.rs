@@ -37,6 +37,7 @@ use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
 use hyper_util::service::TowerToHyperService;
+use rustls::crypto::ring;
 use state::AppState;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -80,7 +81,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("tracing 初始化失败：{e}"))?;
 
     // rustls加密提供者，ring，重复安装幂等
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let _ = ring::default_provider().install_default();
 
     let state = build_state(cfg)?;
     let rt = tokio::runtime::Builder::new_multi_thread()
