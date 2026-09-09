@@ -1554,6 +1554,8 @@ COMMENT ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     IS '流程发起：创建 RUNNING 实例并激活首个审批节点任务集，节点策略见 fn_activate_node';
 
 -- 3) 授权，运行时连接角色经 SET ROLE fms_operator 调用
+-- SECURITY DEFINER 闸口不授 PUBLIC，先收默认 PUBLIC 执行再按角色授，防任意会话直呼
+REVOKE EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     TO fms_operator;
 
@@ -1681,4 +1683,6 @@ COMMENT ON FUNCTION wf.fn_revise_definition(uuid)
     IS '流程定义回草稿 DISABLED 转 DRAFT，仅无 RUNNING 实例可回，规避 RLS 计数在途';
 
 -- 授权，运行时连接角色经 SET ROLE fms_operator 调用
+-- SECURITY DEFINER 闸口不授 PUBLIC，先收默认 PUBLIC 执行再按角色授，防任意会话直呼
+REVOKE EXECUTE ON FUNCTION wf.fn_revise_definition(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION wf.fn_revise_definition(uuid) TO fms_operator;
