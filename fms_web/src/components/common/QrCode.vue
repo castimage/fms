@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * QR 码渲染，数据源为自研纯 TS 生成器 utils/qrcode.ts，无第三方依赖，
+ * QR 码渲染，矩阵生成委托 qrcode-generator 成熟库（typeNumber 0 自动选版本，纠错 M），
  * 深色模式随主题换色，text/size/主题变化时重建。
  */
 import { onMounted, watch } from 'vue'
 import { useTemplateRef } from 'vue'
-import { generateQrMatrix } from '@/utils/qrcode'
+import qrcode from 'qrcode-generator'
 import { useThemeStore } from '@/stores/theme'
 
 const { text, size = 200 } = defineProps<{
@@ -22,8 +22,10 @@ const canvasRef = useTemplateRef<HTMLCanvasElement>('canvasRef')
 function draw() {
   const canvas = canvasRef.value
   if (!canvas) return
-  const matrix = generateQrMatrix(text)
-  const n = matrix.length
+  const qr = qrcode(0, 'M')
+  qr.addData(text)
+  qr.make()
+  const n = qr.getModuleCount()
   const quiet = 4
   const dpr = window.devicePixelRatio || 1
   const total = n + quiet * 2
@@ -37,7 +39,7 @@ function draw() {
   ctx.fillStyle = theme.darkMode ? '#e5e6eb' : '#1f2329'
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      if (matrix[y][x]) ctx.fillRect((x + quiet) * px, (y + quiet) * px, px, px)
+      if (qr.isDark(y, x)) ctx.fillRect((x + quiet) * px, (y + quiet) * px, px, px)
     }
   }
 }
