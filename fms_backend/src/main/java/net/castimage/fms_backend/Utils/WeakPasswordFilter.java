@@ -43,8 +43,8 @@ public class WeakPasswordFilter {
     /** 总开关，false 恒放行 */
     private volatile boolean enabled;
 
-    @Autowired
-    private FmsProperties fmsProperties;
+    /** 配置源，Spring 注入 */
+    private final FmsProperties fmsProperties;
 
     /**
      * 测试/程序化构造，按参数构建，内置集合。
@@ -67,6 +67,15 @@ public class WeakPasswordFilter {
      */
     public static WeakPasswordFilter disabled() {
         return new WeakPasswordFilter(1024, 0.01, Set.of(), false);
+    }
+
+    /**
+     * Spring 单例构造，本类另有静态工厂使用的私有构造器，多构造器并存时
+     * 须显式标注注入入口，否则容器按无参构造器查找而失败。
+     */
+    @Autowired
+    public WeakPasswordFilter(FmsProperties fmsProperties) {
+        this.fmsProperties = fmsProperties;
     }
 
     private WeakPasswordFilter(int expectedInsertions, double falsePositiveRate,
