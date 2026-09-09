@@ -103,33 +103,10 @@ fn has_dotdot_segment(s: &str) -> bool {
     s.split('/').any(|seg| seg == "..")
 }
 
-/// 最小percent-decode，仅%XX，非法%序列按字面保留，不校验utf-8结构
+/// 最小percent-decode，仅%XX，非法%序列按字面保留，不校验utf-8结构，
+/// 委托 percent-encoding crate，单轮逐字节语义与自实现一致
 fn percent_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
-        {
-            out.push(h * 16 + l);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn hex_val(c: u8) -> Option<u8> {
-    match c {
-        b'0'..=b'9' => Some(c - b'0'),
-        b'a'..=b'f' => Some(c - b'a' + 10),
-        b'A'..=b'F' => Some(c - b'A' + 10),
-        _ => None,
-    }
+    percent_encoding::percent_decode_str(s).decode_utf8_lossy().into_owned()
 }
 
 /// 带body的方法，GET/DELETE/HEAD跳过
@@ -521,11 +498,11 @@ pub async fn mw_input_filter(
 // 先于filter/rate/auth按真实客户端ip判定，非白名单来源直接丢弃，403 fail-closed，
 // 且xff/X-Real-IP伪造不影响判定(取对端真实ip，见extract_client_ip)
 
-/// 解析后的ip网段，精确ip = /32或 /128，prefix 0 = 全匹配
+/// 解析后的ip网段，精确ip = /32或 /128，prefix 0 = 全匹配，
+/// 网段匹配委托 ipnet crate
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IpNet {
-    addr: std::net::IpAddr,
-    prefix: u8,
+    net: ipnet::IpNet,
 }
 
 impl IpNet {
@@ -547,36 +524,12 @@ impl IpNet {
             Some(_) => return None, // 前缀越界非法
             None => max,            // 无斜杠 = 精确ip，/32或 /128
         };
-        Some(IpNet { addr, prefix })
+        Some(IpNet { net: ipnet::IpNet::new(addr, prefix).ok()? })
     }
 
-    /// 网段是否包含目标ip，掩码比较，ipv4/ipv6异族恒false
+    /// 网段是否包含目标ip，委托 ipnet 掩码比较，ipv4/ipv6异族恒false
     pub fn contains(&self, ip: &std::net::IpAddr) -> bool {
-        if self.prefix == 0 {
-            return true; // /0全匹配，含::/0
-        }
-        match (self.addr, ip) {
-            (std::net::IpAddr::V4(a), std::net::IpAddr::V4(b)) => {
-                let mask = if self.prefix == 32 {
-                    u32::MAX
-                } else {
-                    u32::MAX << (32 - self.prefix as u32)
-                };
-                // match ergonomics，self.addr为owned、ip为引用则 a值 / b引用
-                (u32::from(a) & mask) == (u32::from(*b) & mask)
-            }
-            (std::net::IpAddr::V6(a), std::net::IpAddr::V6(b)) => {
-                let a = u128::from(a);
-                let b = u128::from(*b);
-                if self.prefix == 128 {
-                    a == b
-                } else {
-                    let shift = 128 - self.prefix as u32;
-                    (a >> shift) == (b >> shift)
-                }
-            }
-            _ => false,
-        }
+        self.net.contains(ip)
     }
 }
 

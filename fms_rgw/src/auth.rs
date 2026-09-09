@@ -15,6 +15,8 @@ use axum::extract::State;
 use axum::http::header::{AUTHORIZATION, HeaderName};
 use axum::http::{Method, Request, Response};
 use axum::middleware::Next;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine as _;
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use jsonwebtoken::errors::ErrorKind;
@@ -38,33 +40,9 @@ fn token_exp_secs(token: &str) -> Option<i64> {
     v.get("exp").and_then(|e| e.as_i64())
 }
 
-/// 最小base64url解码(RFC 4648 url安全字母表，无padding，
-/// 尾部不足8位的零位按规范丢弃)
+/// 最小base64url解码(RFC 4648 url安全字母表，无padding)，委托 base64 crate
 fn base64url_decode(s: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(s.len() * 3 / 4 + 3);
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-
-    for &c in s.as_bytes() {
-        let v = match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'-' => 62,
-            b'_' => 63,
-            _ => return None,
-        };
-
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
-
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-        }
-    }
-
-    Some(out)
+    URL_SAFE_NO_PAD.decode(s).ok()
 }
 
 /// `Claims`，与`pgjwt.sign` 产出的payload一致，HS256

@@ -30,6 +30,11 @@ dashmap = "6"
 serde_yml = "0.0.13"
 redis = "0.9"
 thiserror = "2.0.20"
+base64 = "0.22"
+fnv = "1"
+ipnet = "2"
+percent-encoding = "2"
+rand = "0.9"
 
 [dev-dependencies]
 h2 = "0.4"

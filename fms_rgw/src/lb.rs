@@ -3,8 +3,8 @@
 //! 下一个健康实例，连续失败 ≥3标记down，故障剔除，健康探测成功恢复，重新纳入。
 //!
 //! 设计要点，
-//! -无新外部依赖，random 用原子计数驱动 xorshift64 伪随机，ip-hash 用 FNV-1a
-//!   自实现，均确定性可复现。
+//! -随机与哈希委托成熟库，random 用 rand 线程随机源，ip-hash 用 fnv crate，
+//!   算法与替换前一致。
 //! -兼容约束，servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
 //!   现有`FMS_RGW_UPSTREAM`单url部署行为不变。
 //! -熔断粒度，全局`CircuitBreaker`保留为整体兜底(forward任一实例成功即成功，
@@ -21,6 +21,7 @@ use crate::types::BufferedBody;
 use axum::body::Body;
 use axum::http::{Method, Request, Response};
 use bytes::Bytes;
+use rand::Rng;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing::{info, warn};
@@ -150,8 +151,6 @@ pub struct UpstreamPool {
     mode: LbMode,
     /// round-robin轮转计数
     rr_counter: AtomicUsize,
-    /// xorshift64伪随机状态，原子CAS交换，无锁
-    prng_state: AtomicU64,
     /// 转发失败自动重试次数上限，仅重试健康实例
     retry_count: usize,
 }
@@ -188,7 +187,6 @@ impl UpstreamPool {
             entries,
             mode: LbMode::parse(&cfg.mode),
             rr_counter: AtomicUsize::new(0),
-            prng_state: AtomicU64::new(0),
             retry_count: cfg.retry_count,
         })
     }
@@ -212,8 +210,7 @@ impl UpstreamPool {
 
     /// 按配置模式选择一个健康实例(只选healthy=true，全down 则返回 `None`)，
     /// - round-robin，原子计数轮转，从起点线性探测第一个健康实例
-    /// - random，原子计数驱动xorshift64伪随机(自实现避免引入rand依赖，约束
-    ///   无新外部依赖，分布质量对负载均衡足够)，从随机起点线性探测
+    /// - random，rand 线程随机源定随机起点，从随机起点线性探测
     /// - least-conn，在途请求数最小者，并发下为近似值，平手取序号小者，确定性
     /// - ip-hash，fnv1a，ip % len定位后线性探测第一个健康实例，简化一致性哈希，
     ///   实例数变化会重映射，会话粘性为尽力而为，无ip时回退round-robin
@@ -233,7 +230,7 @@ impl UpstreamPool {
                 None => self.round_robin(),
             },
             LbMode::Random => {
-                let start = (self.next_rand() % self.entries.len() as u64) as usize;
+                let start = rand::rng().random_range(0..self.entries.len());
                 self.probe_from(start)
             }
             LbMode::LeastConn | LbMode::Auto => self.least_conn(),
@@ -274,29 +271,6 @@ impl UpstreamPool {
             }
         }
         best.map(|(idx, _)| idx)
-    }
-
-    /// xorshift64* 伪随机数，random模式，自实现避免引入rand依赖(依赖纪律，
-    /// 无新外部依赖)。状态为原子CAS交换，无锁，种子初值0时首次调用自愈为
-    /// 非0常量，xorshift要求种子非0。分布质量对负载均衡打散足够，确定性可复现
-    fn next_rand(&self) -> u64 {
-        let mut cur = self.prng_state.load(Ordering::Relaxed);
-        loop {
-            let mut x = cur;
-            if x == 0 {
-                x = 0x9E37_79B9_7F4A_7C15;
-            }
-            x ^= x << 13;
-            x ^= x >> 7;
-            x ^= x << 17;
-            match self
-                .prng_state
-                .compare_exchange_weak(cur, x, Ordering::Relaxed, Ordering::Relaxed)
-            {
-                Ok(_) => return x,
-                Err(actual) => cur = actual,
-            }
-        }
     }
 
     /// 转发，http路径，按模式选实例，重建上游请求，交该实例 send，
@@ -460,14 +434,12 @@ impl UpstreamPool {
     }
 }
 
-/// FNV-1a 64位哈希，ip-hash用，自实现避免新依赖，分布质量对一致性哈希足够
+/// FNV-1a 64位哈希，ip-hash用，委托 fnv crate，逐字节结果与替换前自实现一致
 fn fnv1a(s: &str) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in s.as_bytes() {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x100_0000_01b3);
-    }
-    h
+    use std::hash::Hasher;
+    let mut h = fnv::FnvHasher::default();
+    h.write(s.as_bytes());
+    h.finish()
 }
 
 #[cfg(test)]
