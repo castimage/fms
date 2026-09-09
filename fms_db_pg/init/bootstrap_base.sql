@@ -100,30 +100,16 @@ $$;
 GRANT EXECUTE ON FUNCTION pgjwt.hmac(text, text, text) TO PUBLIC;
 -- 包装函数不受扩展管理（DROP EXTENSION pgjwt 后残留，升级 pgjwt 时需复查扩展脚本是否覆盖），可选加固，收回 PUBLIC EXECUTE（auth.jwt_sign/verify 为 SECURITY DEFINER，无需 PUBLIC）或改 CREATE EXTENSION pgcrypto WITH SCHEMA pgjwt
 
--- pgmq 幂等处理，先尝试 CREATE EXTENSION IF NOT EXISTS pgmq，无安装脚本/扩展记录，本测试库现状，pgmq schema 与函数实际可用，则直接探测 schema 与 send 函数，存在即视为可用
+-- pgmq 幂等处理，先尝试 CREATE EXTENSION IF NOT EXISTS pgmq，可用性以 pg_extension 扩展记录为唯一依据，
+-- 无记录即视为未安装，相关队列/授权/cron 由后续文件按同一口径跳过，不再探测 schema/函数确认实际功能
 DO $$
-DECLARE
-    v_created  boolean := false;   -- 本会话是否成功执行 CREATE EXTENSION pgmq
-    v_ns_cnt   bigint;
-    v_send_cnt bigint;
 BEGIN
     BEGIN
         CREATE EXTENSION IF NOT EXISTS pgmq;
-        v_created := true;
+        RAISE NOTICE 'PGMQ 扩展就绪（pg_extension 记录存在）';
     EXCEPTION WHEN OTHERS THEN
-        RAISE NOTICE 'CREATE EXTENSION pgmq 不可用（%），改为探测 pgmq schema/函数。', SQLERRM;
+        RAISE NOTICE 'CREATE EXTENSION pgmq 不可用（%），pgmq 视为未安装，队列与相关 cron 功能跳过', SQLERRM;
     END;
-
-    SELECT count(*) INTO v_ns_cnt FROM pg_namespace WHERE nspname = 'pgmq';
-    SELECT count(*) INTO v_send_cnt FROM pg_proc
-       WHERE proname = 'send'
-         AND pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'pgmq');
-
-    IF v_ns_cnt > 0 AND v_send_cnt > 0 THEN
-        RAISE NOTICE 'PGMQ 可用：pgmq schema 存在（%），pgmq.send() 函数=%（本次新装扩展=%）', v_ns_cnt, v_send_cnt, v_created;
-    ELSE
-        RAISE WARNING 'PGMQ 不可用：pgmq schema=%，pgmq.send()=%，队列功能将不可用', v_ns_cnt, v_send_cnt;
-    END IF;
 END $$;
 
 -- pgaudit 全局审计配置（ALTER SYSTEM 需超级用户，本环境连接用户 postgres 具备，无 ALTER SYSTEM 权限可降级为会话级 SET pgaudit.log，生产由管理员配置）

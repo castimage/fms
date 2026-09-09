@@ -44,15 +44,15 @@ diagnose_00_failure() {
         echo "[fms-init][bootstrap_base]      zhparser/pgmq），重建后重试；"
         echo "[fms-init][bootstrap_base]   2) 手工源码安装：zhparser（github.com/amutu/zhparser，"
         echo "[fms-init][bootstrap_base]      依赖 scws）、pg_ivm（github.com/sraoss/pg_ivm，"
-        echo "[fms-init][bootstrap_base]      make && make install）、pgmq（github.com/tembo-io/pgmq，"
+        echo "[fms-init][bootstrap_base]      make && make install）、pgmq（github.com/pgmq/pgmq，"
         echo "[fms-init][bootstrap_base]      扩展在 pgmq-extension 子目录）。"
     fi
 }
 
 for f in $INIT_SCRIPTS; do
-    # queues_cron.sql 对 pgmq 缺失做三段降级：队列预创建与最小授权按
-    # pg_extension + pg_namespace 探测跳过，冒烟测试以 EXCEPTION WHEN OTHERS
-    # 兜底，无 pgmq 时整文件不失败。pg_cron 9 个定时任务 partman-maintenance
+    # queues_cron.sql 以 pg_extension 记录判断 pgmq，未装（记录缺失）即视为
+    # 无此功能，跳过队列预创建与最小授权；冒烟与 pg_cron 调度按各自可用性执行，
+    # 无 pgmq 时整文件不失败。pg_cron 9 个定时任务 partman-maintenance
     # 分区维护 / budget-warning 预算预警 / voucher-number-check 断号巡检 /
     # fx-adjustment 调汇 / fa-depreciation 折旧 / close-check 期末检查 /
     # wf-timeout 流程超时 / audit-chain-check 审计链核验 / log-consumer

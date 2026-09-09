@@ -17,11 +17,11 @@ DECLARE
 BEGIN
     -- pgmq 可用性以 pg_extension 扩展记录为准（定制镜像已源码内置 pgmq 并正式
     -- CREATE EXTENSION，记录缺失即视为未安装），扩展未装则跳过队列预创建，
-    -- 预期降级路径，安装 pgmq 后重跑本文件即补齐队列与授权，无需重建容器
+    -- 安装 pgmq 后重跑本文件即补齐队列与授权，无需重建容器
     IF NOT EXISTS (
         SELECT 1 FROM pg_extension WHERE extname = 'pgmq'
     ) THEN
-        RAISE NOTICE 'queues_cron: pgmq 扩展未安装，跳过 7 条队列预创建（预期降级路径）';
+        RAISE NOTICE 'queues_cron: pgmq 扩展未安装，跳过 7 条队列预创建（视为无此功能）';
         RETURN;
     END IF;
     FOREACH q IN ARRAY ARRAY['q_notify_task','q_notify_mail','q_notify_ws',
@@ -79,12 +79,11 @@ END $$;
 
 -- pgmq 权限，最小授权，队列内部表 q_q_* 绝不直接 GRANT，消息访问一律经 pgmq.* 函数，全部 pgmq 函数默认 PUBLIC EXECUTE（含 purge_queue/drop_queue/delete 管理函数），REVOKE FROM PUBLIC 后按最小授权重授
 -- 本环境 pgmq 核心函数为 invoker 权限、内部直接读写 q_q_* 表，若同时收回表级授权，应用角色经函数访问必 permission denied，故将核心消息路径函数（send/read/archive/pop/set_vt/meta/list/archived）改为 SECURITY DEFINER（属主 fms_admin），应用角色仅持 EXECUTE，管理函数仅 fms_admin（SUPERUSER 隐含 EXECUTE）
--- pgmq 未安装（pg_extension 无记录或 pgmq schema 缺失）时跳过授权段（GRANT ... ON SCHEMA pgmq 在 schema 缺失时直接报错），
--- 本段按 pg_extension 记录 + pg_namespace 探测，与队列预创建段同一口径，安装 pgmq 后重跑本文件补齐
+-- pgmq 未安装（pg_extension 无记录）时跳过授权段（GRANT ... ON SCHEMA pgmq 在 schema 缺失时直接报错），
+-- 本段以 pg_extension 记录为唯一依据，与队列预创建段同一口径，安装 pgmq 后重跑本文件补齐
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq')
-       OR NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'pgmq') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq') THEN
         RAISE NOTICE 'queues_cron: pgmq 未安装，跳过 PGMQ 最小授权段';
         RETURN;
     END IF;

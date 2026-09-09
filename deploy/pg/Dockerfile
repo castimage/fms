@@ -98,18 +98,19 @@ RUN wget -q -O - http://www.xunsearch.com/scws/down/scws-1.2.1.tar.bz2 | tar xjf
     && echo "OK: zhparser 源码安装成功（依赖 scws）" \
     || echo "WARN: zhparser 源码安装失败（全文检索 fms_zh 将不可用，bootstrap_base 失败时 init 诊断会提示）"
 
-# pgmq：消息队列（github.com/tembo-io/pgmq，扩展代码在 pgmq-extension/
-# 子目录）。源码安装后 pg_available_extensions 可见，bootstrap_base 的
-# CREATE EXTENSION IF NOT EXISTS pgmq 直接成功；即便缺失，queues_cron /
-# log_access_batch 已按 pg_proc 函数存在性检测做三段降级，不影响建库。
-RUN git clone --depth 1 https://github.com/tembo-io/pgmq /tmp/pgmq \
+# pgmq：消息队列（官方仓库 github.com/pgmq/pgmq，扩展在 pgmq-extension/
+# 子目录，现为纯 SQL 实现，无 C/preload，make install 经 PGXS 装控制文件与
+# SQL 对象）。pg_extension 有记录即视为已安装，bootstrap_base 的 CREATE
+# EXTENSION IF NOT EXISTS pgmq 直接成功；无记录即视为未安装，queues_cron
+# 跳过队列/授权、log_access_batch 直落库，均不影响建库。
+RUN git clone --depth 1 https://github.com/pgmq/pgmq /tmp/pgmq \
     && cd /tmp/pgmq/pgmq-extension && make && make install \
     && echo "OK: pgmq 源码安装成功" \
-    || echo "WARN: pgmq 源码安装失败（bootstrap_base 失败时 init 诊断会提示；queues_cron 降级可用）"
+    || echo "WARN: pgmq 源码安装失败（运行期 pg_extension 无记录即视为未安装，NOTICE 跳过队列/授权）"
 
-# 降级矩阵（供故障排查参考）：
+# 缺失处理（供故障排查参考）：
 #   pgaudit / pg_cron / pg_partman_bgw 缺失，bootstrap_base 直接失败（必须安装）
-#   zhparser / pg_ivm / pgmq 缺失，init 脚本探测降级路径（WARN / 诊断提示）
+#   zhparser / pg_ivm / pgmq 缺失按未安装处理（pgmq 不再探测实际功能，仅 NOTICE 跳过）
 # 源码安装均为 git clone --depth 1（默认取仓库 HEAD）；pgaudit 因 master 处于
 # 19beta 开发分支，固定 --branch 18.0（PG 18 稳定版）。其余扩展如需固定
 # 版本可加 --branch <tag>（如 pg_cron 1.6.x / pg_partman 5.x）。
