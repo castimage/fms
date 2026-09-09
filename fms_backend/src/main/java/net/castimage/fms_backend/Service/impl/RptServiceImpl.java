@@ -5,6 +5,8 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.config.FmsProperties;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Mapper.RptMapper;
 import net.castimage.fms_backend.Model.vo.ArAgingRow;
@@ -237,15 +239,17 @@ public class RptServiceImpl implements RptService {
                     "attachment; filename=" + type + "_" + day.format(FILE_DATE) + ".csv");
             PrintWriter writer = response.getWriter();
             writer.write('\uFEFF'); // utf-8 BOM，Excel 打开 csv 不乱码，
+            CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT);
             switch (type) {
-                case "trial-balance" -> exportTrialBalance(writer, companyId, period);
-                case "income-statement" -> exportIncomeStatement(writer, companyId, period);
-                case "balance-sheet" -> exportBalanceSheet(writer, companyId, period);
-                case "cash-flow" -> exportCashFlow(writer, companyId, period);
-                case "ar-aging" -> exportArAging(writer, companyId, period);
-                case "dept-expense" -> exportDeptExpense(writer, companyId, period);
+                case "trial-balance" -> exportTrialBalance(printer, companyId, period);
+                case "income-statement" -> exportIncomeStatement(printer, companyId, period);
+                case "balance-sheet" -> exportBalanceSheet(printer, companyId, period);
+                case "cash-flow" -> exportCashFlow(printer, companyId, period);
+                case "ar-aging" -> exportArAging(printer, companyId, period);
+                case "dept-expense" -> exportDeptExpense(printer, companyId, period);
                 default -> throw new BadRequestException("报表类型非法");
             }
+            printer.flush();
             writer.flush();
         } catch (IOException e) {
             throw new net.castimage.fms_backend.Exception.InternalServerException("报表导出失败");
@@ -254,47 +258,48 @@ public class RptServiceImpl implements RptService {
 
     // ---- csv 导出，每类型表头 + 行，字段 RFC 4180 转义 ----
 
-    private void exportTrialBalance(PrintWriter w, UUID companyId, String period) {
-        w.println("科目编码,科目名称,方向,期初余额,本期借方,本期贷方,期末余额");
+    private void exportTrialBalance(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("科目编码", "科目名称", "方向", "期初余额", "本期借方", "本期贷方", "期末余额");
         for (TrialBalanceRow r : rptMapper.selectTrialBalance(companyId, normalizePeriod(period))) {
-            w.println(csv(r.accountCode(), r.accountName(), r.direction(), ZERO,
-                    r.periodDebit(), r.periodCredit(), r.closingBalance()));
+            p.printRecord(r.accountCode(), r.accountName(), r.direction(), ZERO,
+                    r.periodDebit(), r.periodCredit(), r.closingBalance());
         }
     }
 
-    private void exportIncomeStatement(PrintWriter w, UUID companyId, String period) {
-        w.println("期间,收入,费用,净利润");
+    private void exportIncomeStatement(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("期间", "收入", "费用", "净利润");
         for (IncomeStatementRow r : rptMapper.selectIncomeStatement(companyId, trim(period))) {
-            w.println(csv(r.period(), r.totalRevenue(), r.totalExpense(), r.netProfit()));
+            p.printRecord(r.period(), r.totalRevenue(), r.totalExpense(), r.netProfit());
         }
     }
 
-    private void exportBalanceSheet(PrintWriter w, UUID companyId, String period) {
-        w.println("期间,资产,负债,权益");
+    private void exportBalanceSheet(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("期间", "资产", "负债", "权益");
         for (BalanceSheetRow r : rptMapper.selectBalanceSheet(companyId, trim(period))) {
-            w.println(csv(r.period(), r.totalAsset(), r.totalLiability(), r.totalEquity()));
+            p.printRecord(r.period(), r.totalAsset(), r.totalLiability(), r.totalEquity());
         }
     }
 
-    private void exportCashFlow(PrintWriter w, UUID companyId, String period) {
-        w.println("期间,现金流入,现金流出,净流量");
+    private void exportCashFlow(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("期间", "现金流入", "现金流出", "净流量");
         for (CashFlowRow r : rptMapper.selectCashFlow(companyId, trim(period))) {
-            w.println(csv(r.period(), r.cashIn(), r.cashOut(), r.netFlow()));
+            p.printRecord(r.period(), r.cashIn(), r.cashOut(), r.netFlow());
         }
     }
 
-    private void exportArAging(PrintWriter w, UUID companyId, String period) {
-        w.println("客户编码,客户名称,发票号,发票日期,到期日,币种,发票总额,已核销,未核销余额");
+    private void exportArAging(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("客户编码", "客户名称", "发票号", "发票日期", "到期日", "币种",
+                "发票总额", "已核销", "未核销余额");
         for (ArAgingRow r : rptMapper.selectArAging(companyId, trim(period))) {
-            w.println(csv(r.customerCode(), r.customerName(), r.invoiceNo(), r.invoiceDate(),
-                    r.dueDate(), r.currency(), r.total(), r.paidAmount(), r.openBalance()));
+            p.printRecord(r.customerCode(), r.customerName(), r.invoiceNo(), r.invoiceDate(),
+                    r.dueDate(), r.currency(), r.total(), r.paidAmount(), r.openBalance());
         }
     }
 
-    private void exportDeptExpense(PrintWriter w, UUID companyId, String period) {
-        w.println("期间,部门,科目编码,科目名称,金额");
+    private void exportDeptExpense(CSVPrinter p, UUID companyId, String period) throws IOException {
+        p.printRecord("期间", "部门", "科目编码", "科目名称", "金额");
         for (DeptExpenseRow r : rptMapper.selectDeptExpense(companyId, trim(period), null)) {
-            w.println(csv(r.period(), r.deptName(), r.accountCode(), r.accountName(), r.amount()));
+            p.printRecord(r.period(), r.deptName(), r.accountCode(), r.accountName(), r.amount());
         }
     }
 
@@ -378,26 +383,6 @@ public class RptServiceImpl implements RptService {
             return "180+";
         }
         return (AGING_BUCKET_UPPERS[idx - 1] + 1) + "-" + AGING_BUCKET_UPPERS[idx];
-    }
-
-    /** csv 行拼接，RFC 4180，含逗号/引号/换行时引号包裹、内部引号加倍 */
-    private String csv(Object... fields) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < fields.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(csvField(fields[i]));
-        }
-        return sb.toString();
-    }
-
-    private String csvField(Object value) {
-        String s = value == null ? "" : String.valueOf(value);
-        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
     }
 
     /** 期间校验（YYYY-MM） */

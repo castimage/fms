@@ -18,6 +18,10 @@
         <java.version>25</java.version>
         <mybatis-plus.version>3.5.15</mybatis-plus.version>
         <postgresql.version>42.7.11</postgresql.version>
+        <guava.version>33.4.0-jre</guava.version>
+        <otp-java.version>2.1.0</otp-java.version>
+        <uuid-creator.version>6.0.0</uuid-creator.version>
+        <commons-csv.version>1.14.0</commons-csv.version>
     </properties>
 
     <dependencies>
@@ -86,6 +90,36 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!-- Guava：BloomFilter 供弱密码布隆预筛（替换 WeakPasswordFilter 自研位数组/双哈希） -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+        </dependency>
+        <!-- otp-java：RFC 6238 TOTP 生成/校验（替换 TotpUtils 自研 hmac 与动态截断） -->
+        <dependency>
+            <groupId>com.github.bastiaanjansen</groupId>
+            <artifactId>otp-java</artifactId>
+            <version>${otp-java.version}</version>
+        </dependency>
+        <!-- uuid-creator：UUIDv7 时间有序生成（替换 UuidV7 自研位布局） -->
+        <dependency>
+            <groupId>com.github.f4b6a3</groupId>
+            <artifactId>uuid-creator</artifactId>
+            <version>${uuid-creator.version}</version>
+        </dependency>
+        <!-- Apache Commons CSV：对账单导入解析与 CSV 导出统一（替换 split 硬切与手写转义） -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+        <!-- commons-codec：TOTP 密钥 Base32 编解码（版本由 Boot parent 管理，不写 version） -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
         </dependency>
 
         <dependency>

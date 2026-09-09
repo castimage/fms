@@ -9,6 +9,8 @@ import net.castimage.fms_backend.Model.vo.ChainCheckView;
 import net.castimage.fms_backend.Service.AuditService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -83,22 +85,24 @@ public class AuditServiceImpl implements AuditService {
                     "attachment; filename=audit_" + LocalDateTime.now().format(FILE_DATE) + ".csv");
             PrintWriter writer = response.getWriter();
             writer.write('\uFEFF'); // UTF-8 BOM：Excel 打开不乱码，
-            writer.println("id,actor_id,action,table_name,record_id,old_values,new_values,"
-                    + "ip,request_id,occurred_at,prev_hash,row_hash");
+            CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT);
+            printer.printRecord("id", "actor_id", "action", "table_name", "record_id",
+                    "old_values", "new_values", "ip", "request_id", "occurred_at", "prev_hash", "row_hash");
             long pageNo = 1;
             while (true) {
                 IPage<AuditLogView> pg = auditLogMapper.selectLogPage(
                         new Page<>(pageNo, exportPageSize), actorId, trim(tableName), recordId, trim(action), from, to);
                 for (AuditLogView r : pg.getRecords()) {
-                    writer.println(csv(r.id(), r.actorId(), r.action(), r.tableName(), r.recordId(),
+                    printer.printRecord(r.id(), r.actorId(), r.action(), r.tableName(), r.recordId(),
                             r.oldValues(), r.newValues(), r.ip(), r.requestId(), r.occurredAt(),
-                            r.prevHash(), r.rowHash()));
+                            r.prevHash(), r.rowHash());
                 }
                 if (pg.getRecords().size() < exportPageSize) {
                     break; // 末页退出游标循环，
                 }
                 pageNo++;
             }
+            printer.flush();
             writer.flush();
         } catch (IOException e) {
             throw new net.castimage.fms_backend.Exception.InternalServerException("审计日志导出失败");
@@ -111,20 +115,4 @@ public class AuditServiceImpl implements AuditService {
         return s == null ? null : s.trim();
     }
 
-    /** CSV 行拼接（RFC 4180：含逗号/引号/换行时引号包裹、内部引号加倍） */
-    private String csv(Object... fields) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < fields.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            String s = fields[i] == null ? "" : String.valueOf(fields[i]);
-            if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
-                sb.append('"').append(s.replace("\"", "\"\"")).append('"');
-            } else {
-                sb.append(s);
-            }
-        }
-        return sb.toString();
-    }
 }

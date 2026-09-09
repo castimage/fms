@@ -41,6 +41,9 @@ import net.castimage.fms_backend.Service.CashService;
 import net.castimage.fms_backend.Service.VoucherLinkService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -655,7 +658,8 @@ public class CashServiceImpl implements CashService {
         if (lines.length == 0) {
             throw new BadRequestException("对账单文件为空");
         }
-        String delimiter = lines[0].contains("\t") ? "\t" : ",";
+        char delimiter = lines[0].contains("\t") ? '\t' : ',';
+        CSVFormat csvFormat = CSVFormat.DEFAULT.builder().setDelimiter(delimiter).get();
         int start = 0;
         if (lines[0].toLowerCase(Locale.ROOT).contains("trx_date")
                 || lines[0].contains("日期") || lines[0].toLowerCase(Locale.ROOT).contains("date")) {
@@ -666,7 +670,7 @@ public class CashServiceImpl implements CashService {
             if (line.isEmpty()) {
                 continue;
             }
-            String[] cols = line.split(delimiter, -1);
+            String[] cols = splitCsvRow(line, csvFormat);
             if (cols.length < 3) {
                 throw new BadRequestException("对账单第 " + (i + 1) + " 行列数不足（须至少 trx_date,amount,summary）");
             }
@@ -691,6 +695,25 @@ public class CashServiceImpl implements CashService {
             throw new BadRequestException("对账单未解析到有效数据行");
         }
         return rows;
+    }
+
+    /** 单行按 Commons CSV 切分，引号包裹的逗号/换行不再错断，非法格式返回空列由调用方行校验兜底 */
+    private String[] splitCsvRow(String line, CSVFormat csvFormat) {
+        List<CSVRecord> records;
+        try (CSVParser parser = CSVParser.parse(line, csvFormat)) {
+            records = parser.getRecords();
+        } catch (IOException e) {
+            return new String[0];
+        }
+        if (records.isEmpty()) {
+            return new String[0];
+        }
+        CSVRecord record = records.get(0);
+        String[] cols = new String[record.size()];
+        for (int i = 0; i < cols.length; i++) {
+            cols[i] = record.get(i);
+        }
+        return cols;
     }
 
     /** 日期解析，yyyy-MM-dd / yyyy/M/d 兼容 */

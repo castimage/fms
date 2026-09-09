@@ -38,6 +38,8 @@ import net.castimage.fms_backend.Utils.UuidV7;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -638,12 +640,14 @@ public class GlServiceImpl implements GlService {
                     "attachment; filename=ledger_" + LocalDate.now().format(FILE_DATE) + ".csv");
             PrintWriter writer = response.getWriter();
             writer.write('\uFEFF'); // utf-8 BOM，Excel 打开 csv 不乱码，
-            writer.println("科目编码,科目名称,方向,期初余额,本期借方,本期贷方,期末余额");
+            CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT);
+            printer.printRecord("科目编码", "科目名称", "方向", "期初余额", "本期借方", "本期贷方", "期末余额");
             for (LedgerView r : voucherLineMapper.selectLedger(companyId, p, accountId)) {
-                writer.println(csv(r.accountCode(), r.accountName(),
+                printer.printRecord(r.accountCode(), r.accountName(),
                         "DEBIT".equals(r.direction()) ? "借" : "贷",
-                        r.openingBalance(), r.periodDebit(), r.periodCredit(), r.closingBalance()));
+                        r.openingBalance(), r.periodDebit(), r.periodCredit(), r.closingBalance());
             }
+            printer.flush();
             writer.flush();
         } catch (IOException e) {
             throw new InternalServerException("总账导出失败");
@@ -867,26 +871,6 @@ public class GlServiceImpl implements GlService {
         if (value != null && !allowed.contains(value)) {
             throw new BadRequestException(label + "非法：" + value);
         }
-    }
-
-    /** csv 行拼接，RFC 4180，含逗号/引号/换行时引号包裹、内部引号加倍 */
-    private String csv(Object... fields) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < fields.length; i++) {
-            if (i > 0) {
-                sb.append(',');
-            }
-            sb.append(csvField(fields[i]));
-        }
-        return sb.toString();
-    }
-
-    private String csvField(Object value) {
-        String s = value == null ? "" : String.valueOf(value);
-        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
     }
 
     /** 期间格式校验（YYYY-MM） */

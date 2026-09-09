@@ -19,23 +19,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 弱密码布隆过滤器单测，参数推导、全量命中、随机强密码未命中、误判率上界、
+ * 弱密码布隆过滤器单测，容量/误判率构造、全量命中、随机强密码未命中、误判率上界、
  * 大小写归一化、线程安全、自定义集合注入、禁用开关与 copy-on-write 增补。
  */
 class WeakPasswordFilterTest {
 
     @Test
-    void parameterDerivationMatchesSpecFormula() {
-        // n=1024/p=0.01 得 m=9816、k=7（容差 ±2，spec 表默认档）
+    void createAcceptsDefaultAndStrictParams() {
+        // 容量/误判率参数交由 Guava 推导，默认档与严格档内置弱密码均命中
         WeakPasswordFilter defaultFilter = WeakPasswordFilter.create(1024, 0.01);
-        assertEquals(7, defaultFilter.hashCount());
-        assertTrue(Math.abs(9816 - defaultFilter.bitSize()) <= 2,
-                "m 应为 9816±2，实际 " + defaultFilter.bitSize());
-        // n=1024/p=0.001 得 m≈14723、k=10（按公式实算，spec 表 14716 为手算近似，容差 ±2 覆盖）
+        assertTrue(defaultFilter.isWeak("123456"));
         WeakPasswordFilter strictFilter = WeakPasswordFilter.create(1024, 0.001);
-        assertEquals(10, strictFilter.hashCount());
-        assertTrue(Math.abs(14723 - strictFilter.bitSize()) <= 2,
-                "m 应为 14723±2，实际 " + strictFilter.bitSize());
+        assertTrue(strictFilter.isWeak("123456"));
     }
 
     @Test
