@@ -10,6 +10,7 @@ import type {
   WfDefinitionRequest,
   WfDefinitionView,
   WfInstanceQuery,
+  WfInstanceStartRequest,
   WfInstanceStatus,
   WfInstanceView,
   WfTaskEventView,
@@ -54,6 +55,10 @@ export const wfApi = {
   /** 本人发起实例分页，rls 限定 */
   myInstances(q: PageQuery & { status?: WfInstanceStatus }): Promise<PageResult<WfInstanceView>> {
     return request<PageResult<WfInstanceView>>({ url: '/wf/instances/my', method: 'get', params: q })
+  },
+  /** 发起实例，定义须 ACTIVE，同业务单据仅允许一个未删除实例 */
+  startInstance(req: WfInstanceStartRequest): Promise<WfInstanceView> {
+    return request<WfInstanceView>({ url: '/wf/instances', method: 'post', data: req })
   },
 
   // 任务

@@ -4,7 +4,7 @@
  * 状态流 DRAFT 启用 ACTIVE，可停用 DISABLED，DISABLED 可回草稿（无 RUNNING 实例），
  * 节点行编辑器，节点编码与类型可增删排序，审批节点配策略与处理人来源。
  */
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import {
   NButton,
   NInput,
@@ -19,11 +19,13 @@ import { getUser, listRoles, pageUsers } from '@/api/org'
 import { useAppStore } from '@/stores/app'
 import FormGrid from '@/components/common/FormGrid.vue'
 import DataTable from '@/components/common/DataTable.vue'
+import WfGraph from '@/components/wf/WfGraph.vue'
 import type { FmsColumn } from '@/components/common/DataTable.vue'
 import type {
   WfDefinitionRequest,
   WfDefinitionStatus,
   WfDefinitionView,
+  WfGraphStep,
   WfHandlerSource,
   WfNodeDef,
   WfNodeStrategy,
@@ -237,10 +239,6 @@ function collectUserIds(rows: NodeRow[]): string[] {
   return rows.flatMap((r) => r.handlers.map((h) => h.userId)).filter((id) => !!id)
 }
 
-function typeLabel(t: WfNodeType): string {
-  return TYPE_OPTIONS.find((o) => o.value === t)?.label ?? t
-}
-
 /** 处理人来源文本，指定用户取显示名，角色取角色名 */
 function handlerLabel(h: HandlerRow): string {
   if (h.source === 'applicant') return '申请人'
@@ -422,6 +420,16 @@ const showPreview = ref(false)
 const previewRow = ref<WfDefinitionView | null>(null)
 const previewNodes = ref<NodeRow[]>([])
 
+/** 预览节点转流程图数据，处理人来源文本化 */
+const previewSteps = computed<WfGraphStep[]>(() =>
+  previewNodes.value.map((r) => ({
+    node_code: r.node_code,
+    type: r.type,
+    strategy: r.type === 'APPROVE' ? r.strategy : undefined,
+    handlerLabel: r.type === 'APPROVE' ? handlerSummary(r) : undefined,
+  })),
+)
+
 function openPreview(row: WfDefinitionView) {
   previewRow.value = row
   previewNodes.value = parseNodes(row.nodeJson)
@@ -561,15 +569,7 @@ onMounted(() => {
           <span v-if="previewRow.formType" class="preview-item">业务类型：{{ previewRow.formType }}</span>
         </div>
         <div class="node-title">审批节点编排（共 {{ previewNodes.length }} 个）</div>
-        <div class="node-rows">
-          <div v-for="(r, i) in previewNodes" :key="i" class="preview-row">
-            <span class="preview-node-code">{{ r.node_code }}</span>
-            <span class="preview-node-type">{{ typeLabel(r.type) }}</span>
-            <span class="preview-node-strategy">{{ r.type === 'APPROVE' ? STRATEGY_LABEL[r.strategy] : '—' }}</span>
-            <span class="preview-node-role">{{ handlerSummary(r) }}</span>
-          </div>
-          <div v-if="!previewNodes.length" class="preview-empty">暂无节点编排</div>
-        </div>
+        <WfGraph :steps="previewSteps" />
       </template>
     </n-modal>
   </div>
@@ -652,32 +652,5 @@ onMounted(() => {
   gap: 4px 16px;
   margin-bottom: 12px;
   font-size: 13px;
-}
-.preview-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-.preview-node-code {
-  font-weight: 600;
-  width: 130px;
-}
-.preview-node-type {
-  width: 60px;
-  color: var(--fms-text-muted, #666);
-}
-.preview-node-strategy {
-  width: 50px;
-  color: var(--fms-text-muted, #666);
-}
-.preview-node-role {
-  flex: 1;
-  color: var(--fms-text-muted, #666);
-}
-.preview-empty {
-  color: var(--fms-text-muted, #666);
-  font-size: 13px;
-  padding: 8px 0;
 }
 </style>

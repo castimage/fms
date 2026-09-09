@@ -32,6 +32,21 @@ export interface WfNodeDef {
   handlers?: WfNodeHandler[]
 }
 
+/** 流程图节点，handlerLabel 为处理人来源的文本概要 */
+export interface WfGraphStep {
+  node_code: string
+  type: WfNodeType
+  strategy?: WfNodeStrategy
+  handlerLabel?: string
+}
+
+/** 流程实例发起请求，businessType 与 businessId 定位业务单据 */
+export interface WfInstanceStartRequest {
+  definitionId: string
+  businessType: string
+  businessId: string
+}
+
 /** 流程定义创建/更新请求，code 公司内唯一且创建后不可变更 */
 export interface WfDefinitionRequest {
   companyId: string

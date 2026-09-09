@@ -48,6 +48,13 @@ const TASK_TAG: Record<WfTaskStatus, { label: string; type: TagProps['type'] }> 
   TRANSFERRED: { label: '已转办', type: 'default' },
 }
 
+/** 任务类型，会签与或签票在待办中可辨 */
+const TASK_TYPE_TAG: Record<string, { label: string; type: TagProps['type'] }> = {
+  APPROVE: { label: '单审', type: 'default' },
+  COUNTERSIGN: { label: '会签', type: 'info' },
+  OR_SIGN: { label: '或签', type: 'warning' },
+}
+
 // 领取仅限 PENDING 任务，领取与办结均委托 pg 函数原子完成
 async function onClaim(task: WfTaskView) {
   await wfApi.claimTask(task.id)
@@ -117,6 +124,15 @@ const columns: FmsColumn<WfTaskView>[] = [
   { key: 'businessId', title: '业务单号', width: 110, hideBelow: 'md', render: (r) => r.businessId ?? '—' },
   { key: 'definitionName', title: '流程', width: 140 },
   { key: 'nodeCode', title: '当前节点', width: 100, hideBelow: 'sm' },
+  {
+    key: 'taskType',
+    title: '任务类型',
+    width: 90,
+    render: (r) => {
+      const t = TASK_TYPE_TAG[r.taskType] ?? { label: r.taskType, type: 'default' as const }
+      return h(NTag, { type: t.type, size: 'small', bordered: false }, { default: () => t.label })
+    },
+  },
   { key: 'assigneeName', title: '处理人', width: 100, hideBelow: 'md' },
   { key: 'dueAt', title: '截止时间', width: 150, hideBelow: 'sm', render: (r) => formatDateTime(r.dueAt) },
   {
@@ -161,7 +177,7 @@ onMounted(() => void load())
       <n-button size="small" @click="load">刷新</n-button>
     </div>
 
-    <DataTable v-model:page="page" v-model:size="size" :columns="columns" :data="rows" :loading="loading" :total="total" :scroll-x="1000">
+    <DataTable v-model:page="page" v-model:size="size" :columns="columns" :data="rows" :loading="loading" :total="total" :scroll-x="1090">
       <template #empty>
         <span>暂无待办任务</span>
       </template>

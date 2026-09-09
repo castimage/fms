@@ -67,5 +67,6 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     StatusTag: typeof import('./components/common/StatusTag.vue')['default']
+    WfGraph: typeof import('./components/wf/WfGraph.vue')['default']
   }
 }
