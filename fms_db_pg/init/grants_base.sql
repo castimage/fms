@@ -113,18 +113,17 @@ GRANT EXECUTE ON FUNCTION wf.complete_task(uuid, text, text)           TO fms_op
 REVOKE ALL ON um.params FROM fms_operator, fms_viewer, fms_auditor, fms_report, fms_app;
 REVOKE ALL ON sec.app_secrets FROM PUBLIC;
 
--- pgmq 最小授权（init/queues_cron.sql文件三节已细化，此处总闸兜底重申，pgmq 缺失环境，
--- 扩展未装，schema 不存在会硬失败，与 init/queues_cron.sql 的 WARN 跳过降级路径对齐，
--- 存在才授权，否则 NOTICE 跳过）
+-- pgmq 最小授权（init/queues_cron.sql 已细化，此处总闸兜底重申；pgmq 未装即视为无此功能，
+-- schema 缺失时 GRANT 会硬失败，故以 pg_extension 记录为准，存在才授权，否则 NOTICE 跳过）
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'pgmq') THEN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq') THEN
         EXECUTE 'REVOKE ALL ON ALL FUNCTIONS IN SCHEMA pgmq FROM PUBLIC';
         EXECUTE 'REVOKE ALL ON ALL TABLES  IN SCHEMA pgmq FROM fms_app, fms_operator';
         EXECUTE 'REVOKE ALL ON ALL SEQUENCES IN SCHEMA pgmq FROM fms_app, fms_operator';
         EXECUTE 'GRANT USAGE ON SCHEMA pgmq TO fms_app, fms_operator';
     ELSE
-        RAISE NOTICE 'pgmq schema 不存在，跳过 pgmq 最小授权（init/queues_cron.sql 未安装 pgmq，属预期降级）';
+        RAISE NOTICE 'pgmq 扩展未安装（视为无此功能），跳过 pgmq 最小授权';
     END IF;
 END $$;
 -- 业务函数批量授权（与 init/queues_cron.sql文件三节同一 DO 块模式，管理函数 purge/drop/delete 不授，仅 fms_admin）

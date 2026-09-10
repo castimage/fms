@@ -67,6 +67,8 @@ public final class TotpUtils {
             return false;
         }
 
+        // 仅做输入合法性闸口，非法 base32 一律返回 false，不抛异常，
+        // otp-java Builder 期望 base32 编码文本且内部会再解码，故生成器必须用 secret 文本构建
         byte[] key;
         try {
             key = BASE32.decode(secretBase32);
@@ -77,7 +79,7 @@ public final class TotpUtils {
             return false;
         }
 
-        TOTPGenerator generator = new TOTPGenerator.Builder(key)
+        TOTPGenerator generator = new TOTPGenerator.Builder(secretBase32)
                 .withHOTPGenerator(h -> h.withAlgorithm(HMACAlgorithm.SHA1).withPasswordLength(DIGITS))
                 .withPeriod(Duration.ofSeconds(STEP_SECONDS))
                 .build();
