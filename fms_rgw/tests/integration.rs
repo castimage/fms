@@ -1,13 +1,13 @@
 //! `tests/integration.rs`，中间件链集成测试(`tower::ServiceExt::oneshot`直调`build_router`)
 //!
 //! 覆盖，安全链顺序 log、cors、trace、filter、rate、auth、sign，再到 ws/proxy 分发，
-//! - filter，路径穿越400、sql注入400、body超限413
-//! - rate，ip维度429 + `Retry-After`
-//! - auth，缺失401，40100、伪造密钥401，40100、过期40101、身份头注入 + `X-FMS-*`剥离
-//! - sign，`X-FMS-Signature`存在且经`verify_signature_header`校验通过，body原样转发
-//! - cors，白名单预检200，非白名单origin预检拒绝
-//! - static，index/fallback/hash资源缓存头/dotfile 404
-//! - proxy，响应透传，状态码/头/体+ 响应侧`X-Trace-Id`
+//! filter，路径穿越400、sql注入400、body超限413
+//! rate，ip维度429 + `Retry-After`
+//! auth，缺失401，40100、伪造密钥401，40100、过期40101、身份头注入 + `X-FMS-*`剥离
+//! sign，`X-FMS-Signature`存在且经`verify_signature_header`校验通过，body原样转发
+//! cors，白名单预检200，非白名单origin预检拒绝
+//! static，index/fallback/hash资源缓存头/dotfile 404
+//! proxy，响应透传，状态码/头/体+ 响应侧`X-Trace-Id`
 
 mod common;
 

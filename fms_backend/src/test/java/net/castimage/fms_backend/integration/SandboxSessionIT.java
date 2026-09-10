@@ -14,15 +14,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * pg 沙箱模型集成测试，fms_app 空壳 + SET ROLE 职责通道。
  *
- * <p>用真实连接验证，fms_app 无任何业务表权限，空壳 fail-closed，SET ROLE
+ * 用真实连接验证，fms_app 无任何业务表权限，空壳 fail-closed，SET ROLE
  * 后职责角色授权生效，auth.set_session 闸口可执行且注入 guc，这是"直连数据库
  * 无数据可读"安全目标的直接证据。
  *
- * <p>权限拒绝断言按 SQLState=42501 判定，与 pg lc_messages 语言无关。
+ * 权限拒绝断言按 SQLState=42501 判定，与 pg lc_messages 语言无关。
  * 类级 @Transactional 使 JdbcTemplate 各操作绑定同一线程连接，否则 SET ROLE 与
  * 后续查询会借到不同池连接，测试结束自动回滚，SET LOCAL guc 随回滚清空，
  * 与生产事务语义一致。
- * 注意，SET ROLE 是会话级且 Hikari 归还连接不执行 reset（connection-init-sql
+ * SET ROLE 是会话级且 Hikari 归还连接不执行 reset（connection-init-sql
  * 仅建连时生效），每个用例必须 try/finally 复位 ROLE，防止污染连接池破坏后续
  * 空壳断言，生产路径无此风险，拦截器用 SET LOCAL 随事务自动清空。
  */

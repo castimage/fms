@@ -32,7 +32,7 @@ public class ReceiptAllocation {
     /** 发票 id（语义引用 ar.invoices） */
     private UUID invoiceId;
 
-    /** 本次核销金额（CHECK amount &gt; 0） */
+    /** 本次核销金额（CHECK amount > 0） */
     private BigDecimal amount;
 
     /** 乐观锁版本（写入 0，更新/撤销须带版本条件） */

@@ -2,9 +2,9 @@
 # 本文件以 fms_rgw/config/fms_rgw.yaml 生产模板为蓝本改写，原模板不改动，
 # 经 compose 挂载到容器 /app/config/fms_rgw.yaml，FMS_RGW_CONFIG 指向。
 # 未列出的配置项，health/限流/熔断/shards/角色等，一律不写，采用代码默认值，
-#   - upstream 健康检查 /internal/health，interval 5s / timeout 2s
-#   - 限流 ip_per_window=100 / user_per_window=200 / login_per_window=10 / shards=64
-#   - 熔断 error_threshold_pct=50 / sample_window=100 / min_samples=20 /
+# upstream 健康检查 /internal/health，interval 5s / timeout 2s
+# 限流 ip_per_window=100 / user_per_window=200 / login_per_window=10 / shards=64
+# 熔断 error_threshold_pct=50 / sample_window=100 / min_samples=20 /
 #     open_timeout_secs=30 / half_open_probes=5
 
 server:

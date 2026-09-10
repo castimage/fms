@@ -21,12 +21,12 @@ import java.util.Map;
  * /internal/log-batch，网关已有首道限流，本过滤器是绕过网关直连后端时的纵深闸，
  * 仅覆盖三个敏感/匿名入口，不重复限流业务 /api/** 全量，避免与网关双倍影响。
  *
- * <p>实现，CachePort 滑动窗口计数（key=fms:ratelimit:{type}:{ip}，increment + ttl=60s，
+ * 实现，CachePort 滑动窗口计数（key=fms:ratelimit:{type}:{ip}，increment + ttl=60s，
  * 与 AuthServiceImpl.totpFailTryAcquire 同款语义，每次计数刷新 ttl 即滚动窗口，
  * ttl 过期自动归零），超限写 429 + 42900 统一错误响应，四字段，与
  * GatewaySignatureFilter.writeError 风格一致并短路返回，不进入 Controller。
  *
- * <p>位置说明，/internal/log-batch 在网关签名过滤器（urlPatterns=/api/*）覆盖之外，
+ * 位置说明，/internal/log-batch 在网关签名过滤器（urlPatterns=/api/*）覆盖之外，
  * 本过滤器以独立 urlPatterns 注册同样覆盖它，计数在签名校验（order=2）之后，
  * 未签名垃圾请求先被签名闸拒绝，限流闸聚焦"签名合法但高频"的直连流量。
  */

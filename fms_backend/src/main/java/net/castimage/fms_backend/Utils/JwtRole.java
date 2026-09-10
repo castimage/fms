@@ -31,7 +31,7 @@ public enum JwtRole {
      * 语义，绝不猜测或降级默认。字符串常量 switch 分派免 values() 线性扫描。用于网关签名
      * 头身份采信与服务端角色解析两处。
      *
-     * <p>安全语义：这是 X-FMS-Role 头值进入系统的唯一解析点（GatewaySignatureFilter
+     * 安全语义：这是 X-FMS-Role 头值进入系统的唯一解析点（GatewaySignatureFilter
      * 采信身份时调用），未知字符串返回 null 即触发 40100 拒绝——任意字符串不得映射到
      * 任何有效角色，杜绝"未知角色值经 X-FMS-Role 注入后 SET ROLE 落空或误映射"的
      * 提权路径。白名单与网关 auth.allowed_roles 配置保持一致（五角色），新增角色须
@@ -61,7 +61,7 @@ public enum JwtRole {
      * 值直接拼入 SET ROLE 语句（SandboxSessionInterceptor），绝不接受请求输入，杜绝
      * 角色注入。
      *
-     * <p>映射语义：PG 侧只有四个职责角色（fms_operator/fms_viewer/fms_auditor/
+     * 映射语义：PG 侧只有四个职责角色（fms_operator/fms_viewer/fms_auditor/
      * fms_report），五枚举收敛为四值；admin 与 operator 共用 fms_operator 登录角色，
      * 管理员的"全量数据可见"不由角色区分，而由 RLS 策略按 auth.set_session 预载的
      * scope（admin 常被授予全公司/全部门范围）生效——因此 X-FMS-Role 头即使被替换为

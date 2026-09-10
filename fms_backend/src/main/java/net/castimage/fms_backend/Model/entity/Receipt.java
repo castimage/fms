@@ -29,7 +29,7 @@ public class Receipt {
     /** 客户 id（语义引用 ar.customers） */
     private UUID customerId;
 
-    /** 收款金额（CHECK amount &gt; 0） */
+    /** 收款金额（CHECK amount > 0） */
     private BigDecimal amount;
 
     /** 收款银行账户（语义引用 cash.bank_accounts，可空） */

@@ -81,7 +81,7 @@ const tableColumns = computed<DataTableColumns>(() => {
   return cols
 })
 
-// 注意，props 解构在 3.5 非响应式，仅 defineProps 直接解构生效，total 必须经 props.total 读取，
+// props 解构在 3.5 非响应式，仅 defineProps 直接解构生效，total 必须经 props.total 读取，
 // 否则恒为初始值 0，itemCount 退化为当页 data.length，分页恒 1 页
 const itemCount = computed(() => props.total || props.data.length)
 

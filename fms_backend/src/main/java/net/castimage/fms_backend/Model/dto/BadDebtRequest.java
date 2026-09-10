@@ -20,7 +20,7 @@ public record BadDebtRequest(
         @NotBlank(message = "计提期间必填")
         @Pattern(regexp = "\\d{4}-\\d{2}", message = "计提期间格式须为 YYYY-MM")
         String period,
-        /** 计提金额（&gt;= 0） */
+        /** 计提金额（>= 0） */
         @NotNull(message = "计提金额必填")
         @DecimalMin(value = "0", message = "计提金额不能为负")
         BigDecimal amount) {

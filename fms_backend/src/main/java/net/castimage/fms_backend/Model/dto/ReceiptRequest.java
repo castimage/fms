@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * 收款登记请求：amount 必填且 &gt; 0（DB CHECK 兜底）；status 初始 RECEIVED，
+ * 收款登记请求：amount 必填且 > 0（DB CHECK 兜底）；status 初始 RECEIVED，
  * 核销后 Service 推进 ALLOCATED。
  */
 public record ReceiptRequest(
@@ -17,7 +17,7 @@ public record ReceiptRequest(
         /** 客户 id（必填，须存在） */
         @NotNull(message = "客户必填")
         UUID customerId,
-        /** 收款金额（必填，&gt; 0） */
+        /** 收款金额（必填，> 0） */
         @NotNull(message = "收款金额必填")
         @DecimalMin(value = "0.01", message = "收款金额必须大于 0")
         BigDecimal amount,

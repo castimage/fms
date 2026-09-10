@@ -15,7 +15,7 @@ import java.util.Optional;
  * 找回票据/totp pending、totp 失败计数、令牌黑名单任意后端实例写入全局可见。
  * 原子语义由 Redis 原生命令保证（SETNX/INCR/SCAN），与内存实现逐条对齐，见 CachePort。
  *
- * <p>故障语义，fail-closed，安全系统不降级，任一命令执行失败异常自然上抛（RuntimeException），
+ * 故障语义，fail-closed，安全系统不降级，任一命令执行失败异常自然上抛（RuntimeException），
  * 由调用方按 500 拒绝请求，nonce 去重宁可拒不可放，票据宁可无效不可复用，
  * redis 不可达属部署错误，compose healthcheck + 启动 fail-fast 暴露。
  */

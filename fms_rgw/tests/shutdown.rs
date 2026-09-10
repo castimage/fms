@@ -1,9 +1,9 @@
 //! 优雅关闭完整路径测试(对应`src/lib.rs` `serve_with_shutdown`可注入关闭信号)
 //!
 //! 覆盖(`src/lib.rs` `serve`/`serve_with_shutdown`/`serve_connection`)，
-//! -注入关闭信号 + in-flight慢请求，触发后请求正常完成、serve 返回 Ok
-//! -触发后accept停止，新连接不再被接受/处理
-//! -无in-flight时触发则 serve 快速返回
+//! 注入关闭信号 + in-flight慢请求，触发后请求正常完成、serve 返回 Ok
+//! 触发后accept停止，新连接不再被接受/处理
+//! 无in-flight时触发则 serve 快速返回
 //!
 //! 生产路径(`serve`无注入、os信号触发)行为与此完全一致，仅触发源不同。
 //! 时序约定，关闭信号均在"请求已到达上游，已进入handler"之后触发，
@@ -70,7 +70,7 @@ fn proxied_req() -> String {
     )
 }
 
-/// 轮询mock上游直到记录到**业务请求**(`/api`/** 前缀，排除网关健康探测
+/// 轮询mock上游直到记录到业务请求(`/api`/** 前缀，排除网关健康探测
 /// `/internal/health`噪声)= 请求已进入网关handler并被代理到上游，
 /// 上限3s，超时panic，避免在"请求未在途"时触发关闭造成时序误判
 async fn wait_request_arrived(mock: &common::MockUpstream) {

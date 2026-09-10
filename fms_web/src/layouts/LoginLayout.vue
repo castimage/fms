@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * 独立布局，BlankLayout 语义，全屏居中 + 渐变背景 + 版权，登录页与 404 共用，手机/桌面同构。
- * 注意，作为嵌套路由父组件必须渲染 router-view，slot 占位会导致子路由永不挂载。
+ * 作为嵌套路由父组件必须渲染 router-view，slot 占位会导致子路由永不挂载。
  *
- * 背景，挂载时 loadLogin 拉取登录页背景，启用则渲染 BackgroundLayer，按断点档解析单档配置，
+ * 挂载时 loadLogin 拉取登录页背景，启用则渲染 BackgroundLayer，按断点档解析单档配置，
  * 渐变底保留为 fallback，基色改透明，由 body 底色承接。
  */
 import { computed, onMounted } from 'vue'

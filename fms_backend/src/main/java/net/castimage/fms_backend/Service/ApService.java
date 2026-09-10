@@ -128,7 +128,7 @@ public interface ApService {
     /** 创建对账单（DRAFT；supplier + statement_date） */
     ReconciliationView createReconciliation(ReconciliationRequest req);
 
-    /** 行导入（全部落库 UNMATCHED；候选匹配 top1 &gt;0.6 自动建议回写 similarity_score） */
+    /** 行导入（全部落库 UNMATCHED；候选匹配 top1 >0.6 自动建议回写 similarity_score） */
     void importLines(UUID id, ReconciliationImportRequest req);
 
     /** 人工匹配（updateMatchStatus 原子守卫 WHERE UNMATCHED，0 行则 40900 防双配） */

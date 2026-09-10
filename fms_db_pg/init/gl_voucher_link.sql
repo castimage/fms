@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/gl_voucher_link），ar/ap/cash 业务单据 ↔ gl 凭证联动（voucher_link）
 
--- 背景，init/ar_ap_cash_base.sql 为 ar.invoices/ap.invoices/ar.receipts/ap.payments 预留 voucher_id、
+-- init/ar_ap_cash_base.sql 为 ar.invoices/ap.invoices/ar.receipts/ap.payments 预留 voucher_id、
 -- cash.transactions 预留 voucher_line_id（无 FK 无触发器），Java 侧 ArServiceImpl/
 -- ApServiceImpl 生成凭证草稿回填，本文件打通单据到凭证联动，
 --   1) 不可变触发器豁免 voucher_id，ar/ap 发票开票（ISSUED）后仅允许 status 列变更，

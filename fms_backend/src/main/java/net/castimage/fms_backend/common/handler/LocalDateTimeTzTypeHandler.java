@@ -19,7 +19,7 @@ import java.util.Date;
 /**
  * LocalDateTime 类型处理器（PG timestamptz 列全局兼容）。
  *
- * <p>PG 时间戳列统一为 {@code timestamp with time zone}（2026-08 联调实测
+ * PG 时间戳列统一为 {@code timestamp with time zone}（2026-08 联调实测
  * gl.vouchers/um.users 等表 created_at/approved_at/posted_at 均为 timestamptz，
  * 服务器 session timezone=UTC），而应用实体/视图字段为 {@link LocalDateTime}。
  * pgjdbc 42.7.x 对 timestamptz 列调用 {@code getObject(..., LocalDateTime.class)}
@@ -27,13 +27,12 @@ import java.util.Date;
  * LocalDateTime"（联调实测 sqlState=42821），应用默认 LocalDateTimeTypeHandler
  * 无法读取。本处理器经 {@code mybatis-plus.type-handlers-package} 全局注册
  * （javaType=LocalDateTime 且未声明 @MappedJdbcTypes，注册在 null jdbcType 键下，
- * 自动映射场景优先命中，不覆盖显式 TIMESTAMP 绑定场景）：</p>
- * <ul>
- *   <li>读取：timestamptz 转 OffsetDateTime（pgjdbc 原生），再转 {@code Asia/Shanghai}
- *       本地时间（与 application.yaml jackson time-zone: Asia/Shanghai 一致）；</li>
- *   <li>写回：{@code ps.setObject(LocalDateTime)}（pgjdbc 按 session TZ 转换，与 DB 默认
- *       now()/UTC 语义一致；应用写路径均由 PG 函数/触发器取 now()，不受影响）。</li>
- * </ul>
+ * 自动映射场景优先命中，不覆盖显式 TIMESTAMP 绑定场景）：
+ *
+ *   读取：timestamptz 转 OffsetDateTime（pgjdbc 原生），再转 {@code Asia/Shanghai}
+ *       本地时间（与 application.yaml jackson time-zone: Asia/Shanghai 一致）；
+ *   写回：{@code ps.setObject(LocalDateTime)}（pgjdbc 按 session TZ 转换，与 DB 默认
+ *       now()/UTC 语义一致；应用写路径均由 PG 函数/触发器取 now()，不受影响）。
  */
 @MappedTypes(LocalDateTime.class)
 public class LocalDateTimeTzTypeHandler extends BaseTypeHandler<LocalDateTime> {

@@ -6,7 +6,7 @@ import java.util.Set;
 /**
  * 内置弱密码集合（175 项，中英文，统一归一化小写存储；查询/构建均由 WeakPasswordFilter 归一化后比对，杜绝大小写变体绕过）。
  *
- * <p>维护元数据：版本 1.0 / 更新 2026-08-09 / 来源基线：SecLists 10k-most-common 前 200、
+ * 维护元数据：版本 1.0 / 更新 2026-08-09 / 来源基线：SecLists 10k-most-common 前 200、
  * RockYou 高频弱口令、国内常见弱密码清单（数字谐音 + 祝福语 + 拼音姓名）。增补条目直接合入本清单，
  * 服务重启后位数组自动重建（fms.security.weak-password.expected-insertions=1024 留有 ~5 倍余量）。
  */

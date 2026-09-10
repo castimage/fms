@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * （::uuid/IPage sql）+ 沙箱拦截器（每语句 auth.set_session + SET ROLE）
  * 在真实数据链路上的端到端行为。
  *
- * <p>直调 Mapper 绕过了 http 过滤器链，身份须经 RequestContext（ThreadLocal）
+ * 直调 Mapper 绕过了 http 过滤器链，身份须经 RequestContext（ThreadLocal）
  * 手工填充，这正是拦截器的真实数据源，生产由 GatewaySignatureFilter 填充，
  * 已由 GatewaySignatureIT 覆盖全链路。
  */

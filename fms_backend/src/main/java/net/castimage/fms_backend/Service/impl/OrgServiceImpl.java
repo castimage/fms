@@ -272,7 +272,7 @@ public class OrgServiceImpl implements OrgService {
      * 开放。mustChangePwd 缺省视为 true，首登强制改密。创建后回读被 rls 隐藏，users_select 仅 is_self 可见，operator 永不可见他人行时免回读直接返回
      * 请求数据构造的视图，不抛 40400 避免事务回滚丢写。
      *
-     * <p>语义要点，应用侧只做预检，长度/弱密码，实际写库全部经 03c 闸口函数
+     * 应用侧只做预检，长度/弱密码，实际写库全部经 03c 闸口函数
      * auth.create_user，bcrypt 哈希由应用侧 PasswordUtils.encode 生成后经函数参数
      * 传入，列级白名单禁止直接 UPDATE pass_hash，敏感列，pass_hash/盲索引字段
      * 不对 operator 可见，operatorId 随调用传入落审计。mustChangePwd 缺省即 true，管理员创建账号首登必须改密，防初始口令长期有效。回读可见性，rls 范围外
@@ -360,7 +360,7 @@ public class OrgServiceImpl implements OrgService {
      * bcrypt 哈希，并同步置 must_change_pwd=true 强制下次登录改密。管理员路径不校验旧
      * 密码，目标用户既有令牌由网关侧 ttl 自然失效，本方法不做主动吊销。
      *
-     * <p>语义要点，这是管理员代重置路径，区别于用户改自己的密码，信任模型为
+     * 这是管理员代重置路径，区别于用户改自己的密码，信任模型为
      * "管理员已认证 + 写角色"即可重置任意可见用户，不校验旧密码，管理员本就
      * 不应知道目标用户旧口令，写入经 auth.set_password 闸口，列级白名单，密码
      * 列不可直写，bcrypt 哈希由 PasswordUtils.encode 生成，must_change_pwd=true

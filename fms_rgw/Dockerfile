@@ -3,10 +3,10 @@
 #
 # Stage 1 builder : rust:1.94-slim → cargo build --release
 # Stage 2 runtime : debian:bookworm-slim 最小化
-#                   - 非 root 用户（uid 10001，便于 K8s 安全上下文）
-#                   - EXPOSE 8443（TLS）
-#                   - VOLUME /app/static（静态资源挂载，镜像不内置前端构建产物）
-#                   - HEALTHCHECK 探测 /healthz（TLS/明文降级双探测）
+# 非 root 用户（uid 10001，便于 K8s 安全上下文）
+# EXPOSE 8443（TLS）
+# VOLUME /app/static（静态资源挂载，镜像不内置前端构建产物）
+# HEALTHCHECK 探测 /healthz（TLS/明文降级双探测）
 #
 # 构建: docker build -t fms_rgw:0.1.0 .
 # 运行: docker run -d -p 8443:8443 \

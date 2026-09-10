@@ -44,26 +44,24 @@ import java.security.InvalidKeyException;
 /**
  * 网关签名校验过滤器，order=2，urlPatterns=/api/*，TraceIdFilter order=1 先执行。
  *
- * <p>与 fms_rgw sign.rs 同构，X-FMS-Signature 协议，
- * <pre>
+ * 与 fms_rgw sign.rs 同构，X-FMS-Signature 协议，
+ *
  *   body_hash = hex(sha256(body))                          // 空 body = e3b0c442...
  *   input     = method|path|body_hash|t|nonce|uid|role     // '|' = 0x7C，无转义
  *   sig       = hex(hmac-sha256(sign_secret, input))       // 64 位小写 hex
- * </pre>
  *
- * <p>处理流程，
- * <ol>
- *   <li>请求体缓存，CachedBodyHttpServletRequest 贯穿到 Controller，防二次读流，</li>
- *   <li>读取 X-FMS-Signature，缺失则 40100，解析 t=&amp;nonce=&amp;sig= 三字段，非法则 40001，</li>
- *   <li>时间窗，|now - t| &gt; replay-window-secs，300 则 40100，防重放，</li>
- *   <li>重算 hmac（身份头 uid/role 纳入输入），恒定时间比较（MessageDigest.isEqual）失败则 40100，</li>
- *   <li>nonce 去重，NonceStore，时间窗与签名之后、采信身份之前命中则 40100（第二道闸），</li>
- *   <li>采信身份，X-FMS-UserId 必须 canonical uuid，X-FMS-Role 必须命中五白名单，否则 40100，api-key 模式携非空 X-api-key 豁免，身份由 ApiKeyFilter order=3 采信，</li>
- *   <li>剥离伪造 X-FMS-* 头，仅保留已采信的 X-FMS-UserId/X-FMS-Role，纵深防御，</li>
- *   <li>填充 RequestContext，finally 清理，防 ThreadLocal 泄漏。</li>
- * </ol>
+ * 处理流程，
  *
- * <p>X-api-key 模式，系统间集成，网关不注入身份头、签名身份段为空串，hmac 校验以上述空串参与输入，步骤 6 已通过，本过滤器对携带非空 X-api-key 的
+ *   请求体缓存，CachedBodyHttpServletRequest 贯穿到 Controller，防二次读流，
+ *   读取 X-FMS-Signature，缺失则 40100，解析 t=&nonce=&sig= 三字段，非法则 40001，
+ *   时间窗，|now - t| > replay-window-secs，300 则 40100，防重放，
+ *   重算 hmac（身份头 uid/role 纳入输入），恒定时间比较（MessageDigest.isEqual）失败则 40100，
+ *   nonce 去重，NonceStore，时间窗与签名之后、采信身份之前命中则 40100（第二道闸），
+ *   采信身份，X-FMS-UserId 必须 canonical uuid，X-FMS-Role 必须命中五白名单，否则 40100，api-key 模式携非空 X-api-key 豁免，身份由 ApiKeyFilter order=3 采信，
+ *   剥离伪造 X-FMS-* 头，仅保留已采信的 X-FMS-UserId/X-FMS-Role，纵深防御，
+ *   填充 RequestContext，finally 清理，防 ThreadLocal 泄漏。
+ *
+ * X-api-key 模式，系统间集成，网关不注入身份头、签名身份段为空串，hmac 校验以上述空串参与输入，步骤 6 已通过，本过滤器对携带非空 X-api-key 的
  * 请求不按「X-FMS-UserId 缺失」拒绝，跳过身份采信放行，由 ApiKeyFilter（order=3，
  * 本过滤器之后、身份采信之前）校验 um.api_keys 后按 key.user_id + scope 注入身份，
  * 任何失败在 ApiKeyFilter 侧一律 40100 fail-closed。
@@ -167,15 +165,15 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
      * RequestContext，不得自行解析头，X-api-key 模式，网关不注入身份头、签名身份段
      * 空串本过滤器跳过身份采信，由 ApiKeyFilter（order=3）校验后按密钥注入身份。
      *
-     * <p>校验链语义，与 fms_rgw verify_signature_header 同构，失败优先级一致，签名缺失则 40100
+     * 校验链语义，与 fms_rgw verify_signature_header 同构，失败优先级一致，签名缺失则 40100
      * fail-closed，宁可拒绝不可放行，t/nonce/sig 三字段解析（'&' 分隔、未知字段拒绝、
-     * nonce 须 canonical uuid、sig 须 64 位小写 hex）失败则 40001，|now - t| &gt; 窗口，300s，
+     * nonce 须 canonical uuid、sig 须 64 位小写 hex）失败则 40001，|now - t| > 窗口，300s，
      * abs 双向覆盖未来时间戳防提前重放则 40100，hmac 重算，method|path|body_hash|t|nonce|
      * uid|role，uid/role 取请求头原值，网关一跳内换头即不匹配恒定时间比较失败则 40100，
      * nonce 已在窗口内用过则 40100（时间窗+签名之后才去重，杜绝先占 nonce 的拒绝型 dos，
      * 采信身份前拒绝，重放者拿不到任何反馈差异）。全部通过后才采信身份并放行。
      *
-     * <p>身份采信规则，X-FMS-UserId 必须为 canonical uuid（36 字符小写，与网关注入格式
+     * 身份采信规则，X-FMS-UserId 必须为 canonical uuid（36 字符小写，与网关注入格式
      * 对齐，大写/非标准格式一律拒绝），X-FMS-Role 必须命中五角色白名单（JwtRole.from），
      * 否则 40100，此后剥离所有伪造 X-FMS-* 头，仅保留已采信的两项，下游与 Controller
      * 只能读到可信值，配合 RequestContext 单一数据源形成纵深防御。body 在步骤 1 已缓存为
@@ -252,7 +250,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         //    参与输入且已通过步骤 6，与网关注入的空身份签名一致），其余路径 fail-closed，
         //    但携带非空 X-api-key 的 api-key 模式请求豁免，网关不注入身份头、签名身份段
         //    空串，步骤 6 已通过，身份采信延后到 ApiKeyFilter（order=3）校验后注入。
-        //    注意，匿名白名单路径若带身份头（网关对 /api/auth/totp/* 携带有效 Bearer 时
+        // 匿名白名单路径若带身份头（网关对 /api/auth/totp/* 携带有效 Bearer 时
         //    "尽力注入"身份），同样采信身份与角色，否则 RequestContext 有 userId 无
         //    role，SandboxSessionInterceptor 拒绝注入，连接退化为 fms_app 空壳，
         //    permission denied（2fa setup/enable/disable 联调实测 40300）。

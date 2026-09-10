@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * 网关签名校验全链路集成测试，GatewaySignatureFilter 10 步校验 + MockMvc 真实过滤器链。
  *
- * <p>覆盖核心路径，合法签名放行并打通
+ * 覆盖核心路径，合法签名放行并打通
  * 经沙箱注入再到真实 sql 再到 Controller（/api/config 读 um.params），缺失/篡改/
  * 重放/过期/非法身份全部 40100 fail-closed，匿名路径以空身份签名放行。
  */

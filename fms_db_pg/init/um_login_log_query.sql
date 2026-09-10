@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/um_login_log_query），登录日志独立查询端点支撑，um.login_log rls 策略调整
 
--- 背景，安全中心（2fa/api Key/登录审计）要求登录审计独立查询，um.login_log 已建
+-- 安全中心（2fa/api Key/登录审计）要求登录审计独立查询，um.login_log 已建
 --       （auth.record_login SECURITY DEFINER 写入，rls，is_self OR has_role('fms_auditor') OR
 --       current_user='fms_admin'，按月分区），此前 SecurityPage 以应用日志占位、缺独立查询端点。
 

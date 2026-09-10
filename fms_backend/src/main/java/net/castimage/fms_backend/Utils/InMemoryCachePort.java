@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * CachePort 内存实现，fms.session-store 缺省=in-memory，保持单实例既有行为，
  * ConcurrentHashMap + 过期时刻（epoch millis），key 命名空间与 Redis 实现一一对应，fms:nonce: 等前缀，防跨实现漂移，见 CachePort 契约。过期条目惰性清理，读路径只判过期不删除，避免写放大，@Scheduled 兜底清扫回收长尾。
  *
- * <p>线程安全性，所有写路径走 CHM 原子方法（putIfAbsent/compute/computeIfPresent），
+ * 线程安全性，所有写路径走 CHM 原子方法（putIfAbsent/compute/computeIfPresent），
  * 并发下不丢写、不覆盖并发先行的新窗口，与 Redis 原子命令（SETNX/INCR/LPOP）语义对齐。
  */
 public class InMemoryCachePort implements CachePort {

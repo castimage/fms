@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Select;
  * API（SPEC §8.3 仅逐条 send），循环移入 DB 内避免 N 次 JDBC 往返；函数内部逐条
  * pgmq.send 容错（单条失败 NOTICE 继续，best-effort），返回成功 send 条数。
  *
- * <p>权限模型：/internal 路径免网关签名（GatewaySignatureFilter shouldNotFilter），
+ * 权限模型：/internal 路径免网关签名（GatewaySignatureFilter shouldNotFilter），
  * 请求无身份采信则 SandboxSessionInterceptor 跳过注入，连接保持 fms_app 空壳，函数
  * SECURITY DEFINER 以属主 fms_admin 身份执行绕过角色限制（08 文件已授 fms_app log
  * schema USAGE），EXECUTE 仅授 fms_app（27 文件 REVOKE PUBLIC 兜底，08 的 REVOKE 先于

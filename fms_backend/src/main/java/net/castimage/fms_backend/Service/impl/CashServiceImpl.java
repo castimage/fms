@@ -142,7 +142,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>详情为账号解密的唯一出口，B 类方法 auth.decrypt_bank_account（SECURITY DEFINER，
+     * 详情为账号解密的唯一出口，B 类方法 auth.decrypt_bank_account（SECURITY DEFINER，
      * current_user 守卫 + 数据范围校验 + pgp_sym_decrypt aes256）返回明文账号填入 accountNo，
      * 明文仅存在于本次响应，不入日志、不落库。
      */
@@ -159,7 +159,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>创建唯一入口为 SECURITY DEFINER 闸口 cash.fn_create_bank_account，函数内
+     * 创建唯一入口为 SECURITY DEFINER 闸口 cash.fn_create_bank_account，函数内
      * pgp_sym_encrypt 落 account_no_enc + sha256 盲索引落 account_no_hash（uk_bank_account_hash
      * 唯一兜底 23505 映射 40900），company_id 由函数从当前用户上下文推导（无法确定公司则 RAISE
      * 42501 映射 40300），Java 侧只做枚举/币种预检，明文账号不落库不日志。
@@ -244,10 +244,10 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>company_id 由所属银行账户推导，防跨公司挂账，rls WITH CHECK 兜底，
+     * company_id 由所属银行账户推导，防跨公司挂账，rls WITH CHECK 兜底，
      * 初始 match_status=UNMATCHED，金额>0/方向枚举 Java 预检 + db CHECK 终审。
      *
-     * <p>创建幂等，uk_trx_idem 同族模式，规范化请求内容 SHA-256 作幂等键，同公司同账户同 body 重复提交仅 1 条，重复请求返回既有流水 = A 级幂等，
+     * 创建幂等，uk_trx_idem 同族模式，规范化请求内容 SHA-256 作幂等键，同公司同账户同 body 重复提交仅 1 条，重复请求返回既有流水 = A 级幂等，
      * 并发竞态由部分唯一索引兜底，23505 不产生重复数据 = B 级安全。
      */
     @Override
@@ -324,7 +324,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>解析规则，utf-8 文本，带 BOM 容错，首行含分隔符即分隔符，TSV 优先，否则 csv，
+     * 解析规则，utf-8 文本，带 BOM 容错，首行含分隔符即分隔符，TSV 优先，否则 csv，
      * 表头行，含 trx_date/日期自动跳过，列序 trx_date, amount, summary[, direction]，
      * 日期支持 yyyy-MM-dd / yyyy/M/d，金额 BigDecimal，direction 可空，非空须 IN/OUT，
      * 任一列解析失败则 40001 带行号，快速失败，不落库。
@@ -343,10 +343,10 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>事务内落库，bank_statements（company_id 由账户推导，total_lines 回填）+
+     * 事务内落库，bank_statements（company_id 由账户推导，total_lines 回填）+
      * 批量 bank_statement_lines（match_status=UNMATCHED），rls WITH CHECK 兜底越权公司。
      *
-     * <p>导入幂等，uk_bank_stmt_idem 同族模式，filename+全部行内容 SHA-256 作幂等键，同公司同账户同文件同内容重复导入仅 1 份，重复 confirm 返回既有对账单行数
+     * 导入幂等，uk_bank_stmt_idem 同族模式，filename+全部行内容 SHA-256 作幂等键，同公司同账户同文件同内容重复导入仅 1 份，重复 confirm 返回既有对账单行数
      * = A 级幂等，并发竞态由部分唯一索引兜底 = B 级安全，不同文件同名内容不同不冲突。
      */
     @Override
@@ -433,7 +433,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>自动对账，B 类核心逻辑，与 pg 函数 cash.fn_auto_reconcile 同口径，
+     * 自动对账，B 类核心逻辑，与 pg 函数 cash.fn_auto_reconcile 同口径，
      * 逐条未匹配流水按同账户、金额相等、日期差≤3 天、摘要 pg_trgm similarity 降序取最优候选
      * （similarity/`%` 走 ix_bsl_summary GIN trgm 索引），相似度 ≥0.9 才自动配对，
      * 双方均以 WHERE match_status='UNMATCHED' 原子 UPDATE，防并发双配，对账单行侧
@@ -506,7 +506,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>人工对账，预检双方同公司、同银行账户，对账单行经其所属对账单归属账户，
+     * 人工对账，预检双方同公司、同银行账户，对账单行经其所属对账单归属账户，
      * 再双向原子配对，流水侧 markMatched（0 行则 40900"流水已被消费"），随后对账单行侧
      * markMatched（0 行则 40900"对账单行已被消费"，事务回滚撤销流水侧配对），
      * 相似度记 NULL，人工判定，非相似度驱动。
@@ -559,7 +559,7 @@ public class CashServiceImpl implements CashService {
     /**
      * {@inheritDoc}
      *
-     * <p>当日口径调 pg SECURITY DEFINER 函数 cash.fn_daily_report（期初=当日前的净流入、
+     * 当日口径调 pg SECURITY DEFINER 函数 cash.fn_daily_report（期初=当日前的净流入、
      * 当日收/付/净额/期末 + 分账户明细，fastjson2 解析），未来 7 天预测为 B 类 sql
      * 按日聚合（ar 应收到期未核销 - ap 应付到期未核销，rls 行级收敛）。
      */

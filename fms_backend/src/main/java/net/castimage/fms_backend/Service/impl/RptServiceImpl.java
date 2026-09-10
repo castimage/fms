@@ -172,7 +172,7 @@ public class RptServiceImpl implements RptService {
     /**
      * {@inheritDoc}
      *
-     * <p>看板聚合七路数据，① 资金日报，rpt.cash_flow_daily immv 近 30 日，net=income-expense，
+     * 看板聚合七路数据，① 资金日报，rpt.cash_flow_daily immv 近 30 日，net=income-expense，
      * ② 预算执行 top（rpt.budget_actual immv 对键最新 APPROVED budget_plans，实际数倒序 top10），
      * ③ 应收账龄分桶，rpt.ar_aging 视图全部未核销行按 due_date 相对 date 分桶合计 open_balance，
      * ④ 资金汇总，cash.transactions 当日 IN/OUT + 截至当日净额，rls 收敛，
@@ -221,7 +221,7 @@ public class RptServiceImpl implements RptService {
     /**
      * {@inheritDoc}
      *
-     * <p>导出白名单校验后按报表类型取数，utf-8 BOM（\uFEFF）流式写 csv，表头 + 数据行 +
+     * 导出白名单校验后按报表类型取数，utf-8 BOM（\uFEFF）流式写 csv，表头 + 数据行 +
      * flush（不 close 输出流，由 Servlet 容器接管），文件名 report_yyyyMMdd.csv，
      * Content-Disposition attachment。csv 字段按 RFC 4180 转义，含逗号/引号/换行时引号包裹、引号加倍。
      */

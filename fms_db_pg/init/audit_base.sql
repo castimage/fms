@@ -109,7 +109,7 @@ END $$;
 -- 参数，p_action 动作类型（INSERT/UPDATE/DELETE 或业务动作如 voucher_post/period_close），p_table_name 目标表，p_record_id 目标记录 id，p_old_values/p_new_values 变更前后快照 jsonb，p_ip/p_request_id 来源信息（空串则 NULL 入库）
 -- 行为，actor_id 从 fms.user_id guc 取（未注入则 NULL），INSERT 由 trg_audit_log_hash 自动补 prev_hash/row_hash 构成哈希链，返回新行 id
 
--- 边界，表级无 INSERT 授权 + FORCE rls 无写策略 + 不可变触发器硬拒 UPDATE/DELETE，写入仅经本函数与捕获触发器可达，应用角色不可直插伪造审计条目，本文件末与 grants_base.sql 均已 REVOKE PUBLIC EXECUTE，仅 fms_admin 与内部触发器（SECURITY DEFINER 自动提升）可调
+-- 表级无 INSERT 授权 + FORCE rls 无写策略 + 不可变触发器硬拒 UPDATE/DELETE，写入仅经本函数与捕获触发器可达，应用角色不可直插伪造审计条目，本文件末与 grants_base.sql 均已 REVOKE PUBLIC EXECUTE，仅 fms_admin 与内部触发器（SECURITY DEFINER 自动提升）可调
 
 -- 调用约定，业务函数（fn_post_voucher/fn_reverse_voucher/fn_close_period 等）在事务内显式调用本函数留痕业务动作，挂载了捕获触发器（fn_audit_log）的表在业务 DML 时自动经 record 写 INSERT/UPDATE/DELETE 行，双通道写入均走同一 INSERT 路径，哈希链在触发器层统一补链，无旁路
 CREATE OR REPLACE FUNCTION audit.record(
@@ -140,7 +140,7 @@ END $$;
 
 -- 2.4 通用审计捕获触发器函数（业务表 AFTER INSERT/UPDATE/DELETE 挂载，SECURITY DEFINER 以 fms_admin 身份写审计，不受业务表 rls 限制）
 -- 行为，按 TG_OP 取变更快照（UPDATE/DELETE 取 OLD，INSERT/UPDATE 取 NEW），记录 id 取 OLD.id（DELETE）或 NEW.id，经 audit.record 写入，捕获路径 ip/request_id 传 NULL，返回 COALESCE(NEW, OLD) 不阻断业务 DML
--- 边界，SECURITY DEFINER 使审计写入不受业务表 rls 约束，任何业务 DML（含软删 UPDATE deleted_at=now）自动留痕，触发器函数不对外授权，仅触发器以内置身份调用
+-- SECURITY DEFINER 使审计写入不受业务表 rls 约束，任何业务 DML（含软删 UPDATE deleted_at=now）自动留痕，触发器函数不对外授权，仅触发器以内置身份调用
 CREATE OR REPLACE FUNCTION audit.fn_audit_log()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -185,7 +185,7 @@ CREATE TRIGGER trg_audit_log_hash
 
 -- 行为，自链首（prev='0'×64）按 fn_audit_log_hash 同式逐行重算（ip/request_id 入公式 + occurred_at 时区无关化 to_char AT TIME ZONE 'UTC'），与存储值比对，首处不符即停，首断链点即返回
 
--- 边界，STABLE + SECURITY DEFINER，fms_auditor 与 queues_cron.sql 中的 cron 包装函数（读 prev_ok/broken_at/detail）调用，篡改任何一行（含连带伪造 prev_hash）即被检出
+-- STABLE + SECURITY DEFINER，fms_auditor 与 queues_cron.sql 中的 cron 包装函数（读 prev_ok/broken_at/detail）调用，篡改任何一行（含连带伪造 prev_hash）即被检出
 
 -- 校验语义，逐行顺序依赖 id 与写入序一致，由 fn_audit_log_hash 在链锁内强制
 -- NEW.id 严格递增保证，uuidv7 同毫秒随机位无序，未经强制会在并发同毫秒 INSERT 时错位，

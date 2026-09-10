@@ -12,7 +12,7 @@ import java.time.Duration;
  * 由 Redis 原子 SETNX 保证并发去重正确性，任意实例写入全局可见——多实例部署下
  * 网关签名 nonce 的 X4-1 第二道闸语义与单实例一致。
  *
- * <p>与内存版的关键差异（取舍，喵）：分布式场景无法原子地做"容量检查+写入"
+ * 与内存版的关键差异（取舍，喵）：分布式场景无法原子地做"容量检查+写入"
  * （approximateSize 的 SCAN 与 setIfAbsent 之间必有竞窗），故舍弃 fail-closed
  * 容量闸——防内存耗尽改由 Redis 自身内存策略（maxmemory 淘汰）兜底，容量仅作
  * 水位监控口径（usageRatio 分母）。拒绝语义不变：TTL 内同 nonce 恒拒绝，仅

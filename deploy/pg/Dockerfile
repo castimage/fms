@@ -42,7 +42,7 @@ RUN echo "shared_preload_libraries = 'pgaudit,pg_cron,pg_partman_bgw'" >> /usr/s
 # pgaudit：数据库审计（github.com/pgaudit/pgaudit，固定 release 18.0——
 # master 处于 19beta 开发分支，18.0 为支持 PG 18 的稳定版）。编译产物
 # pgaudit.so，已加入 preload 基线；bootstrap_base 建库即依赖，必需安装。
-# 注意：Makefile 未定义 USE_PGXS 时走 PG 源码树内构建（../../src/
+# Makefile 未定义 USE_PGXS 时走 PG 源码树内构建（../../src/
 # Makefile.global），独立构建必须显式 USE_PGXS=1（经 pg_config 定位 PGXS）。
 RUN git clone --depth 1 --branch 18.0 https://github.com/pgaudit/pgaudit /tmp/pgaudit \
     && cd /tmp/pgaudit && make USE_PGXS=1 && make USE_PGXS=1 install \
@@ -84,11 +84,11 @@ RUN git clone --depth 1 https://github.com/sraoss/pg_ivm /tmp/pg_ivm \
 
 # zhparser：中文分词（github.com/amutu/zhparser，依赖 SCWS 中文分词库 +
 # pkg-config + libxml2-dev）：
-#   - scws 用发布版 tarball（GitHub 仓库是 autotools 源无 configure）：
+# scws 用发布版 tarball（GitHub 仓库是 autotools 源无 configure）：
 #     xunsearch.com 官方下载。老代码 unlink 隐式声明会被新 gcc 默认
-#     -Werror=implicit-function-declaration 判错，须以 CFLAGS 显式关闭；
-#   - zhparser 从 GitHub 源码 make（SCWS_HOME=/usr/local 找头文件）；
-#   - make install 后 ldconfig 刷新动态库缓存
+# Werror=implicit-function-declaration 判错，须以 CFLAGS 显式关闭；
+# zhparser 从 GitHub 源码 make（SCWS_HOME=/usr/local 找头文件）；
+# make install 后 ldconfig 刷新动态库缓存
 RUN wget -q -O - http://www.xunsearch.com/scws/down/scws-1.2.1.tar.bz2 | tar xjf - -C /tmp \
     && cd /tmp/scws-1.2.1 \
     && ./configure CFLAGS="-O2 -Wno-implicit-function-declaration" \

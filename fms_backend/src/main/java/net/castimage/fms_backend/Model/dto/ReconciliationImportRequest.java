@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 对账单行导入请求（POST /api/ap/reconciliations/{id}/lines）：一次性批量导入，
  * 全部落库为 UNMATCHED；导入时 Service 对每行做候选匹配建议（金额相等 + 日期差
- * ≤3 天 + similarity 降序，top1 &gt; 0.6 回写 similarity_score 供 UI 展示建议，
+ * ≤3 天 + similarity 降序，top1 > 0.6 回写 similarity_score 供 UI 展示建议，
  * 不自动匹配）。
  */
 public record ReconciliationImportRequest(
@@ -26,7 +26,7 @@ public record ReconciliationImportRequest(
             /** 交易日期（必填） */
             @NotNull(message = "交易日期必填")
             LocalDate trxDate,
-            /** 金额（必填，&gt; 0） */
+            /** 金额（必填，> 0） */
             @NotNull(message = "金额必填")
             BigDecimal amount,
             /** 摘要（候选匹配数据源） */

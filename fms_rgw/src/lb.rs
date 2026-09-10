@@ -1,13 +1,11 @@
 //! 多上游负载均衡池(`UpstreamPool`)，每实例独立`UpstreamClient` + 健康位 + 在途计数，
 //! 支持round-robin / random / least-conn / ip-hash / auto五种模式，转发失败自动重试
 //! 下一个健康实例，连续失败 ≥3标记down，故障剔除，健康探测成功恢复，重新纳入。
-//!
-//! 设计要点，
-//! -随机与哈希委托成熟库，random 用 rand 线程随机源，ip-hash 用 fnv crate，
+//! 随机与哈希委托成熟库，random 用 rand 线程随机源，ip-hash 用 fnv crate，
 //!   算法与替换前一致。
-//! -兼容约束，servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
+//! servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
 //!   现有`FMS_RGW_UPSTREAM`单url部署行为不变。
-//! -熔断粒度，全局`CircuitBreaker`保留为整体兜底(forward任一实例成功即成功，
+//! 熔断粒度，全局`CircuitBreaker`保留为整体兜底(forward任一实例成功即成功，
 //!   最后一次错误才失败)，实例级故障剔除/恢复由本池的健康位管理(健康探测 + 转发
 //!   连续失败共用`mark_healthy` / `record_failure`)。
 //!
@@ -209,13 +207,13 @@ impl UpstreamPool {
     }
 
     /// 按配置模式选择一个健康实例(只选healthy=true，全down 则返回 `None`)，
-    /// - round-robin，原子计数轮转，从起点线性探测第一个健康实例
-    /// - random，rand 线程随机源定随机起点，从随机起点线性探测
-    /// - least-conn，在途请求数最小者，并发下为近似值，平手取序号小者，确定性
-    /// - ip-hash，fnv1a，ip % len定位后线性探测第一个健康实例，简化一致性哈希，
-    ///   实例数变化会重映射，会话粘性为尽力而为，无ip时回退round-robin
-    /// - auto，等价least-conn(自动健康管理由探测与转发失败共用，单上游时退化为直连，
-    ///   任何模式行为一致)
+    /// round-robin 原子计数轮转，从起点线性探测第一个健康实例，
+    /// random 用 rand 线程随机源定随机起点后线性探测，
+    /// least-conn 选在途请求数最小者，并发下为近似值，平手取序号小者，确定性，
+    /// ip-hash 按 fnv1a 取模定位后线性探测第一个健康实例，简化一致性哈希，
+    ///   实例数变化会重映射，会话粘性为尽力而为，无ip时回退round-robin，
+    /// auto 等价 least-conn，自动健康管理由探测与转发失败共用，
+    ///   单上游时退化为直连，任何模式行为一致
     pub fn pick(&self, client_ip: Option<&str>) -> Option<usize> {
         if self.entries.is_empty() {
             return None;

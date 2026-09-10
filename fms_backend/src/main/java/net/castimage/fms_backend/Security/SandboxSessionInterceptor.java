@@ -47,7 +47,7 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      * 参数）+ SET ROLE（guc 随提交/回滚自动结束，无残留），无事务退化为会话级 SET +
      * SET ROLE（残留由连接池 RESET ALL 兜底）。
      *
-     * <p>安全模型，这是后端数据访问的最后一道闸，任何 sql 执行前都必须把
+     * 安全模型，这是后端数据访问的最后一道闸，任何 sql 执行前都必须把
      * GatewaySignatureFilter 采信的身份，user_id + 角色 + 数据范围注入 pg 会话，
      * rls 策略据此过滤行。匿名请求不注入任何 guc，fms_app 登录角色无数据权限，
      * rls 恒拒绝（fail-closed），有身份但角色为 null 属半采信异常态，正常链路
@@ -55,7 +55,7 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      * 身份不完整时泄露数据。角色名来自 JwtRole.pgRole 编译期枚举白名单，
      * SET ROLE 拼接的值不可能来自请求输入。
      *
-     * <p>事务分派语义，MyBatis 事务内（autoCommit=false）guc 用 SELECT auth.set_session
+     * 事务分派语义，MyBatis 事务内（autoCommit=false）guc 用 SELECT auth.set_session
      * 以 bind 参数注入，orgIds/deptIds 显式传快照，null 则由函数从 scope 表预载，
      * guc 随提交/回滚自动清空，无跨事务残留，事务外（autoCommit=true）SET LOCAL 无效，
      * 退化为会话级 SET 三个 guc + SET ROLE，残留由连接池归还时的 RESET ALL 兜底。
@@ -196,7 +196,7 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
         }
     }
 
-    /** List&lt;uuid&gt; 转 pg uuid[] 数组参数，null/空返回 NULL（auth.set_session 从 scope 表预载） */
+    /** List<uuid> 转 pg uuid[] 数组参数，null/空返回 NULL（auth.set_session 从 scope 表预载） */
     private Array toArray(Connection conn, List<UUID> ids) throws SQLException {
         if (ids == null || ids.isEmpty()) {
             return null;

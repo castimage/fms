@@ -190,7 +190,7 @@ public class ArController {
     }
 
     /**
-     * 收款登记（status=RECEIVED，金额&gt;0）。
+     * 收款登记（status=RECEIVED，金额>0）。
      */
     @PostMapping("/receipts")
     public ApiResponse<ReceiptView> createReceipt(@RequestBody @Valid ReceiptRequest req) {

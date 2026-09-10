@@ -115,9 +115,9 @@ fn is_body_method(method: &Method) -> bool {
 }
 
 /// `Content-Type`白名单，仅对带body的方法校验，
-/// application/json | application/x-www-form-urlencoded | multipart/form-data
-/// | text/plain | application/octet-stream，附件上传
-/// 缺失`Content-Type` 则返回 `BadContentType`。**实际无body的请求跳过校验**(http语义，
+/// application/json、application/x-www-form-urlencoded、multipart/form-data、text/plain、
+/// application/octet-stream，附件上传
+/// 缺失`Content-Type` 则返回 `BadContentType`。实际无body的请求跳过校验(http语义，
 /// 无`Content-Length`或`Content-Length`: 0且无`Transfer-Encoding` = 请求体为空)，
 /// 登出/api-key吊销等无body的POST不需要`Content-Type`(部分客户端/浏览器
 /// 对空body请求不携带该头属合法行为，按方法一刀切会误伤)
@@ -205,7 +205,7 @@ pub fn check_sql_injection_path(path: &str, query: Option<&str>) -> Result<(), F
 
 /// 对body的浅特征检查，文本型 + application/json + multipart/form-data均扫描
 /// (仅查前两类会被`Content-Type`切换整体绕过第一道防线)，json字符串值与multipart
-/// 表单字段值同样拦截。multipart经`extract_multipart_text`只保留**表单字段**
+/// 表单字段值同样拦截。multipart经`extract_multipart_text`只保留表单字段
 /// 文本，文件part跳过，二进制文件字节流可能含任意ASCII子串(随机字节/真实
 /// 文档格式)，整体扫描必然误伤一切上传，注入载荷只能经表单字段传入，字段照常扫描。
 pub fn check_sql_injection_body(
@@ -235,10 +235,10 @@ pub fn check_sql_injection_body(
     }
 }
 
-/// multipart预处理，按boundary分隔行拆分各part，拼接**表单字段** part内容，
+/// multipart预处理，按boundary分隔行拆分各part，拼接表单字段 part内容，
 /// 文件part，头部含filename=按声明`Content-Type`分流，二进制类型(image/*、
-/// octet-stream等)内容跳过，字节流无注入面且必误伤上传，**text/\* 文本文件
-/// csv/TXT仍参与扫描**(内容可安全文本解析，对账单csv导入等文本入库场景
+/// octet-stream等)内容跳过，字节流无注入面且必误伤上传，text/* 文本文件
+/// csv/TXT仍参与扫描，内容可安全文本解析，对账单csv导入等文本入库场景
 /// 的注入载荷保持第一道防线拦截，纵深不因上传放宽)。
 /// 分隔行按RFC 2046严格匹配，整行恰为 "--boundary"，首分隔或 "--boundary--"
 /// 收尾分隔，不做前缀宽松匹配，防止攻击者借边界前缀把携带注入载荷的行伪造成
@@ -833,7 +833,7 @@ mod tests {
 
     #[test]
     fn normalize_path_boundaries() {
-        // 边界，根路径、点段保留，. 不是 ..、单段 ..、首尾斜杠语义
+        // 根路径、点段保留，. 不是 ..、单段 ..、首尾斜杠语义
         assert_eq!(normalize_path("/").unwrap(), "/");
         assert_eq!(normalize_path("/a/./b").unwrap(), "/a/./b", ". 段不误伤");
         assert_eq!(normalize_path("/a/b/").unwrap(), "/a/b/", "末尾斜杠保留");

@@ -14,13 +14,13 @@ import java.util.UUID;
 /**
  * UUID 类型处理器（PG uuid 列）。
  *
- * <p>MyBatis 3.5.x 默认注册表<b>不</b>含 UUID 处理器（验证见
+ * MyBatis 3.5.x 默认注册表不含 UUID 处理器（验证见
  * UuidTypeHandlerRegistrationTest），注解式 Mapper 语句（如
  * {@code #{id}::uuid}）解析参数映射时因「Type handler was null … javaType
  * (UUID)」直接抛异常，导致 SqlSessionFactory/应用上下文启动失败。
  * 本处理器经 {@code mybatis-plus.type-handlers-package} 全局注册：
  * 参数侧以 {@link Types#OTHER} 绑定（pgjdbc 原生识别 UUID），
- * 结果侧兼容 PG 返回的 UUID 或字符串形式。</p>
+ * 结果侧兼容 PG 返回的 UUID 或字符串形式。
  */
 @MappedTypes(UUID.class)
 public class UuidTypeHandler extends BaseTypeHandler<UUID> {

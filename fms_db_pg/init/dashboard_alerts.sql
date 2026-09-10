@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/dashboard_alerts），看板-异常告警聚合，预算执行率阈值 + 银行账户余额安全线
 
--- 背景，GET /api/rpt/dashboard 新增异常告警维度。预算执行率阈值语义与
+-- GET /api/rpt/dashboard 新增异常告警维度。预算执行率阈值语义与
 --   budget.fn_cron_budget_warning 同源（um.params budget.warn.ratio 可配，缺省 0.8），
 --   银行账户余额安全线为新增可配参数 um.params cash.bank.safety.line，缺省 0 =
 --   仅透支告警，admin 可经系统参数页调高。

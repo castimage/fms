@@ -12,13 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * uuid 类型处理器回归测试，
- * <ul>
- *   <li>MyBatis 3.5.19 默认注册表对 {@code javaType=uuid, jdbcType=null} 返回 null
+ *
+ *   MyBatis 3.5.19 默认注册表对 {@code javaType=uuid, jdbcType=null} 返回 null
  *       （注解式 Mapper 的 {@code #{id}} 参数映射会抛 "Type handler was null"，阻塞启动），
- *       本测试固化了该前提，防止未来升级 MyBatis 后误删 UuidTypeHandler 注册。</li>
- *   <li>注册 UuidTypeHandler 后，SqlSourceBuilder 所用的
- *       {@code getTypeHandler(uuid.class, null)} 必须命中，且命中实例为本处理器。</li>
- * </ul>
+ *       本测试固化了该前提，防止未来升级 MyBatis 后误删 UuidTypeHandler 注册。
+ *   注册 UuidTypeHandler 后，SqlSourceBuilder 所用的
+ *       {@code getTypeHandler(uuid.class, null)} 必须命中，且命中实例为本处理器。
  */
 class UuidTypeHandlerRegistrationTest {
 

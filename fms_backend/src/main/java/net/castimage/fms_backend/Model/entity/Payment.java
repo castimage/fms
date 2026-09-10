@@ -29,7 +29,7 @@ public class Payment {
     /** 供应商 id（语义引用 ap.suppliers） */
     private UUID supplierId;
 
-    /** 付款金额（CHECK amount &gt; 0） */
+    /** 付款金额（CHECK amount > 0） */
     private BigDecimal amount;
 
     /** 付款银行账户（语义引用 cash.bank_accounts，可空） */

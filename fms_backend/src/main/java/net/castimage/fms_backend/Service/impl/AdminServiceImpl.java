@@ -97,7 +97,7 @@ public class AdminServiceImpl implements AdminService {
     /**
      * {@inheritDoc}
      *
-     * <p>写路径三重防护，① RequestContext.requireWriteRole，只读角色 40300，
+     * 写路径三重防护，① RequestContext.requireWriteRole，只读角色 40300，
      * ② 敏感键白名单（jwt./pgcrypto. 前缀 + secret/password/token/… 子串则 40300，
      * 与 09b 密钥收敛策略一致，敏感键只存 sec.app_secrets），③ value fastjson2 校验
      * 合法 json（标量/对象均可，落库 ::jsonb）。code 存在则原子更新 value/updated_by，

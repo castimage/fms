@@ -182,7 +182,7 @@ pub(crate) struct UpstreamRequestParts {
 /// 追加，不覆盖链路上游代理的既有记录，`X-Forwarded-Proto`仅缺失时写入(调用方
 /// `proxy_handler`已按tls配置预置，此处保留)。
 ///
-/// 边界，body缺失时退化为空体(防御性，正常链路由`mw_sign`保证必有缓冲)，
+/// body缺失时退化为空体(防御性，正常链路由`mw_sign`保证必有缓冲)，
 /// 重建失败，非法uri/头 则 `InvalidUri`
 ///
 /// `parts`，请求模板，headers将被原地修改，调用方重试时须传独立克隆

@@ -14,12 +14,12 @@ import java.util.Map;
 
 /**
  * 数据源装配，读写分离，从库只读分流，
- * <ul>
- *   <li>enabled=false，单机/多机形态，直接返回主写源，与 Boot 自动装配行为一致，
- *       零路由开销，本配置替代自动装配，DataSourceAutoConfiguration 条件缺失跳过，</li>
- *   <li>enabled=true，集群形态，RoutingDataSource 包装 写源 + 只读源，readOnly=true
- *       事务路由到只读 url（pgbouncer-ro 指向从库），其余走主库。</li>
- * </ul>
+ *
+ *   enabled=false，单机/多机形态，直接返回主写源，与 Boot 自动装配行为一致，
+ *       零路由开销，本配置替代自动装配，DataSourceAutoConfiguration 条件缺失跳过，
+ *   enabled=true，集群形态，RoutingDataSource 包装 写源 + 只读源，readOnly=true
+ *       事务路由到只读 url（pgbouncer-ro 指向从库），其余走主库。
+ *
  * 两源共用同一连接角色（fms_app）与沙箱语义，connection-init-sql=RESET ALL、
  * auto-commit=false，SandboxSessionInterceptor 每语句 SET ROLE 在从库同样生效，流复制携带数据不带会话，rls 策略照常按注入 guc 收敛。
  */

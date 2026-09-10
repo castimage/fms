@@ -1040,11 +1040,11 @@ RESET ROLE;
 -- POST /api/auth/change-password 为已认证端点，已登录会话经 SandboxSessionInterceptor
 -- 按 jwt 角色 SET ROLE（viewer01 对应 fms_viewer 等），调用 auth.set_password / auth.update_user
 -- 须有 EXECUTE，自助改密对所有角色开放。安全语义不变，
---   - auth.set_password，函数体内含身份闸口（current_uid 非空且非本人则 42501 拒绝），
+-- auth.set_password，函数体内含身份闸口（current_uid 非空且非本人则 42501 拒绝），
 --     已登录会话只能改自己的密码，与 fms_app/fms_operator 既有授权同构，
---   - auth.update_user，白名单键补丁（email/status/must_change_pwd/failed_login_count/
+-- auth.update_user，白名单键补丁（email/status/must_change_pwd/failed_login_count/
 --     locked_until/last_login_at），自助改密路径仅清 must_change_pwd，
---   - auth.record_login，SECURITY DEFINER 登录审计落库，要求改密事件记
+-- auth.record_login，SECURITY DEFINER 登录审计落库，要求改密事件记
 --     um.login_log（fail_reason='password_changed'），缺授权时审计静默丢失（仅 WARN）。
 SET ROLE fms_admin;
 

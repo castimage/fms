@@ -105,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
      * finally 复位角色。用户不存在与口令错误统一返回「用户名或密码错误」，不泄露账号
      * 存在性。
      *
-     * <p>执行细节，查用户用列白名单，pass_hash 参与 bcrypt 校验但不出列给响应，
+     * 执行细节，查用户用列白名单，pass_hash 参与 bcrypt 校验但不出列给响应，
      * 匿名阶段 SELECT 因 rls 恒空集，配合 03c 闸口防登录名枚举，查到用户后注入
      * fms.user_id guc，随后的计数/锁定/last_login 更新经 is_self 策略放行，本用户
      * 只写自己的行。口令失败语义分两档，未达阈值仅累加计数（响应仍统一"用户名或
@@ -113,7 +113,7 @@ public class AuthServiceImpl implements AuthService {
      * 记 locked-until，响应提示剩余锁定分钟，此时账号存在性已被锁定状态间接证实，
      * 属可接受的信息暴露。锁定过期自动解锁并清零计数，无需管理员介入。
      *
-     * <p>2fa 分支，启用 2fa 的用户首步只发两步票据（ttl=fms.mfa.ticket-ttl）不签发
+     * 2fa 分支，启用 2fa 的用户首步只发两步票据（ttl=fms.mfa.ticket-ttl）不签发
      * 令牌，弱密码标记随票据暂存，二次验证成功才生效，避免首步泄露弱密码状态，
      * 未启用直接签发 access/refresh 令牌对。审计覆盖全部失败路径（user_not_found/
      * locked/disabled/bad_password/success），审计落库失败仅 WARN 不影响主流程。
@@ -265,7 +265,7 @@ public class AuthServiceImpl implements AuthService {
      * 并把旧 refresh 原值立即入黑名单，旋转后旧令牌在剩余 ttl 内失效，防旧令牌重放。
      * 期间注入本用户 guc 满足 rls 自读。
      *
-     * <p>安全语义，刷新是新会话的重新授权点，黑名单在验签之前检查，被撤销的令牌
+     * 安全语义，刷新是新会话的重新授权点，黑名单在验签之前检查，被撤销的令牌
      * 即使签名仍有效也立即拒绝，pg 侧 jwt_verify 严格校验签名与 exp（后端无 jwt
      * 密钥副本，权威在 db），验签失败统一按 TokenExpiredException 处理（40100 语义，
      * 不区分"伪造"与"过期"，不给攻击者反馈差异），载荷断言 type=refresh（access
@@ -315,7 +315,7 @@ public class AuthServiceImpl implements AuthService {
      * 内的尽力失效，refresh 校验路径先查黑名单，命中即拒。req 为 null 或令牌为空白时
      * 静默返回，不抛错，幂等可重放。
      *
-     * <p>语义细节，access 入黑名单仅防 ttl 内的残余使用，网关验签不查后端黑名单，
+     * 语义细节，access 入黑名单仅防 ttl 内的残余使用，网关验签不查后端黑名单，
      * 实际生效面主要是 refresh 路径与后端敏感操作的可选校验，黑名单按原始 token
      * 文本为键，哈希存储不可行，需精确匹配原始串，多实例共享、无泄漏。登出
      * 不要求已认证，匿名登出幂等放行，不写审计，登录审计已覆盖会话生命周期。

@@ -17,12 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 安全告警检测，定时调度，以 fms_app 直连通道经 SECURITY DEFINER 函数检测，无会话身份，
- * <ul>
- *   <li>暴力破解聚合，窗口内同 ip 登录失败超阈值则发 admin 站内信，同 ip 30 分钟内去重，</li>
- *   <li>审计链篡改，链断，broken_at 非空则发 admin 站内信，同断链点去重，</li>
- *   <li>主从复制，期望从库数缺失/复制状态降级/延迟超阈值则发 admin 站内信，冷却去重，</li>
- *   <li>nonce 水位，Redis 版非精确容量闸，按近似条目数/期望容量比率 WARN，每周期，不刷屏。</li>
- * </ul>
+ *
+ *   暴力破解聚合，窗口内同 ip 登录失败超阈值则发 admin 站内信，同 ip 30 分钟内去重，
+ *   审计链篡改，链断，broken_at 非空则发 admin 站内信，同断链点去重，
+ *   主从复制，期望从库数缺失/复制状态降级/延迟超阈值则发 admin 站内信，冷却去重，
+ *   nonce 水位，Redis 版非精确容量闸，按近似条目数/期望容量比率 WARN，每周期，不刷屏。
+ *
  * 告警是检测而非阻断，阻断由登录锁定/限流/签名协议承担。
  */
 @Component

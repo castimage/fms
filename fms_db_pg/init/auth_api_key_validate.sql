@@ -1,12 +1,12 @@
 -- FMS 财务系统， api-key 后端校验收敛(系统间集成）
 
--- 背景，网关无密钥库不校验（auth.rs 透传 + 剥离 X-FMS-* + 不注入身份头 + 签名身份段
+-- 网关无密钥库不校验（auth.rs 透传 + 剥离 X-FMS-* + 不注入身份头 + 签名身份段
 --       空串），校验收敛在后端，um.api_keys.key_hash 为 hmac(key, blind_key) 盲索引
 --       （init/fill_missing.sql），而 sec.app_secrets 不对任何角色授权（um_org_base），
 --       Java 侧无法直读 blind_key，故盲索引计算 + 等值查 + last_used_at 回写必须
 --       收敛于 SECURITY DEFINER 函数，以 fms_admin 身份读密钥，明文永不离开库内。
 
--- 注意，网关中 'key_hash=sha256(key)' 表述与部署实现（hmac 盲索引
+-- 网关中 'key_hash=sha256(key)' 表述与部署实现（hmac 盲索引
 --       防字典攻击）不一致，以 init/fill_missing.sql 与本文件为准。
 -- 幂等，全部 CREATE OR REPLACE，可重复执行。
 

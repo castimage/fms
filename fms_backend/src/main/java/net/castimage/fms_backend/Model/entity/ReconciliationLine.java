@@ -14,7 +14,7 @@ import java.util.UUID;
  * 对账单行实体（ap.reconciliation_lines）：match_status UNMATCHED/MATCHED/MANUAL
  * （DB CHECK 兜底）；matched_invoice_id 仅回填不核销（核销走 payment_allocations，
  * 与对账解耦）；人工匹配经 updateMatchStatus 原子守卫（WHERE match_status='UNMATCHED'，
- * 0 行则 40900 防双配）；similarity_score 存候选建议（&gt;0.6 自动建议）。
+ * 0 行则 40900 防双配）；similarity_score 存候选建议（>0.6 自动建议）。
  */
 @TableName(schema = "ap", value = "reconciliation_lines")
 @Data

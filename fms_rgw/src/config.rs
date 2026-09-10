@@ -348,7 +348,7 @@ impl Default for UpstreamCfg {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AuthCfg {
-    /// jwt验签密钥，***必填***，为空则main启动报错退出
+    /// jwt验签密钥，必填，为空则main启动报错退出
     pub jwt_secret: String,
     /// iss校验，默认为None，不校验iss
     pub expected_iss: Option<String>,
@@ -417,7 +417,7 @@ impl Default for AuthCfg {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct SignCfg {
-    /// hmac签名密钥，***必填***，与后端共享，为空则main启动报错退出
+    /// hmac签名密钥，必填，与后端共享，为空则main启动报错退出
     pub sign_secret: String,
 }
 

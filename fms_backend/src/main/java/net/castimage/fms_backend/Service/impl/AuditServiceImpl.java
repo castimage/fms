@@ -56,7 +56,7 @@ public class AuditServiceImpl implements AuditService {
     /**
      * {@inheritDoc}
      *
-     * <p>哈希链校验语义：PG 函数自链首（prev='0'×64）按 fn_audit_log_hash 同式逐行重算
+     * 哈希链校验语义：PG 函数自链首（prev='0'×64）按 fn_audit_log_hash 同式逐行重算
      * （ip/request_id 入公式 + occurred_at 时区无关化 to_char AT TIME ZONE 'UTC'），与存储值
      * 比对，首处不符即停——prevOk=false + brokenAt=首断链点（修复建议从断点行起全链重算）。
      */
@@ -69,7 +69,7 @@ public class AuditServiceImpl implements AuditService {
     /**
      * {@inheritDoc}
      *
-     * <p>导出为 UTF-8 BOM CSV（Excel 兼容）：表头 12 列（含 prev_hash/row_hash 链字段，
+     * 导出为 UTF-8 BOM CSV（Excel 兼容）：表头 12 列（含 prev_hash/row_hash 链字段，
      * 供审计线下核验）；分页游标循环取全量（每页行数 fms.audit.export-page-size，默认 2000）；
      * 字段 RFC 4180 转义。
      */

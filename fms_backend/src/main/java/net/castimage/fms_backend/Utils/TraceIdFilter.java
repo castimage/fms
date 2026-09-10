@@ -18,13 +18,13 @@ public class TraceIdFilter extends OncePerRequestFilter {
      * 兜底取用）并写入 MDC，响应头在链前写回，保证下游任何 4xx/5xx 响应恒携带 traceId，
      * finally 双清理 MDC 与 RequestContext，防线程复用污染。
      *
-     * <p>语义要点，traceId 贯穿全链路（网关经后端到日志再到响应头），本过滤器是后端
+     * traceId 贯穿全链路（网关经后端到日志再到响应头），本过滤器是后端
      * 唯一入口，复用外部 traceId 时严格 canonical 校验，非法值视为缺失重新生成，
      * 杜绝日志注入与伪造链路归属，缺失/非法时生成 v4 兜底，RequestContext 先注入
      * 仅含 traceId 的占位上下文，GatewaySignatureFilter 校验通过后在同一实例上填充
      * 身份，顺序保证，本过滤器 order=1 恒先于签名过滤器 order=2 执行。
      *
-     * <p>清理语义，响应头在链前写回，即使后续 4xx/5xx 也保证响应携带 traceId，
+     * 清理语义，响应头在链前写回，即使后续 4xx/5xx 也保证响应携带 traceId，
      * finally 双清理，MDC 与 RequestContext，与 GatewaySignatureFilter 的清理互为
      * 双保险，防容器线程复用导致的跨请求污染。
      *

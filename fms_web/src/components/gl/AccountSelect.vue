@@ -19,7 +19,7 @@ const props = defineProps<{
   disabled?: boolean
   placeholder?: string
 }>()
-// 注意，props 先赋值再解构是非响应式，3.5 仅 defineProps 直接解构生效，display 恒初始值导致选中后回显空，全部经 props. 读取
+// props 先赋值再解构是非响应式，3.5 仅 defineProps 直接解构生效，display 恒初始值导致选中后回显空，全部经 props. 读取
 
 const value = defineModel<string | null>('value', { default: null })
 

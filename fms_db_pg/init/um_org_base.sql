@@ -131,7 +131,7 @@ ON CONFLICT (identifier) DO NOTHING;
 -- 2.1 当前会话用户 id（安全版，上下文缺失/非法/用户不存在返回 NULL）
 -- 全库 rls 策略的身份来源，读 fms.user_id guc（后端每请求经 auth.set_session 注入，验证脚本以字面量注入），函数无参数、STABLE，可被任何策略表达式直接调用而无需额外上下文
 -- 行为，guc 缺失/为空/非 canonical uuid，8-4-4-4-12 十六进制则 NULL，fail-closed 不抛错，策略视行不可见，格式合法但用户已软删或状态非 ACTIVE 则 NULL，LOCKED/DISABLED 账户经伪造 guc 在 rls 层即失效，与 set_session 的 ACTIVE 语义一致
--- 边界，fms_admin 会话未注入 guc 同样返回 NULL，管理放行一律经 session_user/current_user 短路判定而非本函数
+-- fms_admin 会话未注入 guc 同样返回 NULL，管理放行一律经 session_user/current_user 短路判定而非本函数
 -- 调用约定，所有 rls 策略（含 is_self/can_access_dept 的内部 EXISTS）均以本函数为身份唯一来源，禁止直接读 guc，格式与 ACTIVE 双校验集中在此一处，防策略表达式各自解析造成判定口径漂移
 CREATE OR REPLACE FUNCTION auth.current_uid()
 RETURNS uuid
@@ -161,7 +161,7 @@ END $$;
 -- rls 行级收敛核心判定，gl/ar/ap/cash/org 等业务表的公司范围策略一律经此函数
 -- 参数，p_org_id 目标行所属公司 id，策略表达式以行值传入
 -- 行为，p_org_id NULL 或 guc 缺失则 false，未注入上下文不可见，fail-closed，否则按 p_org_id::text 精确匹配逗号分隔集合，canonical 小写 uuid 文本，与 set_session 的 uuid::text 输出恒一致
--- 边界，短路判定必须用 session_user 而非 current_user，SECURITY DEFINER 内 current_user 恒为属主 fms_admin，用它短路会把 SET ROLE fms_operator 的普通会话也恒真放行，fms_admin（维护/物化刷新/cron）直通
+-- 短路判定必须用 session_user 而非 current_user，SECURITY DEFINER 内 current_user 恒为属主 fms_admin，用它短路会把 SET ROLE fms_operator 的普通会话也恒真放行，fms_admin（维护/物化刷新/cron）直通
 -- 语义，精确匹配，非前缀/包含，集合由 set_session 以 uuid 文本写入，行值同样转 uuid 文本比较，天然规范化无大小写/格式歧义，未授权公司则 false 行不可见
 CREATE OR REPLACE FUNCTION auth.can_access_org(p_org_id uuid)
 RETURNS boolean
@@ -190,7 +190,7 @@ END $$;
 -- 2.3 部门数据范围（读 fms.dept_ids），直接成员命中，或 include_subtree=true 的授予部门存在后代部门 d（d.path <@ g.path，GIST 索引加速），部门管理员看其子树的能力，SECURITY DEFINER 绕过 rls，两处查询均走既有索引，失败静默
 -- 参数，p_dept_id 目标行所属部门 id，策略表达式以行值传入
 -- 行为，fms.dept_ids 直接包含 p_dept_id 则 true，否则查 um.user_dept_scope 中当前用户 include_subtree=true 且未软删的授予部门（g 与目标部门 d 均须未软删），目标部门是任一授予部门的 ltree 子树节点（d.path <@ g.path）则 true
--- 边界，p_dept_id NULL 则 false，未注入身份时 auth.current_uid 为 NULL，EXISTS 恒 false（fail-closed），与 can_access_org 组合使用（vouchers 等表按 org 与 dept 双收敛）
+-- p_dept_id NULL 则 false，未注入身份时 auth.current_uid 为 NULL，EXISTS 恒 false（fail-closed），与 can_access_org 组合使用（vouchers 等表按 org 与 dept 双收敛）
 -- 语义，两级判定叠加，直接授予（fms.dept_ids 快照，set_session 预载）覆盖普通成员，scope 表的 include_subtree 授予覆盖部门管理员（子树含后代，ltree <@ 语义），快照与 scope 表任一命中即放行，均未命中则行不可见
 CREATE OR REPLACE FUNCTION auth.can_access_dept(p_dept_id uuid)
 RETURNS boolean
@@ -365,7 +365,7 @@ END $$;
 -- 2.8 银行账号解密（唯一出口，SECURITY DEFINER，仅 fms_admin 与资金职责角色）
 -- 参数，p_id 目标银行账户 id（cash.bank_accounts 主键）
 -- 行为，读 sec.app_secrets 的 pgcrypto.master_key，库内密钥收敛点，后 pgp_sym_decrypt 解 cash.bank_accounts.account_no_enc 密文，返回明文账号，显式 cipher-algo=aes256，默认 aes128，OpenPGP 数据包自带算法标识，存量 aes128 密文照常可解
--- 边界，守卫用 current_user（SET ROLE 后的职责身份）而非 session_user，fms_app 恰为职责角色成员，session_user 判定对 fms_app 直连恒真会误放行，fms_operator 为 NOLOGIN，须经 SET ROLE 注入后才可执行，fms_app 直连必被拒
+-- 守卫用 current_user（SET ROLE 后的职责身份）而非 session_user，fms_app 恰为职责角色成员，session_user 判定对 fms_app 直连恒真会误放行，fms_operator 为 NOLOGIN，须经 SET ROLE 注入后才可执行，fms_app 直连必被拒
 -- 错误，角色不符 / 主密钥未配置 / 账户不存在或已软删则分别 RAISE，不返回 NULL 混淆"无此账户"，GRANT 仅 fms_operator，fms_app 直连不可达
 -- 设计约束，明文账号仅在本函数内出现，应用侧任何 SELECT 都只拿到密文（account_no_enc 列对非 DEFINER 上下文不可读），解密能力收敛到唯一出口，审计/权限管控单点化
 CREATE OR REPLACE FUNCTION auth.decrypt_bank_account(p_id uuid)

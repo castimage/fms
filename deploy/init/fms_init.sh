@@ -6,9 +6,9 @@
 # 文件末段另含主从部署前置，replicator 角色 + pg_hba 复制授权 + wal_level
 # 登记，从库 pg_basebackup 前置条件，配套 docker-compose.pg-repl.yml。
 # 【目录语义】fms_db_pg/ 按两目录组织，目录级只读挂载至容器 /fms-init，
-#   - init/，新库初始化白名单，见下方 INIT_SCRIPTS，白名单之外的文件一律
+# init/，新库初始化白名单，见下方 INIT_SCRIPTS，白名单之外的文件一律
 #     不执行
-#   - verify/，部署后冒烟校验，只读
+# verify/，部署后冒烟校验，只读
 # 执行顺序由 INIT_SCRIPTS 显式数组裁决，不依赖文件名排序。
 
 # 显式顺序数组，白名单
@@ -148,7 +148,7 @@ fi
 # 为主从部署中从库执行 pg_basebackup 提供前置条件。
 # 幂等：角色 IF NOT EXISTS 创建，pg_hba 行 grep 判重后追加，ALTER SYSTEM
 # 覆写同名项，重启容器或重复初始化均不报错。
-# 注意，initdb.d 阶段 pgbouncer 尚不存在，本段只依赖主库自身，pg_hba.conf
+# initdb.d 阶段 pgbouncer 尚不存在，本段只依赖主库自身，pg_hba.conf
 # 由主服务器启动时读取，initdb 阶段追加即生效，无需 reload。
 # max_wal_senders / max_replication_slots 默认 10 足够单从库场景，
 # 多从库时按需增加。

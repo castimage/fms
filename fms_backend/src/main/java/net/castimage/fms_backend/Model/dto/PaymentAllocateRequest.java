@@ -16,7 +16,7 @@ public record PaymentAllocateRequest(
         /** 发票 id（必填，须 ISSUED/PARTIAL） */
         @NotNull(message = "发票必填")
         UUID invoiceId,
-        /** 本次核销金额（必填，&gt; 0） */
+        /** 本次核销金额（必填，> 0） */
         @NotNull(message = "核销金额必填")
         @DecimalMin(value = "0.01", message = "核销金额必须大于 0")
         BigDecimal amount) {

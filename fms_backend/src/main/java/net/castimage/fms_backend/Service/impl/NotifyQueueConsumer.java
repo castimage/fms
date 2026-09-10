@@ -20,21 +20,20 @@ import java.util.UUID;
  * （wf 任务完成/超时催办，05 文件投递）与 q_budget_warning（cron 预算预警，05 文件投递）
  * 此前零消费者、通知表仅种子数据——本组件补齐闭环。
  *
- * <p>消费语义（SPEC.md 消费约定 + 07 文件队列说明）：pgmq.read 按 vt 可见性超时 + SKIP
+ * 消费语义（SPEC.md 消费约定 + 07 文件队列说明）：pgmq.read 按 vt 可见性超时 + SKIP
  * LOCKED 并发领取（多实例各读各的，互不抢同一条）；成功即 archive（确认消费，不再回投）；
  * 失败不确认——vt 过期自动回投，read_ct 递增，达到 retry-threshold 后放弃（archive +
  * WARN，防死信堆积）。周期 fms.pgmq.notify-consumer-interval-ms（默认 30s）独立于
  * cache-cleanup；总开关 fms.pgmq.notify-consumer-enabled（默认开，关停时消息留队可重拾）。
  *
- * <p>消息体结构（05 文件投递侧逐字对齐）：
- * <ul>
- *   <li>q_notify_task：{"type":"wf_task"|"wf_timeout","instance_id":uuid,"task_id":uuid,
+ * 消息体结构（05 文件投递侧逐字对齐）：
+ *
+ *   q_notify_task：{"type":"wf_task"|"wf_timeout","instance_id":uuid,"task_id":uuid,
  *       "assignee_id":uuid,"action":...,"ts":...|"due_at":...}——用户级，按 assignee_id 落库；
- *       成功后 WS 推送该用户最新未读数（与已读动作同款 unread_count 载荷）；</li>
- *   <li>q_budget_warning：{"company_id":uuid,"dept_id":...,"account_id":...,"period":...,
+ *       成功后 WS 推送该用户最新未读数（与已读动作同款 unread_count 载荷）；
+ *   q_budget_warning：{"company_id":uuid,"dept_id":...,"account_id":...,"period":...,
  *       "ratio":...}——公司级（无用户维度），按 fn_broadcast_notification 广播至全部 ACTIVE
- *       用户（幂等：同 ref_type+ref_id+title 已存在整批跳过），成功后 WS 全量推送。</li>
- * </ul>
+ *       用户（幂等：同 ref_type+ref_id+title 已存在整批跳过），成功后 WS 全量推送。
  */
 @Component
 public class NotifyQueueConsumer {

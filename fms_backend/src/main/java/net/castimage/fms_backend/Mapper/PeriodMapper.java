@@ -25,7 +25,7 @@ public interface PeriodMapper extends BaseMapper<Period> {
 
     /** 期间反结账：调 gl.fn_reopen_period（原因必填 + fms.force_reopen 二次确认 + 仅最晚期间 + OPEN + 审计原子完成）。
      *  二次确认开关未开启时函数 RAISE，P0001 消息含"结账"则映射 40900，由前端提示先开开关。
-     *  注意：反结账须先经 {@link #setForceReopenOn()} 于同事务注入 GUC（持久开关由 Service 读
+     * 反结账须先经 {@link #setForceReopenOn()} 于同事务注入 GUC（持久开关由 Service 读
      *  um.params 后 SET LOCAL 传入——API 连接本身不携带该 GUC，见 GlServiceImpl.reopenPeriod） */
     @Options(flushCache = Options.FlushCachePolicy.TRUE)
     @Select("""

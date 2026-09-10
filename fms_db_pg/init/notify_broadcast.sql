@@ -1,7 +1,7 @@
 -- FMS 财务系统（init/notify_broadcast），通知生成源，系统公告/预算预警全量广播 + 单用户通知
 -- 插入的 SECURITY DEFINER 闸口 + pgmq 消费配套。
 
--- 背景，notify.notifications 的 rls INSERT 策略为 WITH CHECK (user_id = auth.current_uid)，
+-- notify.notifications 的 rls INSERT 策略为 WITH CHECK (user_id = auth.current_uid)，
 -- 应用角色（fms_app/fms_operator）无法批量插入他人通知，广播/后台生成必须经属主
 -- fms_admin 的 SECURITY DEFINER 函数绕过，与 log_access_batch 同款模式，q_notify_task /
 -- q_budget_warning 两条队列由 init/queues_cron.sql 预创建，后端

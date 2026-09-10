@@ -25,17 +25,17 @@ import java.util.Map;
  * 网关内部端点，/internal，免网关签名但需内部 token，POST /internal/log-batch 批量接收
  * 访问日志并经 pgmq q_log_access 中转落库。
  *
- * <p>网关零外部基础设施依赖，访问日志仅写
+ * 网关零外部基础设施依赖，访问日志仅写
  * jsonl 到 stdout+文件，不直连 pg/pgmq，pgmq 投递必须经 http 中转，网关批量 POST 本端点，该路径豁免网关签名，但需头 X-FMS-Int-Token 与配置 fms.security.internal-token 一致，随后
  * 本端点批量 pgmq.send("q_log_access")，由后端 cron（log.fn_consume_log_queues 每分钟，
  * 07 文件，链路已存在勿改）消费落 log.access_logs。
  *
- * <p>安全模型（fail-closed），internal-token 未配置，默认空=端点禁用或头不匹配一律 40300，
+ * 安全模型（fail-closed），internal-token 未配置，默认空=端点禁用或头不匹配一律 40300，
  * 请求无身份采信，db 连接保持 fms_app 空壳，投递经 log.fn_send_access_batch SECURITY
  * DEFINER 函数，属主 fms_admin 单次调用完成，函数内逐条 pgmq.send 容错，单条失败 NOTICE
  * 继续，返回成功条数，整批失败，如 db 不可达记录 WARN 后 accepted=0，不阻断网关请求路径。
  *
- * <p>payload 映射，网关 9 字段转 q_log_access 约定 {method,path,status,latency,ip,ts}
+ * payload 映射，网关 9 字段转 q_log_access 约定 {method,path,status,latency,ip,ts}
  * + 扩展 req_id/user/ua，消费链（07 fn_consume_log_queues）固定读取 user_id/trace_id 键，
  * 故同值双写别名保证 log.access_logs.user_id/trace_id 审计列落库，链路勿改，别名在发送侧完成。
  * latency 由浮点毫秒重映射为整数（消费链 NULLIF，...::int 落库，浮点文本 cast 必失败）。

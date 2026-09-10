@@ -541,7 +541,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     /**
      * {@inheritDoc}
      *
-     * <p>写入链路：明细行主键经 RLS 收敛查询（不可见则 40400），随后附件归属校验（须已上传至该
+     * 写入链路：明细行主键经 RLS 收敛查询（不可见则 40400），随后附件归属校验（须已上传至该
      * 行名下：business_type=REIMBURSEMENT_LINE、business_id=行 id，否则 40001），随后回填
      * invoice_file_id（RLS UPDATE 策略行级收敛，影响 0 行即状态异常 40900）。
      */

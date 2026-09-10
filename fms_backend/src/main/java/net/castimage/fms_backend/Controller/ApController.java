@@ -193,7 +193,7 @@ public class ApController {
     }
 
     /**
-     * 付款登记（status=PAID，金额&gt;0）。
+     * 付款登记（status=PAID，金额>0）。
      */
     @PostMapping("/payments")
     public ApiResponse<PaymentView> createPayment(@RequestBody @Valid PaymentRequest req) {
@@ -290,7 +290,7 @@ public class ApController {
     }
 
     /**
-     * 行导入（全部落库 UNMATCHED；候选 top1 &gt;0.6 自动建议回写 similarity_score）。
+     * 行导入（全部落库 UNMATCHED；候选 top1 >0.6 自动建议回写 similarity_score）。
      */
     @PostMapping("/reconciliations/{id}/lines")
     public ApiResponse<Void> importLines(@PathVariable UUID id,

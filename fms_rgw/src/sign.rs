@@ -595,7 +595,7 @@ mod tests {
         let body_hash = compute_body_hash(b"payload");
         let nonce = "8f3a4b5c-0000-0000-0000-0000000000cd";
         let now = now_secs();
-        // 边界，|now - t| == 300 则放行，301 则拒绝
+        // |now - t| == 300 则放行，301 则拒绝
         for delta in [300_i64, -300] {
             let t = now + delta;
             let sig = compute_signature(secret, "POST", "/api/x", &body_hash, t, nonce, "", "");

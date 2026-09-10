@@ -91,7 +91,7 @@ public class ApServiceImpl implements ApService {
     /** 对账单状态白名单 */
     private static final Set<String> RECONCILIATION_STATUSES = Set.of("DRAFT", "CONFIRMED", "VOID");
 
-    /** 自动建议相似度阈值，top1 &gt; 0.6 才建议，否则留人工 */
+    /** 自动建议相似度阈值，top1 > 0.6 才建议，否则留人工 */
     private static final BigDecimal SUGGEST_THRESHOLD = new BigDecimal("0.6");
 
     /** 候选匹配扫描上限 */
@@ -503,16 +503,16 @@ public class ApServiceImpl implements ApService {
 
     /**
      * 付款核销入口，一次核销多张发票，事务内顺序执行，防重双闸 + 防并发超分，
-     * <ol>
-     *   <li>① <b>FOR UPDATE 锁付款单</b>（selectByIdForUpdate，写事务内），并发核销
-     *       同一付款单串行化，status 须 PAID，锁内校验，</li>
-     *   <li>② 逐张发票预检，status 须 ISSUED/PARTIAL + 累计已核销 + 本次 ≤ total
-     *       （超分则 40900），同时累加本次核销合计，不得超付款单金额，</li>
-     *   <li>③ 批量 INSERT payment_allocations，<b>uk_ap_alloc(payment_id, invoice_id)
-     *       唯一约束防同对重复核销</b>（23505 映射 40900），version 乐观锁写入 0，</li>
-     *   <li>④ 发票累计 = total 则置 PAID，否则 PARTIAL，不可变触发器终审，
-     *       核销合计 = 付款金额则付款单置 ALLOCATED。</li>
-     * </ol>
+     *
+     *   ① FOR UPDATE 锁付款单（selectByIdForUpdate，写事务内），并发核销
+     *       同一付款单串行化，status 须 PAID，锁内校验，
+     *   ② 逐张发票预检，status 须 ISSUED/PARTIAL + 累计已核销 + 本次 ≤ total
+     *       （超分则 40900），同时累加本次核销合计，不得超付款单金额，
+     *   ③ 批量 INSERT payment_allocations，uk_ap_alloc(payment_id, invoice_id)
+     *       唯一约束防同对重复核销（23505 映射 40900），version 乐观锁写入 0，
+     *   ④ 发票累计 = total 则置 PAID，否则 PARTIAL，不可变触发器终审，
+     *       核销合计 = 付款金额则付款单置 ALLOCATED。
+     *
      * 付款单到凭证联动（voucher_id）为尽力生成，付款登记时已联动则此处跳过，幂等，
      * 存量未联动付款单在核销时补联动。
      *
@@ -744,7 +744,7 @@ public class ApServiceImpl implements ApService {
 
     /**
      * 对账单行导入，全部落库 UNMATCHED，逐行做候选匹配建议，金额相等 + 日期差≤3 天
-     * + similarity(摘要, 发票号) 降序取 top1，相似度 &gt; 0.6 回写 similarity_score
+     * + similarity(摘要, 发票号) 降序取 top1，相似度 > 0.6 回写 similarity_score
      * 供 ui 展示建议，不自动匹配，留待人工 matchLine 或放弃，对账为核对动作，
      * matched_invoice_id 仅回填不核销，核销走 payment_allocations，与对账解耦。
      *

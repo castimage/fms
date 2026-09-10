@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/um_params_functions），um.params 读/写经 SECURITY DEFINER 函数以 fms_admin 身份执行
 
--- 背景，um_org_base 对 um.params 执行最小授权（REVOKE ALL FROM 全部职责角色，密钥已收敛 sec.app_secrets），
+-- um_org_base 对 um.params 执行最小授权（REVOKE ALL FROM 全部职责角色，密钥已收敛 sec.app_secrets），
 --      /api/admin/params 读与 CRUD 经 um.fn_page_params / um.fn_get_param / um.fn_upsert_param
 --      三个 SECURITY DEFINER 函数执行（属主 fms_admin 绕过表级 REVOKE，rls 策略
 --      params_select/params_write 显式放行 current_user='fms_admin'），函数内 auth.require_permission

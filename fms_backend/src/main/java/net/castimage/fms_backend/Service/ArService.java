@@ -51,7 +51,7 @@ public interface ArService {
     /** 发票详情（RLS 空集则返回 null） */
     ArInvoiceView getInvoice(UUID id);
 
-    /** 创建 DRAFT 发票（客户须存在；total &gt; 0 预检） */
+    /** 创建 DRAFT 发票（客户须存在；total > 0 预检） */
     ArInvoiceView createInvoice(ArInvoiceRequest req);
 
     /** 更新 DRAFT 发票（开票后不可变，仅 DRAFT 可改） */
@@ -60,7 +60,7 @@ public interface ArService {
     /** 软删 DRAFT 发票（ISSUED+ 被不可变触发器拒绝则 40900） */
     void deleteInvoice(UUID id);
 
-    /** 开票（DRAFT 转 ISSUED）：客户存在/金额&gt;0 预检 + 触发器终审（ISSUED 后禁改禁删） */
+    /** 开票（DRAFT 转 ISSUED）：客户存在/金额>0 预检 + 触发器终审（ISSUED 后禁改禁删） */
     ArInvoiceView issueInvoice(UUID id);
 
     /** 作废（ISSUED/PARTIAL 转 VOID）：唯一允许的已开票状态迁移 */
@@ -86,7 +86,7 @@ public interface ArService {
     /** 收款单详情（RLS 空集则返回 null） */
     ReceiptView getReceipt(UUID id);
 
-    /** 收款登记（status=RECEIVED；amount &gt; 0 预检） */
+    /** 收款登记（status=RECEIVED；amount > 0 预检） */
     ReceiptView createReceipt(ReceiptRequest req);
 
     /** 软删收款单（仅 RECEIVED 未核销可删） */

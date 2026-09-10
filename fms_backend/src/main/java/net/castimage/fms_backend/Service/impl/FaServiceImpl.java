@@ -218,7 +218,7 @@ public class FaServiceImpl implements FaService {
     /**
      * {@inheritDoc}
      *
-     * <p>处置：仅 ACTIVE/DEPRECIATING 可处置（Java 预检快速失败），置 DISPOSED +
+     * 处置：仅 ACTIVE/DEPRECIATING 可处置（Java 预检快速失败），置 DISPOSED +
      * disposal_date（缺省当日）；trg_asset_immutable 终审（处置后禁改禁删 RAISE 映射 40900），
      * 后续计提 SELECT 不再纳入（status 白名单）。
      */
@@ -232,7 +232,7 @@ public class FaServiceImpl implements FaService {
     /**
      * {@inheritDoc}
      *
-     * <p>报废：与处置同构，置 SCRAPPED + disposal_date；不可变触发器终审。
+     * 报废：与处置同构，置 SCRAPPED + disposal_date；不可变触发器终审。
      */
     @Override
     @Transactional
@@ -246,12 +246,12 @@ public class FaServiceImpl implements FaService {
     /**
      * {@inheritDoc}
      *
-     * <p>计提计算（Service 侧，与 PG 函数 fa.fn_run_depreciation 同口径）：
-     * <ul>
-     *   <li>直线法：monthly = round((原值 - 残值) / 月数, 2)</li>
-     *   <li>双倍余额递减：monthly = round((原值 - 累计折旧) * 2 / 月数, 2)</li>
-     *   <li>计提额封顶：amount = min(monthly, 原值 - 残值 - 累计折旧)（<=0 不计提）</li>
-     * </ul>
+     * 计提计算（Service 侧，与 PG 函数 fa.fn_run_depreciation 同口径）：
+     *
+     *   直线法：monthly = round((原值 - 残值) / 月数, 2)
+     *   双倍余额递减：monthly = round((原值 - 累计折旧) * 2 / 月数, 2)
+     *   计提额封顶：amount = min(monthly, 原值 - 残值 - 累计折旧)（<=0 不计提）
+     *
      * 批次写：CONFIRMED 批次存在（同公司同期间）则跳过返回 0；DRAFT 旧批次软删重建（幂等，
      * 旧批次已计提资产本次跳过落资产防双计提）；计提生效落资产（ACTIVE 转 DEPRECIATING +
      * 累计折旧累加，net_value 生成列联动）；
@@ -460,7 +460,7 @@ public class FaServiceImpl implements FaService {
     /**
      * {@inheritDoc}
      *
-     * <p>确认（DRAFT 转 CONFIRMED）：应用层 NOT EXISTS 同公司同期间 CONFIRMED 双闸 +
+     * 确认（DRAFT 转 CONFIRMED）：应用层 NOT EXISTS 同公司同期间 CONFIRMED 双闸 +
      * 部分唯一索引 uk_depr_run(company_id, period) WHERE status='CONFIRMED' 终审
      * （并发下 23505 映射 40900 由异常映射）；RLS update 策略（仅 DRAFT 可改）兜底恒 0 行则 40900。
      */

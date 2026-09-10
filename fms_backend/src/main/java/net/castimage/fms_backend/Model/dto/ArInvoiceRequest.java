@@ -31,7 +31,7 @@ public record ArInvoiceRequest(
         /** 币种（CHAR(3)，缺省 CNY） */
         @Size(max = 3, message = "币种为 3 位 ISO 代码")
         String currency,
-        /** 含税总额（必填，&gt; 0） */
+        /** 含税总额（必填，> 0） */
         @NotNull(message = "发票总额必填")
         @DecimalMin(value = "0.01", message = "发票总额必须大于 0")
         BigDecimal total,

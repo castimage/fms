@@ -28,7 +28,7 @@ spring:
     time-zone: Asia/Shanghai
     date-format: yyyy-MM-dd HH:mm:ss
     default-property-inclusion: non_null   # ApiResponse.data 字段单独 @JsonInclude(ALWAYS) 保证恒渲染
-    # 注意：Boot 4 运行时为 Jackson 3，SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
+    # Boot 4 运行时为 Jackson 3，SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
     # 已移至 DateTimeFeature 且默认即 false（日期输出 ISO-8601 字符串），故不再配置
     # write-dates-as-timestamps（Jackson 3 的 SerializationFeature 枚举已无此键，绑定会失败）
   mail:

@@ -21,7 +21,7 @@ public interface LoginLogMapper extends BaseMapper<LoginLog> {
      * 登录日志分页（loginName 模糊 + occurred_at 时间范围 + success 成功失败 + locked
      * 锁定触发可选过滤；排序白名单 occurred_at DESC, id DESC；ip inet 经 ::text 映射字符串）。
      * admin（fms_operator + audit:read:all 权限点）经 RLS 放行全量，operator/viewer/report 仅本人。
-     * 注意：布尔参数带 ::boolean 显式类型（PG 18 对 "IS NULL 与布尔比较并存" 的参数推断报
+     * 布尔参数带 ::boolean 显式类型（PG 18 对 "IS NULL 与布尔比较并存" 的参数推断报
      * 42P18 could not determine data type，与 from/to 的 ::timestamptz 同式规避）。
      */
     @Select("""

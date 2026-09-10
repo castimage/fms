@@ -45,11 +45,11 @@ import java.util.UUID;
 /**
  * 凭证联动实现（init/gl_voucher_link.sql 的 Java 侧）：凭证创建路径与 GlServiceImpl.createVoucher
  * 同源（DRAFT 头 + 两行分录直插，DB 触发器终审：DRAFT 豁免平衡校验、期间 CLOSED 拒建、
- * 分录末级科目校验），但幂等键改由<b>来源单据</b>派生（同来源恒同键，uk_voucher_idem
+ * 分录末级科目校验），但幂等键改由来源单据派生（同来源恒同键，uk_voucher_idem
  * 唯一索引兜底并发）——补生成/重试复用既有凭证，业务单据侧以 voucher_id/voucher_line_id
  * 判空做幂等闸。科目映射经 um.fn_get_param_value 读口读取（值 = 科目 id）。
  *
- * <p>事务边界：联动在调用方事务内执行（同事务提交/回滚，与单据状态推进原子一致）；
+ * 事务边界：联动在调用方事务内执行（同事务提交/回滚，与单据状态推进原子一致）；
  * 调用方以"尽力生成"策略包裹（失败 WARN + 单据继续，voucher_id 留空可补生成）。
  */
 @Service

@@ -1,12 +1,12 @@
 //! tests/common/mod.rs，集成/端到端测试共用工具
 //!
 //! 职责，
-//! - `MockUpstream`，tokio::net::TcpListener + hyper 1 http1 手写上游。
+//! `MockUpstream`，tokio::net::TcpListener + hyper 1 http1 手写上游。
 //!   记录每个收到的请求(method/path/query/headers/body)到共享状态(Arc<Mutex<Vec>>)，
 //!   返回可配置响应(状态码/头/体，Arc<Mutex<MockResponse>>)。
-//! - `test_config`，构造 Config 结构直接注入 AppState(fms_rgw::build_state)，
+//! `test_config`，构造 Config 结构直接注入 AppState(fms_rgw::build_state)，
 //!   随机端口由 MockUpstream 绑定 127.0.0.1:0 取得。
-//! - 请求/断言助手，oneshot 直调路由、body 收集、jwt 签发、ConnectInfo 注入。
+//! 请求/断言助手，oneshot 直调路由、body 收集、jwt 签发、ConnectInfo 注入。
 //!
 //! 注，本模块被 integration/e2e 两个测试二进制分别编译，各自只用子集，
 //! 统一 allow，dead_code 避免按二进制分别告警。

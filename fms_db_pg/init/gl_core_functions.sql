@@ -333,7 +333,7 @@ COMMENT ON FUNCTION gl.fn_reject_voucher(uuid, text)
 
 -- 行为与错误，非 p_force 下存在 DRAFT/SUBMITTED/APPROVED 凭证则 RAISE，POSTED/REVERSED 凭证号存在缺口（窗口函数 lag 检测 gap>1）则 RAISE，期间内编号必须连续，断号拒结，UPDATE 未命中（期间不存在或已 CLOSED）则 RAISE，通过后置 CLOSED 并记录 closed_by/closed_at，audit.record 留痕
 
--- 边界，结账后由 trg_period_guard/trg_period_voucher_guard 联动锁定，不可再向该期间建凭证、不可直接改回 OPEN，反结账须经 fn_reopen_period + fms.force_reopen 二次确认，超级用户直改同样被拦截
+-- 结账后由 trg_period_guard/trg_period_voucher_guard 联动锁定，不可再向该期间建凭证、不可直接改回 OPEN，反结账须经 fn_reopen_period + fms.force_reopen 二次确认，超级用户直改同样被拦截
 
 -- 期间状态机语义，OPEN 转 CLOSED 是单向收口，闭账即该期间业务终结，不再接受新凭证、不再过账，唯一反向路径是 fn_reopen_period，最晚期间 + 原因 + 二次确认，p_force 只豁免完整性检查不豁免鉴权，滥用会破坏期间连续性，仅限历史数据修复
 CREATE OR REPLACE FUNCTION gl.fn_close_period(

@@ -31,7 +31,7 @@ public class BadDebtProvision {
     /** 计提期间（CHAR(7)，YYYY-MM） */
     private String period;
 
-    /** 计提金额（CHECK amount &gt;= 0） */
+    /** 计提金额（CHECK amount >= 0） */
     private BigDecimal amount;
 
     /** 状态：DRAFT/CONFIRMED/REVERSED */

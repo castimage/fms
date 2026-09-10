@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/log_access_batch，执行库，fms），访问日志批量投递函数 log.fn_send_access_batch
 
--- 背景，网关零外部基础设施依赖，访问日志经 http
+-- 网关零外部基础设施依赖，访问日志经 http
 --       中转后端 /internal/log-batch（免网关签名 + 内部 token X-FMS-Int-Token），后端批量投递
 --       pgmq q_log_access，由 queues_cron.sql 的 log.fn_consume_log_queues 每分钟消费落 log.access_logs
 --       供审计。
@@ -14,7 +14,7 @@
 
 -- 权限，/internal 路径后端以 fms_app 空壳连接执行，无身份采信，SandboxSessionInterceptor 跳过
 --       注入，函数 SECURITY DEFINER 以属主 fms_admin 执行绕过角色与 rls，EXECUTE 仅授 fms_app。
---       注意，grants_base.sql 的 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA log FROM PUBLIC 早于本文件执行，
+-- grants_base.sql 的 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA log FROM PUBLIC 早于本文件执行，
 --       新建函数默认 PUBLIC EXECUTE，本文件必须显式 REVOKE 兜底。
 
 -- 依赖，queues_cron.sql 已建 q_log_access 队列且 pgmq 核心函数已改 SECURITY DEFINER（属主 fms_admin），

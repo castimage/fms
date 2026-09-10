@@ -1,15 +1,15 @@
 //! `tests/security_auth.rs`，红队，认证/签名/会话攻击测试套件，针对FMS网关信任链
 //!
 //! 覆盖，对应任务编号，
-//! -  jwt算法混淆，alg:none空签名、HS256用RS256公钥字节作hmac密钥、弱密钥穷举
-//! -  jwt生命周期，过期 / 未来时间 / 空sub / 超长sub
-//! -  pgjwt兼容，无iss/aud宽松放行，iss/aud不匹配且未配置则宽松，配置后严格
-//! - 签名重放，原样重放，网关语义、t超窗、nonce重用去重、body/method/path篡改、客户端伪造签名头被替换
-//! - 签名头全变体，缺失/空/单字段/malformed后端校验拒绝 + 网关剥离注入
-//! - 身份头伪造，`X-FMS-*`剥离重写(值取自`Claims`)，xff/`X-Real-IP`伪造不影响限流key
-//! - 登录暴力破解，login维度429 + `Retry-After`，xff伪造不能绕过，对端ip为key
-//! - 未认证访问矩阵，受保护路径401全矩阵，匿名白名单放行
-//! - 会话/中间人，hsts仅在tls配置下注入，错误响应仍带安全头
+//! jwt算法混淆，alg:none空签名、HS256用RS256公钥字节作hmac密钥、弱密钥穷举
+//! jwt生命周期，过期 / 未来时间 / 空sub / 超长sub
+//! pgjwt兼容，无iss/aud宽松放行，iss/aud不匹配且未配置则宽松，配置后严格
+//! 签名重放，原样重放，网关语义、t超窗、nonce重用去重、body/method/path篡改、客户端伪造签名头被替换
+//! 签名头全变体，缺失/空/单字段/malformed后端校验拒绝 + 网关剥离注入
+//! 身份头伪造，`X-FMS-*`剥离重写(值取自`Claims`)，xff/`X-Real-IP`伪造不影响限流key
+//! 登录暴力破解，login维度429 + `Retry-After`，xff伪造不能绕过，对端ip为key
+//! 未认证访问矩阵，受保护路径401全矩阵，匿名白名单放行
+//! 会话/中间人，hsts仅在tls配置下注入，错误响应仍带安全头
 //!
 //! 方法，tower oneshot直调`build_router` + `MockUpstream`(真实tcp上游，可断言攻击请求
 //! 是否到达上游，防绕过关键)。后端侧签名对称校验(`verify_signature_header` / `NonceStore`)

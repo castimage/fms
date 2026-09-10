@@ -511,14 +511,14 @@ GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator
 --    approve/reject/transfer = operator 业务操作
 
 -- 2) 闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
---    - auth.assign_role / auth.revoke_role，admin.user.grant 闸口，防自助分配/自升
---    - auth.upsert_role，admin.role.create 闸口，角色创建/更新
---    - auth.grant_role_permission / auth.revoke_role_permission，admin.role.grant 闸口
---    - org.fn_upsert_company，org.company.create 闸口，公司创建/更新
+-- auth.assign_role / auth.revoke_role，admin.user.grant 闸口，防自助分配/自升
+-- auth.upsert_role，admin.role.create 闸口，角色创建/更新
+-- auth.grant_role_permission / auth.revoke_role_permission，admin.role.grant 闸口
+-- org.fn_upsert_company，org.company.create 闸口，公司创建/更新
 --    函数体追加 PERFORM auth.require_permission，... 首行闸口
 -- 全部幂等可重跑，psql -v ON_ERROR_STOP=1 执行
 
--- 注意，auth.update_user / auth.set_password / auth.create_user 不设闸，登录/找回/首登
+-- auth.update_user / auth.set_password / auth.create_user 不设闸，登录/找回/首登
 -- 流程复用，且 Java 侧已按矩阵收敛，仅 admin 可经 /api/org/users 创建与改密
 
 SET ROLE fms_admin;

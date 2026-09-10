@@ -17,11 +17,11 @@ import java.util.UUID;
 /**
  * 集成测试基类，全上下文装配（@SpringBootTest MOCK 环境 + MockMvc）+ test profile，连测试机 fms-db 经 SSH 隧道，沙箱角色 fms_app 直连。
  *
- * <p>签名工具与 fms_rgw sign.rs / GatewaySignatureFilter 协议同构，
+ * 签名工具与 fms_rgw sign.rs / GatewaySignatureFilter 协议同构，
  * body_hash=sha256(body) hex，input=method|path|body_hash|t|nonce|uid|role，
  * sig=hmac-sha256(sign_secret, input) 64 位小写 hex，t 为 epoch 秒。
  *
- * <p>子类直接 @Autowired MockMvc 与各 Bean，写操作用例须自行保证无副作用，本套件全部为只读/拒绝路径用例，不做数据写入。
+ * 子类直接 @Autowired MockMvc 与各 Bean，写操作用例须自行保证无副作用，本套件全部为只读/拒绝路径用例，不做数据写入。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @AutoConfigureMockMvc

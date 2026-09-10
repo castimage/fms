@@ -6,19 +6,16 @@ import java.util.UUID;
  * 业务单据 ↔ 凭证联动服务（voucher_link，init/gl_voucher_link.sql）：ar/ap 发票开票、
  * 收款/付款单、资金流水过账时生成 gl 凭证 DRAFT 并回填 voucher_id / voucher_line_id。
  *
- * <p>设计要点：
- * <ul>
- *   <li>凭证一律 <b>DRAFT</b>（不自动过账）——过账由会计在凭证模块完成（SoD 录入≠审核≠记账），
- *       联动只负责把单据转成草稿凭证落账并回填；</li>
- *   <li>科目映射读 um.params（ar.receivable_account / ar.revenue_account /
+ *   凭证一律 DRAFT（不自动过账）——过账由会计在凭证模块完成（SoD 录入≠审核≠记账），
+ *       联动只负责把单据转成草稿凭证落账并回填；
+ *   科目映射读 um.params（ar.receivable_account / ar.revenue_account /
  *       ap.payable_account / ap.expense_account / cash.bank_account /
  *       cash.clearing_account，值 = 科目 id，经 um.fn_get_param_value SECURITY DEFINER
  *       读口，职责角色无参表权限）；参数缺失/非法抛 ConflictException（40900），
- *       由调用方"尽力生成"兜底（WARN + 单据继续，voucher_id 留空）；</li>
- *   <li>幂等：voucher_id/voucher_line_id 已回填即跳过；凭证头带来源单据派生幂等键
- *       （uk_voucher_idem 部分唯一索引兜底），补生成/重试复用既有凭证不重复建账；</li>
- *   <li>联动在调用方事务内执行（同事务边界），失败抛异常由调用方决定回滚或放行。</li>
- * </ul>
+ *       由调用方"尽力生成"兜底（WARN + 单据继续，voucher_id 留空）；
+ *   幂等：voucher_id/voucher_line_id 已回填即跳过；凭证头带来源单据派生幂等键
+ *       （uk_voucher_idem 部分唯一索引兜底），补生成/重试复用既有凭证不重复建账；
+ *   联动在调用方事务内执行（同事务边界），失败抛异常由调用方决定回滚或放行。
  */
 public interface VoucherLinkService {
 

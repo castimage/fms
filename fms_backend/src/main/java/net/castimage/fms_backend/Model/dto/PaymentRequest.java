@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * 付款登记请求：登记即付款（status=PAID）；amount 必填且 &gt; 0（DB CHECK 兜底）；
+ * 付款登记请求：登记即付款（status=PAID）；amount 必填且 > 0（DB CHECK 兜底）；
  * 核销后 Service 推进 ALLOCATED。
  */
 public record PaymentRequest(
@@ -17,7 +17,7 @@ public record PaymentRequest(
         /** 供应商 id（必填，须存在） */
         @NotNull(message = "供应商必填")
         UUID supplierId,
-        /** 付款金额（必填，&gt; 0） */
+        /** 付款金额（必填，> 0） */
         @NotNull(message = "付款金额必填")
         @DecimalMin(value = "0.01", message = "付款金额必须大于 0")
         BigDecimal amount,

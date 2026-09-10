@@ -240,8 +240,8 @@ pub fn cache_control_for(path: &str, hash_max_age_secs: u64, asset_max_age_secs:
 
 /// 判定是否hash文件名资源，扩展名 ∈ {js,css,png,jpg,jpeg,svg,ico,woff,woff2,ttf,eot}且
 /// 主文件名含hash段，
-///   - '.' 分段整体为8+ 位纯十六进制(如`app.3f9a2c1d.js`、`app.3f9a2c1d.min.css`)，
-///   - 'name-<hash>.ext' 形态，'-' 分隔的尾段为8+ 位base64url风格hash(如
+/// '.' 分段整体为8+ 位纯十六进制(如`app.3f9a2c1d.js`、`app.3f9a2c1d.min.css`)，
+/// 'name-<hash>.ext' 形态，'-' 分隔的尾段为8+ 位base64url风格hash(如
 ///     `index-nK2IYyuW.js`、`vendor-DKX9Ih78.min.css`，K/I/Y/W等非hex字符)。
 /// 
 /// 两类命中均为immutable缓存。误判边界，形如`my-nicelibrary.js`的8+ 位字母尾段
@@ -260,8 +260,8 @@ pub fn is_hashed_asset(path: &str) -> bool {
     }
 
     // 逐 '.' 分段判定(app.min-abcdefgh.css等分段命名同样命中)，
-    //   -分段整体为8+ 位纯hex(app.3f9a2c1d.js)，
-    //   -分段内 '-' 分隔的尾段为8+ 位base64url(index-nK2IYyuW.js、
+    // 分段整体为8+ 位纯hex(app.3f9a2c1d.js)，
+    // 分段内 '-' 分隔的尾段为8+ 位base64url(index-nK2IYyuW.js、
     //     vendor-DKX9Ih78.min.css，K/I/Y/W等非hex字符)
     stem.split('.').any(|seg| {
         if seg.len() >= 8 && seg.chars().all(|c| c.is_ascii_hexdigit()) {

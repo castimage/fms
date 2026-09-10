@@ -3,12 +3,12 @@ package net.castimage.fms_backend.Utils;
 /**
  * nonce 防重放去重表抽象（与 fms_rgw nonce.rs 同构）：TTL=重放窗口，同 nonce 窗口内
  * 重放拒绝（X4-1 第二道闸）。双实现按 fms.session-store 切换：
- * <ul>
- *   <li>{@link InMemoryNonceStore}（缺省，单实例）：ConcurrentHashMap，容量超限
- *       fail-closed 拒绝（防内存耗尽），@Scheduled 兜底清理 + 水位监控；</li>
- *   <li>{@link RedisNonceStore}（fms.session-store=redis，多实例）：CachePort 共享存储，
- *       nonce 全局可见；TTL 自然过期，无精确容量闸（分布式无法原子全局计数，属取舍）。</li>
- * </ul>
+ *
+ *   {@link InMemoryNonceStore}（缺省，单实例）：ConcurrentHashMap，容量超限
+ *       fail-closed 拒绝（防内存耗尽），@Scheduled 兜底清理 + 水位监控；
+ *   {@link RedisNonceStore}（fms.session-store=redis，多实例）：CachePort 共享存储，
+ *       nonce 全局可见；TTL 自然过期，无精确容量闸（分布式无法原子全局计数，属取舍）。
+ *
  * 方法语义由 GatewaySignatureFilter（时间窗+签名校验之后、采信身份之前调用）依赖，
  * 两实现行为必须一致。容量推导逻辑为接口静态方法（见 {@link #effectiveCapacity}）。
  */

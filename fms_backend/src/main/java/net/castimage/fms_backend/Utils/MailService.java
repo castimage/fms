@@ -19,13 +19,13 @@ import java.util.Properties;
  * 或 smtp 未配置时静默跳过，recovery 仍返回票据，兼容旧契约，发送失败仅 WARN 不阻断
  * 主流程，与登录审计落库失败同策略，邮件是尽力而为的送达通道，票据本身已随响应返回。
  *
- * <p>sender 解析，优先取 spring.mail.* 自动装配的 JavaMailSender（spring-boot-starter-mail，
+ * sender 解析，优先取 spring.mail.* 自动装配的 JavaMailSender（spring-boot-starter-mail，
  * host 为空时无 bean，ObjectProvider 兜底），缺 bean 时按运行时 smtp 配置自建。
- * <b>smtp 配置运行时生效</b>，host/port/from 优先读 um.params（smtp.host/smtp.port/smtp.from，
+ * smtp 配置运行时生效，host/port/from 优先读 um.params（smtp.host/smtp.port/smtp.from，
  * 管理页「系统参数」修改保存后即时生效，无需重启），yaml 部署配置（FMS_SMTP_*）兜底，
  * 「部署配置 smtp 后自动生效」即指此双通道，填 .env 重建一次初始化，或 Web 改参数零重启。
  *
- * <p>安全约束，目标邮箱由调用方（AuthServiceImpl.recovery）传入，um.users.email 为
+ * 安全约束，目标邮箱由调用方（AuthServiceImpl.recovery）传入，um.users.email 为
  * bytea 加密 + hmac 盲索引，应用侧无法取出明文，只能使用请求体自报邮箱，经闸口
  * recovery_lookup 校验与盲索引一致才命中，防错发。
  */

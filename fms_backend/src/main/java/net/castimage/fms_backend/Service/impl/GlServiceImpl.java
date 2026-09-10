@@ -396,7 +396,7 @@ public class GlServiceImpl implements GlService {
      * SUBMITTED。提交后凭证进入审批队列，不可再改删，updateById 影响行数为 0（状态已
      * 变更或 rls 不可见）按冲突处理。
      *
-     * <p>状态机语义，DRAFT 是唯一可编辑状态，改/删仅 DRAFT，rls update 策略兜底，
+     * 状态机语义，DRAFT 是唯一可编辑状态，改/删仅 DRAFT，rls update 策略兜底，
      * 提交是"封存"动作，提交后不可再改删，只能沿 SUBMITTED 审核到 APPROVED、过账到 POSTED、再
      * REVERSED 单向推进。预检与终审双层，Java 预检，借贷平衡 assertBalanced + 期间
      * OPEN requireOpenPeriod 为第一层快速失败，db 触发器 trg_voucher_submit_check
@@ -440,7 +440,7 @@ public class GlServiceImpl implements GlService {
      * 记录审批人/审批时间。审批后凭证进入过账队列，updateById 影响行数为 0（状态已变更
      * 或 rls 不可见）按冲突处理。
      *
-     * <p>状态机语义，仅 SUBMITTED 可审批，其余状态直接 40900 冲突，审批通过即
+     * 状态机语义，仅 SUBMITTED 可审批，其余状态直接 40900 冲突，审批通过即
      * 记录 approved_by/approved_at 双审计字段，审批人/审批时间不可变，为过账与审计
      * 提供依据，SoD 互斥，制单 ↔ 审核在 Java 层与 db 触发器双层校验，Java 层
      * 拒绝同人审批，快速失败，db 触发器 approved_by ≠ created_by 终审，防绕过
@@ -483,7 +483,7 @@ public class GlServiceImpl implements GlService {
      * CLOSED/状态非法/借贷不平由 db 侧 RAISE，异常统一映射 40900。过账后凭证不可再
      * 修改，只能走冲销，凭证号由 db 侧按期间序列签发。
      *
-     * <p>状态机语义，仅 APPROVED 可过账，Java 层预检，其余状态 40900，过账是
+     * 状态机语义，仅 APPROVED 可过账，Java 层预检，其余状态 40900，过账是
      * 记账生效点，Java 层只做状态预检，取号/状态推进/审计全部委托 pg SECURITY
      * DEFINER 函数 fn_post_voucher 原子完成，单一事务内完成，规避应用层 rls 对
      * 状态列写入的限制与不可变触发器拒绝顺序问题，期间 CLOSED（period 关闭后
@@ -516,7 +516,7 @@ public class GlServiceImpl implements GlService {
      * 驳回后凭证进入 REJECTED，列表可见/可筛选，下一批次经 REJECTED 转 DRAFT 退回
      * （POST /vouchers/{id}/revert，见 revertVoucher）修改后重新提交。
      *
-     * <p>状态机语义，仅 SUBMITTED 可驳回，其余状态 Java 层预检直接 40900，驳回不改凭证
+     * 状态机语义，仅 SUBMITTED 可驳回，其余状态 Java 层预检直接 40900，驳回不改凭证
      * 账务，原分录/金额原样保留，仅状态推进并记录原因，状态历史 remark + 审计双通道，
      * 与冲销（POSTED 转 REVERSED）同族"新凭证抵账"不同，驳回是可逆的审核回退动作。
      *
@@ -556,7 +556,7 @@ public class GlServiceImpl implements GlService {
      * 白名单触发器终审，白名单已含 REJECTED 转 DRAFT 且退回目标 DRAFT 豁免平衡/期间校验），
      * 异常 RAISE 统一映射 40900。
      *
-     * <p>状态机语义，仅 REJECTED 可退回，其余状态 Java 层预检直接 40900，退回是可逆的审核
+     * 状态机语义，仅 REJECTED 可退回，其余状态 Java 层预检直接 40900，退回是可逆的审核
      * 回退动作，与驳回（SUBMITTED 转 REJECTED）互逆，构成驳回-退回闭环，下一批次可重新提交。
      *
      * @param id 被驳回凭证 id（须 REJECTED）
@@ -583,7 +583,7 @@ public class GlServiceImpl implements GlService {
      * REVERSED 并双向互链（reversal_of_voucher_id / reversed_by_voucher_id），返回反向
      * 凭证 id 后按此构建详情。冲销后原凭证冻结，反向凭证作为独立凭证走完整状态机。
      *
-     * <p>状态机语义，仅 POSTED 可冲销，Java 层预检，其余状态 40900，冲销不改原
+     * 状态机语义，仅 POSTED 可冲销，Java 层预检，其余状态 40900，冲销不改原
      * 凭证的账，原凭证冻结为 REVERSED，保留原状供审计，新建一张借贷方向互换的
      * 反向凭证承载冲销账务，两张凭证经 reversal_of_voucher_id / reversed_by_voucher_id
      * 双向互链（审计可追溯"这张冲销了哪张/被哪张冲销"），全部动作，新建反向凭证、
@@ -626,7 +626,7 @@ public class GlServiceImpl implements GlService {
     /**
      * {@inheritDoc}
      *
-     * <p>镜像 rpt.exportCsv 白名单模式，period 白名单校验（YYYY-MM）校验通过后加 utf-8 BOM（\uFEFF）
+     * 镜像 rpt.exportCsv 白名单模式，period 白名单校验（YYYY-MM）校验通过后加 utf-8 BOM（\uFEFF）
      * 流式写 csv（表头 + 数据行 + flush，不 close 输出流，由 Servlet 容器接管），
      * 文件名 ledger_yyyyMMdd.csv，Content-Disposition attachment。方向列转中文，DEBIT=借/CREDIT=贷与前端列渲染同源，金额为有符号净额，正=借向、负=贷向。
      */
@@ -700,7 +700,7 @@ public class GlServiceImpl implements GlService {
     /**
      * {@inheritDoc}
      *
-     * <p>结账（OPEN 转 CLOSED）委托 gl.fn_close_period 原子完成，完整性预检（期间内 DRAFT/
+     * 结账（OPEN 转 CLOSED）委托 gl.fn_close_period 原子完成，完整性预检（期间内 DRAFT/
      * SUBMITTED/APPROVED 凭证计数 > 0 或 POSTED/REVERSED 断号则 RAISE）+ 置 CLOSED + 记
      * closed_by（函数内取 auth.current_uid，即本请求注入的 RequestContext 用户）+ 审计。
      * 预检已内置于函数（p_force=false），Service 层不再重复调查询，避免与 db 侧口径漂移，
@@ -721,7 +721,7 @@ public class GlServiceImpl implements GlService {
     /**
      * {@inheritDoc}
      *
-     * <p>反结账委托 gl.fn_reopen_period，原因必填，Java 预检快速失败，与驳回同款，二次确认
+     * 反结账委托 gl.fn_reopen_period，原因必填，Java 预检快速失败，与驳回同款，二次确认
      * 开关 fms.force_reopen 未开启/存在更晚已结账期间则函数 RAISE，40900。反结账是受控的
      * 唯一逆向路径，审计留痕原因。
      */
@@ -751,7 +751,7 @@ public class GlServiceImpl implements GlService {
     /**
      * {@inheritDoc}
      *
-     * <p>期末调汇委托 gl.fn_fx_adjustment（手动触发，cron 每月 1 日 03:00 自动路径不变），
+     * 期末调汇委托 gl.fn_fx_adjustment（手动触发，cron 每月 1 日 03:00 自动路径不变），
      * 外币科目期末余额 × 期末汇率与按 1:1 计价账面的差生成 DRAFT 调汇凭证草稿，幂等键
      * fx_adjustment:+period 防同期间重复生成，无汇率记录的公司/科目跳过（NOTICE），
      * 返回生成的调汇凭证数，0 = 无外币余额/无汇率/已生成过。
