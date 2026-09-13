@@ -13,8 +13,10 @@ import java.util.UUID;
 
 /**
  * 付款核销明细 Mapper（ap.payment_allocations）：核销防重双闸——
- * ① uk_ap_alloc(payment_id, invoice_id) 唯一约束（23505 映射 40900）；
- * ② version 乐观锁（updateWithVersion 带 WHERE version=?，0 行则 40900）。
+ * uk_ap_alloc(payment_id, invoice_id) 唯一约束（23505 映射 40900）；
+
+ * version 乐观锁（updateWithVersion 带 WHERE version=?，0 行则 40900）。
+
  * 核销与供应商对账解耦（对账仅回填 matched_invoice_id）。
  */
 public interface PaymentAllocationMapper extends BaseMapper<PaymentAllocation> {

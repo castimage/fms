@@ -3,14 +3,17 @@
 -- init/ar_ap_cash_base.sql 为 ar.invoices/ap.invoices/ar.receipts/ap.payments 预留 voucher_id、
 -- cash.transactions 预留 voucher_line_id（无 FK 无触发器），Java 侧 ArServiceImpl/
 -- ApServiceImpl 生成凭证草稿回填，本文件打通单据到凭证联动，
---   1) 不可变触发器豁免 voucher_id，ar/ap 发票开票（ISSUED）后仅允许 status 列变更，
+--不可变触发器豁免 voucher_id，ar/ap 发票开票（ISSUED）后仅允许 status 列变更，
+
 --      而凭证联动需要在开票后回填 voucher_id，开票时/补生成端点，经
 --      CREATE OR REPLACE 重定义两个不可变触发器函数，voucher_id 豁免"仅 status
---      可变更"检查，其余列仍不可变，DELETE/状态机白名单语义原样保留，
---   2) 清算过渡科目种子（cash.clearing_account 指向），现金流水凭证的对端科目，
+--      可变更"检查，其余列仍不可变，DELETE/状态机白名单语义保留，
+--清算过渡科目种子（cash.clearing_account 指向），现金流水凭证的对端科目，
+
 --      资金流水无业务对端，进出账均以清算过渡科目挂对端（IN 借银行/贷清算，
 --      OUT 借清算/贷银行），科目可配可换，
---   3) um.params 科目映射参数种子（公司级，值为该公司 gl.chart_accounts 科目 id，
+--um.params 科目映射参数种子（公司级，值为该公司 gl.chart_accounts 科目 id，
+
 --      {"v":"<uuid>"} 形态与 fa.depr.* 参数同构），ar.receivable_account /
 --      ar.revenue_account / ap.payable_account / ap.expense_account /
 --      cash.bank_account / cash.clearing_account，Java 侧经 um.fn_get_param_value
@@ -24,11 +27,12 @@
 
 SET ROLE fms_admin;
 
--- 1. ar 应收发票不可变触发器，豁免 voucher_id，凭证联动回填列，
---    原"仅 status 列可变更"检查在排除 voucher_id 后判断，其余列，金额/日期/客户等，仍不可变，
+--ar 应收发票不可变触发器，豁免 voucher_id，凭证联动回填列，
+
+--    "仅 status 列可变更"检查在排除 voucher_id 后判断，其余列，金额/日期/客户等，仍不可变，
 --    DELETE 禁令与状态机白名单（同状态更新 NEW.status=OLD.status 放行，凭证联动回填
 --    ISSUED->ISSUED 场景，仅 status/voucher_id 可变更仍由 v_only_status 终审，
---    ISSUED 转 PARTIAL/PAID/VOID、PARTIAL 转 ISSUED/PAID/VOID）与 ar_ap_cash_base.sql 原实现语义一致。
+--    ISSUED 转 PARTIAL/PAID/VOID、PARTIAL 转 ISSUED/PAID/VOID）与 ar_ap_cash_base.sql 实现语义一致。
 CREATE OR REPLACE FUNCTION ar.fn_ar_invoice_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -71,7 +75,8 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END $$;
 
--- 2. ap 应付发票不可变触发器，同 ar 豁免 voucher_id，与 ar_ap_cash_base.sql 同构
+--ap 应付发票不可变触发器，同 ar 豁免 voucher_id，与 ar_ap_cash_base.sql 同构
+
 CREATE OR REPLACE FUNCTION ap.fn_ap_invoice_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -108,7 +113,8 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END $$;
 
--- 3. 清算过渡科目种子（demo 公司 00000000-0000-7000-0000-000000000010），
+--清算过渡科目种子（demo 公司 00000000-0000-7000-0000-000000000010），
+
 --    现金流水凭证的对端科目（cash.clearing_account 参数指向），末级科目（is_leaf=true）
 --    满足 gl.fn_voucher_line_leaf_check 分录末级校验
 INSERT INTO gl.chart_accounts
@@ -119,7 +125,8 @@ VALUES ('00000000-0000-7000-0000-000000000117', '00000000-0000-7000-0000-0000000
         'ASSET', 'DEBIT', false, 'ACTIVE')
 ON CONFLICT (company_id, code) DO NOTHING;
 
--- 4. 科目映射参数种子（um.params 公司级，值为该公司科目 id，{"v":"<uuid>"} 形态，
+--科目映射参数种子（um.params 公司级，值为该公司科目 id，{"v":"<uuid>"} 形态，
+
 --    由 gl.chart_accounts 按 (company_id, code) 解析，科目树随客户可调，缺失即跳过
 --    参数插入，ON CONFLICT DO NOTHING 幂等，重复执行不覆盖手工调整）
 INSERT INTO um.params (code, value, updated_by)
@@ -170,7 +177,8 @@ SELECT 'cash.clearing_account', jsonb_build_object('v', a.id::text),
    AND a.code = '1231' AND a.deleted_at IS NULL
 ON CONFLICT (code) DO NOTHING;   -- 现金流水凭证对端科目，银行清算过渡
 
--- 5. 文件末尾自查
+--文件末尾自查
+
 SELECT 'gl_voucher_link' AS file_name,
        (SELECT count(*) FROM um.params
          WHERE code IN ('ar.receivable_account','ar.revenue_account',

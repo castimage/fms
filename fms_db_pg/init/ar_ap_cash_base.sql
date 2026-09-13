@@ -4,7 +4,7 @@
 -- 职责，ar.receipts 收款重复登记幂等防护，uk_ar_receipt_dedup 部分唯一索引（同客户/同金额/同日期/同账户仅一条有效收款单，重复 INSERT 23505 映射 40900，软删行不占键）
 -- 职责，uk_ar_customer_code/uk_ar_invoice_no/uk_ap_supplier_code/uk_ap_invoice_no
 -- 为部分唯一索引 WHERE deleted_at IS NULL（软删行不占键，编码可复用，与 uk_ar_receipt_dedup 同构），
--- 幂等，ALTER TABLE ... DROP CONSTRAINT IF EXISTS 处理部署库遗留约束，CREATE UNIQUE INDEX IF NOT EXISTS 兜底
+-- 幂等，ALTER TABLE ... DROP CONSTRAINT IF EXISTS 处理部署库既有约束，CREATE UNIQUE INDEX IF NOT EXISTS 兜底
 
 SET ROLE fms_admin;
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS ar.customers (
     deleted_at   timestamptz
 );
 -- 客户编码唯一（软删行不占键，与 uk_ar_receipt_dedup 同构），
--- 部分唯一索引（deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库遗留约束，
+-- 部分唯一索引（deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库既有约束，
 -- CREATE UNIQUE INDEX IF NOT EXISTS 兜底幂等
 ALTER TABLE ar.customers DROP CONSTRAINT IF EXISTS uk_ar_customer_code;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_ar_customer_code ON ar.customers (company_id, code)
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS ar.invoices (
     deleted_at   timestamptz
 );
 -- 发票号唯一（软删行不占键，与 uk_ar_receipt_dedup 同构），部分唯一索引
--- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库遗留约束，幂等
+-- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库既有约束，幂等
 ALTER TABLE ar.invoices DROP CONSTRAINT IF EXISTS uk_ar_invoice_no;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_ar_invoice_no ON ar.invoices (company_id, invoice_no)
     WHERE deleted_at IS NULL;
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS ap.suppliers (
     deleted_at   timestamptz
 );
 -- 供应商编码唯一（软删行不占键，与 uk_ar_receipt_dedup 同构），部分唯一索引
--- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库遗留约束，幂等
+-- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库既有约束，幂等
 ALTER TABLE ap.suppliers DROP CONSTRAINT IF EXISTS uk_ap_supplier_code;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_ap_supplier_code ON ap.suppliers (company_id, code)
     WHERE deleted_at IS NULL;
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS ap.invoices (
     deleted_at   timestamptz
 );
 -- 发票号唯一（软删行不占键，与 uk_ar_receipt_dedup 同构），部分唯一索引
--- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库遗留约束，幂等
+-- （deleted_at 过滤），DROP CONSTRAINT IF EXISTS 处理部署库既有约束，幂等
 ALTER TABLE ap.invoices DROP CONSTRAINT IF EXISTS uk_ap_invoice_no;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_ap_invoice_no ON ap.invoices (company_id, invoice_no)
     WHERE deleted_at IS NULL;
@@ -627,7 +627,7 @@ END $$;
 
 -- ar.receipts 收款重复登记幂等防护，业务键部分唯一索引 uk_ar_receipt_dedup
 -- （company_id, customer_id, amount, receipt_date, COALESCE(bank_account_id, ZERO)）
---， 同客户/同金额/同日期/同账户的收款单仅允许一张有效（deleted_at IS NULL），
+-- ， 同客户/同金额/同日期/同账户的收款单仅允许一张有效（deleted_at IS NULL），
 --    重复登记 INSERT 触发 23505，GlobalExceptionHandler 全局映射 40900，
 --    软删后的同键收款单不阻挡重新登记（部分索引 WHERE deleted_at IS NULL）。
 -- 核销重复生效由 Service 层防护（同对同金额重复请求 40900 + 收款单剩余

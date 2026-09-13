@@ -1,13 +1,13 @@
 //! 多上游负载均衡池(`UpstreamPool`)，每实例独立`UpstreamClient` + 健康位 + 在途计数，
 //! 支持round-robin / random / least-conn / ip-hash / auto五种模式，转发失败自动重试
 //! 下一个健康实例，连续失败 ≥3标记down，故障剔除，健康探测成功恢复，重新纳入。
-//! 随机与哈希委托成熟库，random 用 rand 线程随机源，ip-hash 用 fnv crate，
-//!   算法与替换前一致。
+//! 随机与哈希委托成熟库，random 用 rand 线程随机源，ip-hash 用 fnv crate 的
+//! FNV-1a 逐字节哈希。
 //! servers为空时内部等价vec![base_url]，单上游任何模式行为一致，
-//!   现有`FMS_RGW_UPSTREAM`单url部署行为不变。
+//! `FMS_RGW_UPSTREAM`单url部署等价单上游。
 //! 熔断粒度，全局`CircuitBreaker`保留为整体兜底(forward任一实例成功即成功，
-//!   最后一次错误才失败)，实例级故障剔除/恢复由本池的健康位管理(健康探测 + 转发
-//!   连续失败共用`mark_healthy` / `record_failure`)。
+//! 最后一次错误才失败)，实例级故障剔除/恢复由本池的健康位管理(健康探测 + 转发
+//! 连续失败共用`mark_healthy` / `record_failure`)。
 //!
 //! 调用关系，`AppState` 的 upstream 字段(`state.rs`)供 `proxy_handler`/`ws_handler`
 //! 转发使用(`proxy.rs`/`ws.rs`)，`circuit::health_probe_loop` 调 `probe_all` 周期探测
@@ -211,9 +211,9 @@ impl UpstreamPool {
     /// random 用 rand 线程随机源定随机起点后线性探测，
     /// least-conn 选在途请求数最小者，并发下为近似值，平手取序号小者，确定性，
     /// ip-hash 按 fnv1a 取模定位后线性探测第一个健康实例，简化一致性哈希，
-    ///   实例数变化会重映射，会话粘性为尽力而为，无ip时回退round-robin，
+    /// 实例数变化会重映射，会话粘性为尽力而为，无ip时回退round-robin，
     /// auto 等价 least-conn，自动健康管理由探测与转发失败共用，
-    ///   单上游时退化为直连，任何模式行为一致
+    /// 单上游时退化为直连，任何模式行为一致
     pub fn pick(&self, client_ip: Option<&str>) -> Option<usize> {
         if self.entries.is_empty() {
             return None;
@@ -432,7 +432,7 @@ impl UpstreamPool {
     }
 }
 
-/// FNV-1a 64位哈希，ip-hash用，委托 fnv crate，逐字节结果与替换前自实现一致
+/// FNV-1a 64位哈希，ip-hash用，委托 fnv crate，逐字节哈希
 fn fnv1a(s: &str) -> u64 {
     use std::hash::Hasher;
     let mut h = fnv::FnvHasher::default();

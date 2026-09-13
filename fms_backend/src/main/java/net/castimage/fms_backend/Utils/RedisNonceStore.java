@@ -10,13 +10,13 @@ import java.time.Duration;
  * nonce 防重放去重表 Redis 实现（fms.session-store=redis，多实例共享存储）：
  * checkAndInsert = CachePort.setIfAbsent("fms:nonce:" + nonce, TTL=重放窗口)，
  * 由 Redis 原子 SETNX 保证并发去重正确性，任意实例写入全局可见——多实例部署下
- * 网关签名 nonce 的 X4-1 第二道闸语义与单实例一致。
+ * 网关签名 nonce 的第二道闸语义与单实例一致。
  *
- * 与内存版的关键差异（取舍，喵）：分布式场景无法原子地做"容量检查+写入"
+ * 与内存版的关键差异（取舍）：分布式场景无法原子地做"容量检查+写入"
  * （approximateSize 的 SCAN 与 setIfAbsent 之间必有竞窗），故舍弃 fail-closed
  * 容量闸——防内存耗尽改由 Redis 自身内存策略（maxmemory 淘汰）兜底，容量仅作
  * 水位监控口径（usageRatio 分母）。拒绝语义不变：TTL 内同 nonce 恒拒绝，仅
- * 极端内存压力下的兜底策略从"拒新请求"换成"Redis 逐出旧键"，方向安全。
+ * 极端内存压力下由 Redis 逐出旧键兜底，方向安全。
  */
 public class RedisNonceStore implements NonceStore {
 
@@ -54,7 +54,7 @@ public class RedisNonceStore implements NonceStore {
 
     /**
      * 当前窗口条目数 / 容量 的水位比率（0.0 空 ~ 1.0 满）：approximateSize 为 SCAN 近似值
-     * （O(N)，仅定时水位监控低频调用），故水位为观测口径而非精确计数；分母=动态推导容量喵
+     * （O(N)，仅定时水位监控低频调用），故水位为观测口径而非精确计数；分母=动态推导容量
      */
     @Override
     public double usageRatio() {
@@ -64,7 +64,7 @@ public class RedisNonceStore implements NonceStore {
     /** 空操作：Redis TTL 惰性删除 + 主动过期回收，无兜底清理需求（接口契约对齐） */
     @Override
     public void cleanup() {
-        // TTL 自动过期（惰性删除 + 主动淘汰），无需兜底清理喵
+        // TTL 自动过期（惰性删除 + 主动淘汰），无需兜底清理
     }
 
     /**

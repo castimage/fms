@@ -19,7 +19,7 @@ public interface AuthFunctionMapper {
     String jwtVerify(@Param("token") String token);
 
     /**
-     * 03c 登录闸口，匿名 SELECT 因 um.users rls 恒空集，用户查找 + bcrypt 校验全在 pg 内完成，
+     * 登录闸口，匿名 SELECT 因 um.users rls 恒空集，用户查找 + bcrypt 校验全在 pg 内完成，
      * SECURITY DEFINER 属主 fms_admin 绕过 rls，pass_hash 列匿名不可直读，校验不落地 Java。
      *
      * 返回 jsonb，{user_id, ok, status, locked_until, mfa_enabled, must_change_pwd,
@@ -38,11 +38,11 @@ public interface AuthFunctionMapper {
     UUID recoveryLookup(@Param("loginName") String loginName, @Param("email") String email);
 
     /**
-     * 登录失败计数原子递增，SECURITY DEFINER，2026-08-13 并发安全修复，单条 UPDATE
+     * 登录失败计数原子递增，SECURITY DEFINER，单条 UPDATE
      * SET failed_login_count = failed_login_count + 1 RETURNING 行级原子自增，行锁串行化并发，
      * 达阈值同事务内置 LOCKED + locked_until，返回 jsonb {failed_login_count, locked}。
      *
-     * 取代原 Java 侧读-改-写，并发错误密码丢失更新，暴力破解锁定可被绕过。
+     * Java 侧读-改-写在并发下会丢失更新，暴力破解锁定可被绕过，故收归单条 UPDATE 原子自增。
      */
     @Select("""
             SELECT auth.record_login_failure(#{userId}::uuid, #{maxFailures}, #{lockMinutes})
@@ -87,7 +87,7 @@ public interface AuthFunctionMapper {
 
     // SECURITY DEFINER 闸口，11 契约全量，sql 侧 sql/init/auth_org_functions.sql
 
-    /** 建用户，03c 契约 2，INSERT um.users 幂等，login_name 冲突返回已存在 id */
+    /** 建用户，INSERT um.users 幂等，login_name 冲突返回已存在 id */
     @Select("""
             SELECT auth.create_user(#{loginName}, #{passHash}, #{email}, #{companyId}::uuid, #{mustChangePwd}, #{createdBy}::uuid)
             """)
@@ -95,63 +95,63 @@ public interface AuthFunctionMapper {
                     @Param("email") String email, @Param("companyId") UUID companyId,
                     @Param("mustChangePwd") boolean mustChangePwd, @Param("createdBy") UUID createdBy);
 
-    /** 用户字段补丁（03c），白名单键 email/status/must_change_pwd/failed_login_count/locked_until（pass_hash 等列不可直写） */
+    /** 用户字段补丁，白名单键 email/status/must_change_pwd/failed_login_count/locked_until（pass_hash 等列不可直写） */
     @Select("""
             SELECT auth.update_user(#{userId}::uuid, #{patch}::jsonb)
             """)
     Object updateUser(@Param("userId") UUID userId, @Param("patch") String patch);
 
-    /** 改密/重置密码（03c），UPDATE pass_hash，列级不可直写 */
+    /** 改密/重置密码，UPDATE pass_hash，列级不可直写 */
     @Select("""
             SELECT auth.set_password(#{userId}::uuid, #{bcryptHash})
             """)
     Object setPassword(@Param("userId") UUID userId, @Param("bcryptHash") String bcryptHash);
 
-    /** 启用/禁用 2fa（03c），secret 经函数内 pgp_sym_encrypt 落 mfa_secret_enc */
+    /** 启用/禁用 2fa，secret 经函数内 pgp_sym_encrypt 落 mfa_secret_enc */
     @Select("""
             SELECT auth.set_mfa(#{userId}::uuid, convert_to(#{secretBase32}, 'UTF8'), #{enabled})
             """)
     Object setMfa(@Param("userId") UUID userId, @Param("secretBase32") String secretBase32,
                 @Param("enabled") boolean enabled);
 
-    /** 读解密后的 totp 密钥（03c），pgp_sym_decrypt 后返回 base32，未配置返回 null */
+    /** 读解密后的 totp 密钥，pgp_sym_decrypt 后返回 base32，未配置返回 null */
     @Select("""
             SELECT auth.get_mfa_secret(#{userId}::uuid)
             """)
     String getMfaSecret(@Param("userId") UUID userId);
 
-    /** 分配角色（03c），INSERT um.user_role（uk 冲突 23505 映射 40900） */
+    /** 分配角色，INSERT um.user_role（uk 冲突 23505 映射 40900） */
     @Select("""
             SELECT auth.assign_role(#{userId}::uuid, #{roleCode})
             """)
     Object assignRole(@Param("userId") UUID userId, @Param("roleCode") String roleCode);
 
-    /** 回收角色（03c），user_role 软删或物理删 */
+    /** 回收角色，user_role 软删或物理删 */
     @Select("""
             SELECT auth.revoke_role(#{userId}::uuid, #{roleCode})
             """)
     Object revokeRole(@Param("userId") UUID userId, @Param("roleCode") String roleCode);
 
-    /** 角色创建/更新（03c），内部 ON CONFLICT(code) DO UPDATE name */
+    /** 角色创建/更新，内部 ON CONFLICT(code) DO UPDATE name */
     @Select("""
             SELECT auth.upsert_role(#{code}, #{name}, #{isSystem})
             """)
     UUID upsertRole(@Param("code") String code, @Param("name") String name,
                     @Param("isSystem") boolean isSystem);
 
-    /** 角色-权限绑定（03c） */
+    /** 角色-权限绑定 */
     @Select("""
             SELECT auth.grant_role_permission(#{roleId}::uuid, #{permCode})
             """)
     Object grantRolePermission(@Param("roleId") UUID roleId, @Param("permCode") String permCode);
 
-    /** 角色-权限解绑（03c） */
+    /** 角色-权限解绑 */
     @Select("""
             SELECT auth.revoke_role_permission(#{roleId}::uuid, #{permCode})
             """)
     Object revokeRolePermission(@Param("roleId") UUID roleId, @Param("permCode") String permCode);
 
-    /** 公司创建/更新（03c），org.fn_upsert_company 幂等 upsert（新建公司绕过 rls INSERT WITH CHECK 恒 false，属 SECURITY DEFINER 闸口） */
+    /** 公司创建/更新，org.fn_upsert_company 幂等 upsert（新建公司绕过 rls INSERT WITH CHECK 恒 false，属 SECURITY DEFINER 闸口） */
     @Select("""
             SELECT org.fn_upsert_company(#{code}, #{name}, #{currency}, #{fiscalYearStart}, #{status})
             """)

@@ -204,7 +204,7 @@ pub fn check_sql_injection_path(path: &str, query: Option<&str>) -> Result<(), F
 }
 
 /// 对body的浅特征检查，文本型 + application/json + multipart/form-data均扫描
-/// (仅查前两类会被`Content-Type`切换整体绕过第一道防线)，json字符串值与multipart
+/// (仅查前两类时`Content-Type`切换即可绕过)，json字符串值与multipart
 /// 表单字段值同样拦截。multipart经`extract_multipart_text`只保留表单字段
 /// 文本，文件part跳过，二进制文件字节流可能含任意ASCII子串(随机字节/真实
 /// 文档格式)，整体扫描必然误伤一切上传，注入载荷只能经表单字段传入，字段照常扫描。
@@ -666,7 +666,7 @@ mod tests {
         let evil = b"name=admin'; drop table users;--";
         assert!(check_sql_injection_body(evil, Some("application/x-www-form-urlencoded")).is_err());
         assert!(check_sql_injection_body(evil, Some("text/plain")).is_err());
-        // json / multipart同样扫描(Content-Type切换不再绕过第一道防线)
+        // json / multipart同样扫描(Content-Type切换不可绕过)
         assert!(
             check_sql_injection_body(evil, Some("application/json")).is_err(),
             "JSON body 必须扫描(F6)"

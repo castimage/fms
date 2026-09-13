@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 后端补充限流过滤器测试，登录/找回/内部端点三档限流，超限 429+42900 短路、
+ * 后端限流过滤器测试，登录/找回/内部端点三档限流，超限 429+42900 短路、
  * 非目标路径直通、限流计数键含清洗后 ip（非法 ip 兜底 0.0.0.0 防键膨胀）。
  */
 class RateLimitFilterTest {

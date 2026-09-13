@@ -35,7 +35,7 @@ public class WsNotifyRedisBridge {
     private static final String INSTANCE_ID = UuidV7.next().toString();
 
     /** redis 广播器，publish {"from":instanceId,"uid":uid,"payload":payload} 供各实例订阅端消费，
-     *  匿名内部类，非 lambda，broadcastAll 需同时实现，lambda 只能实现单一抽象方法 */
+     * 匿名内部类，非 lambda，broadcastAll 需同时实现，lambda 只能实现单一抽象方法 */
     @Bean
     @ConditionalOnProperty(name = "fms.session-store", havingValue = "redis")
     public WsNotifyBroadcaster redisWsNotifyBroadcaster(StringRedisTemplate stringRedisTemplate) {

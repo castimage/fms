@@ -56,7 +56,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
 
-/** 组织架构服务实现，公司/部门/用户/角色/权限树/SoD，公司经 org.fn_upsert_company 闸口、用户/角色/分配经 03c 闸口，敏感列不对 operator 开放、部门直接 sql 写（path 经 ::ltree 转换，code/path/parent/level 不可变），软删统一 auth.fn_soft_delete，写操作 rbac 预检 40300 */
+/** 组织架构服务实现，公司/部门/用户/角色/权限树/SoD，公司经 org.fn_upsert_company 闸口、用户/角色/分配经闸口，敏感列不对 operator 开放、部门直接 sql 写（path 经 ::ltree 转换，code/path/parent/level 不可变），软删统一 auth.fn_soft_delete，写操作 rbac 预检 40300 */
 @Service
 public class OrgServiceImpl implements OrgService {
 
@@ -268,11 +268,11 @@ public class OrgServiceImpl implements OrgService {
     /**
      * 创建用户，rbac 写预检 40300，先做密码预检，长度二次校验（fms.security.
      * password-min/max-length）与弱密码布隆预筛精确确认，命中 40001，不落库，再经
-     * 03c 闸口 auth.create_user 写库，列级白名单，pass_hash 等敏感列不对 operator
+     * 闸口 auth.create_user 写库，列级白名单，pass_hash 等敏感列不对 operator
      * 开放。mustChangePwd 缺省视为 true，首登强制改密。创建后回读被 rls 隐藏，users_select 仅 is_self 可见，operator 永不可见他人行时免回读直接返回
      * 请求数据构造的视图，不抛 40400 避免事务回滚丢写。
      *
-     * 应用侧只做预检，长度/弱密码，实际写库全部经 03c 闸口函数
+     * 应用侧只做预检，长度/弱密码，实际写库全部经闸口函数
      * auth.create_user，bcrypt 哈希由应用侧 PasswordUtils.encode 生成后经函数参数
      * 传入，列级白名单禁止直接 UPDATE pass_hash，敏感列，pass_hash/盲索引字段
      * 不对 operator 可见，operatorId 随调用传入落审计。mustChangePwd 缺省即 true，管理员创建账号首登必须改密，防初始口令长期有效。回读可见性，rls 范围外
@@ -314,7 +314,7 @@ public class OrgServiceImpl implements OrgService {
         if (userMapper.selectById(id) == null) {
             throw new NotFoundException("用户不存在");
         }
-        // 03c 白名单键补丁，email/status/must_change_pwd（display_name 不在白名单），
+        // 白名单键补丁，email/status/must_change_pwd（display_name 不在白名单），
         authFunctionMapper.updateUser(id, buildPatch(req));
         User user = userMapper.selectById(id);
         if (user == null) {
@@ -535,7 +535,7 @@ public class OrgServiceImpl implements OrgService {
 
     // 内部实现
 
-    /** 03c update_user 白名单补丁 json（键，email/status/must_change_pwd/display_name，转义交由 fastjson2 处理） */
+    /** update_user 白名单补丁 json（键，email/status/must_change_pwd/display_name，转义交由 fastjson2 处理） */
     private String buildPatch(UserUpdateRequest req) {
         JSONObject patch = new JSONObject();
         if (req.email() != null) {

@@ -29,10 +29,11 @@ BEGIN
     END LOOP;
 END $$;
 
--- 1. rpt.ap_aging_paid 已核销金额增量聚合，ap_aging 降级方案，与 ar 侧同构，pg_ivm 1.15
+--rpt.ap_aging_paid 已核销金额增量聚合，ap_aging 降级方案，与 ar 侧同构，pg_ivm 1.15
+
 -- 不允许"聚合函数 + 左连接"及"含聚合的子查询"，LEFT JOIN 骨架不可直接物化，改为基于
 -- ap.payment_allocations 的单表增量聚合，按发票分组，+ 普通视图 rpt.ap_aging 计算余额
--- CASCADE，rpt.ap_aging 视图依赖本 immv，重跑时需连带删除后再重建，见第 2 节
+-- CASCADE，rpt.ap_aging 视图依赖本 immv，重跑时需连带删除后再重建
 SELECT pgivm.create_immv(
     'rpt.ap_aging_paid',
     'SELECT pa.invoice_id, SUM(pa.amount) AS paid_amount
@@ -43,7 +44,8 @@ SELECT pgivm.create_immv(
 COMMENT ON TABLE rpt.ap_aging_paid IS
 '应付已核销金额 IMMV：按发票累计核销额；rpt.ap_aging 视图基于本 IMMV 计算未核销余额（降级方案）';
 
--- 2. rpt.ap_aging 应付账龄，未核销余额，供应商×期间，余额 = 发票总额 - 已核销（immv
+--rpt.ap_aging 应付账龄，未核销余额，供应商×期间，余额 = 发票总额 - 已核销（immv
+
 -- rpt.ap_aging_paid 实时累计），消费侧按需要再按账龄区间（0-30/31-60/…）对 open_balance 分桶
 CREATE OR REPLACE VIEW rpt.ap_aging AS
 SELECT i.company_id,
@@ -65,12 +67,14 @@ WHERE i.status IN ('ISSUED', 'PARTIAL')
 COMMENT ON VIEW rpt.ap_aging IS
 '应付账龄视图：已开具未付清发票（ISSUED/PARTIAL）按（供应商×期间）计算未核销余额，数据源为 IMMV rpt.ap_aging_paid';
 
--- 3. 报表视图安全调用者，security_invoker=on，视图内对基表的访问按调用者身份受 rls 收敛，
+--报表视图安全调用者，security_invoker=on，视图内对基表的访问按调用者身份受 rls 收敛，
+
 -- 视图授权按矩阵下发后任意角色只能看到自己 org 范围的汇总行（配合注入 guc），防止视图属主
 -- fms_admin（SUPERUSER）绕过 rls 的跨公司泄漏风险，与 rpt.ar_aging 同模式
 ALTER VIEW rpt.ap_aging SET (security_invoker = on);
 
--- 4. rpt SELECT 授权（镜像 init/grants_base.sql rpt 段，immv 与视图均为汇总级，四职责角色只读）
+--rpt SELECT 授权（镜像 init/grants_base.sql rpt 段，immv 与视图均为汇总级，四职责角色只读）
+
 GRANT SELECT ON rpt.ap_aging_paid
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT SELECT ON rpt.ap_aging

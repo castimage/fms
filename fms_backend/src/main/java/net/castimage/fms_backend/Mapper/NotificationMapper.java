@@ -72,12 +72,12 @@ public interface NotificationMapper extends BaseMapper<Notification> {
             """)
     int markAllRead(@Param("userId") UUID userId);
 
-    // —— 通知生成源（init/notify_broadcast.sql SECURITY DEFINER 闸口 + PGMQ 消费）——
+    // 通知生成源（init/notify_broadcast.sql SECURITY DEFINER 闸口 + PGMQ 消费）
     // RLS 的 INSERT WITH CHECK (user_id = auth.current_uid()) 使 fms_app/fms_operator
     // 无法批量插他人通知，批量/单条插入必须经 SECURITY DEFINER 函数（属主 fms_admin）绕过
 
     /**
-     * 系统公告/公司级预警全量广播（29 文件 notify.fn_broadcast_notification，SECURITY DEFINER）：
+     * 系统公告/公司级预警全量广播（notify.fn_broadcast_notification，SECURITY DEFINER）：
      * 向全部 ACTIVE 用户逐行 INSERT；幂等——同 ref_type+ref_id+title 已存在则整批跳过
      * （防 cron/重试重复）；返回实际插入行数。
      */
@@ -88,7 +88,7 @@ public interface NotificationMapper extends BaseMapper<Notification> {
                                @Param("refType") String refType, @Param("refId") UUID refId);
 
     /**
-     * 单用户通知插入（29 文件 notify.fn_insert_notification，SECURITY DEFINER 绕过 RLS）：
+     * 单用户通知插入（notify.fn_insert_notification，SECURITY DEFINER 绕过 RLS）：
      * PGMQ 消费（q_notify_task 任务完成/超时催办）落库入口。
      */
     @Select("""
@@ -98,7 +98,7 @@ public interface NotificationMapper extends BaseMapper<Notification> {
                               @Param("content") String content, @Param("type") String type,
                               @Param("refType") String refType, @Param("refId") UUID refId);
 
-    // —— PGMQ 队列读取/确认（pgmq 核心函数已 SECURITY DEFINER 且 EXECUTE 授 fms_app，见 07 文件）——
+    // PGMQ 队列读取/确认（pgmq 核心函数已 SECURITY DEFINER 且 EXECUTE 授 fms_app）
     // 复合类型 message_record 在 SQL 内展开为列（(r).msg_id 等），规避 MyBatis 复合类型映射；
     // vt 可见性超时秒：读取后 vt 内消息对他人不可见，未确认自动回投（天然重试语义）
 

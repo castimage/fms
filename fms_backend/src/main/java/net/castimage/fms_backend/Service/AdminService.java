@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /** 管理侧业务接口（admin）：系统参数读写（um.params 业务参数，敏感键白名单禁写）、
- *  应用日志查询（log.app_logs）、登录日志查询（um.login_log）、任务监控（log.task_runs）；
- *  日志三表仅追加只读（FORCE RLS） */
+ * 应用日志查询（log.app_logs）、登录日志查询（um.login_log）、任务监控（log.task_runs）；
+ * 日志三表仅追加只读（FORCE RLS） */
 public interface AdminService {
 
     /**
@@ -44,9 +44,8 @@ public interface AdminService {
                                        LocalDateTime from, LocalDateTime to);
 
     /**
-     * 登录日志分页（loginName 模糊 + 时间范围 + success 成功失败 + locked 锁定触发可选；
-     * 设计 615 登录审计）：admin 经 RLS 权限点 audit:read:all 放行全量（PG 层映射
-     * fms_operator 时 is_self 仅本人可见问题由 init/um_login_log_query.sql 策略调整解决）。
+     * 登录日志分页（loginName 模糊 + 时间范围 + success 成功失败 + locked 锁定触发可选）：
+     * admin 经 RLS 权限点 audit:read:all 放行全量（PG 层映射 fms_operator 时 is_self 仅本人可见）。
      */
     PageResult<LoginLogView> pageLoginLogs(long page, long size, String loginName,
                                            LocalDateTime from, LocalDateTime to,

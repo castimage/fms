@@ -24,7 +24,7 @@ const size = ref(20)
 const periodTs = computed(() => (appStore.period ? dayjs(appStore.period + '-01').valueOf() : null))
 function onPeriodChange(ts: number | null) {
   appStore.setPeriod(ts ? dayjs(ts).format('YYYY-MM') : dayjs().format('YYYY-MM'))
-  void load() // 期间变更直接重查，watch 联动实测不可靠，双保险
+  void load() // 期间变更直接重查，watch 联动不可靠，双保险
 }
 
 async function load() {

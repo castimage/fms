@@ -126,7 +126,7 @@ export async function request<T>(config: AxiosRequestConfig, options?: RequestOp
     resp = await http.request<ApiResponse<T>>({ ...config, headers })
   } catch (e) {
     // 后端已返回 ApiResponse 壳，http 非 2xx，40400 映射 404、40300 映射 403、40900 映射 409 等
-    // 均与 2xx 同走业务码分发，40400「接口不存在」等中文消息不再丢失
+    // 均与 2xx 同走业务码分发，40400「接口不存在」等中文消息不被丢弃
     const errBody = parseErrorBody<T>(e)
     if (errBody) return await dispatchBody<T>(errBody, config, options)
     // 无响应体，网络/超时/网关无壳响应，仍按网络异常兜底

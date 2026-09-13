@@ -191,7 +191,7 @@ function fieldOptions(f: ParamFieldView): { label: string; value: string }[] {
   }
 }
 
-/** 子字段 json 值转编辑文本，对象转 json 文本，null 显示空，历史字符串形态原样兼容 */
+/** 子字段 json 值转编辑文本，对象转 json 文本，null 显示空，字符串形态原样兼容 */
 function fieldJsonText(r: Row, field: string): string {
   const v = r.obj?.[field]
   if (v === null || v === undefined) return ''
@@ -201,7 +201,7 @@ function fieldJsonText(r: Row, field: string): string {
 
 /** 子字段 json 编辑文本转存储值，空串/非法/非对象则 null=继承，合法对象 json 则解析后的对象
  * 与 types/background.ts 契约一致，desktop/tablet/mobile 为 BreakpointOverride 对象或 null，
- * 若以字符串持久化，消费端 resolveFor 取字段得 undefined 导致覆盖静默不生效，验证代理实测发现 */
+ * 若以字符串持久化，消费端 resolveFor 取字段得 undefined 导致覆盖静默不生效 */
 function fieldJsonParse(text: string): object | null {
   const t = text.trim()
   if (!t) return null

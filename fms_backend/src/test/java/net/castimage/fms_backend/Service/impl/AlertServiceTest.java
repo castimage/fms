@@ -111,7 +111,7 @@ class AlertServiceTest {
         verify(alertMapper, never()).notifyAdmin(anyString(), anyString());
     }
 
-    // ---------------- 主从复制监控，replica-expected > 0 才启用 ----------------
+    // 主从复制监控，replica-expected > 0 才启用
 
     @Test
     void replicaLagDisabledByDefault() {

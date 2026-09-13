@@ -102,8 +102,8 @@ class WeakPasswordIntegrationTest {
     }
 
     /**
-     * 构造 auth.verify_login 闸口返回的 jsonb（登录走 03c 闸口流，Java 侧不再直查 um.users，
-     * 匿名 SELECT 被 rls is_self 恒拒，联调实测，mock 返回闸口 jsonb 等价真实行为）
+     * 构造 auth.verify_login 闸口返回的 jsonb（登录走闸口流，Java 侧不直查 um.users，
+     * 匿名 SELECT 被 rls is_self 恒拒，mock 返回闸口 jsonb 等价真实行为）
      */
     private static String verifyLoginJson(boolean ok, String status, UUID userId, int failedCount) {
         return "{\"ok\":" + ok + ",\"status\":\"" + status + "\",\"user_id\":\"" + userId
@@ -111,7 +111,7 @@ class WeakPasswordIntegrationTest {
                 + "\"must_change_pwd\":false,\"failed_login_count\":" + failedCount + "}";
     }
 
-    // ---------------- 接入点，注册/重置/找回 弱密码拒绝 ----------------
+    // 接入点，注册/重置/找回 弱密码拒绝
 
     @Test
     void weakPasswordRegistrationRejectedWith40001() {
@@ -182,7 +182,7 @@ class WeakPasswordIntegrationTest {
         verify(authFunctionMapper, times(1)).setPassword(any(), anyString());
     }
 
-    // ---------------- 登录成功弱密码标记，mark-on-login 开关 ----------------
+    // 登录成功弱密码标记，mark-on-login 开关
 
     private LoginResponse doLogin(AuthServiceImpl authService, String password) {
         when(authFunctionMapper.verifyLogin(anyString(), anyString()))
@@ -237,7 +237,7 @@ class WeakPasswordIntegrationTest {
         assertFalse(resp.requirePasswordChange(), "2FA 首步未验密，恒 false");
     }
 
-    // ---------------- 开关与参数配置化 ----------------
+    // 开关与参数配置化
 
     @Test
     void disabledSwitchLetsWeakPasswordThrough() {
@@ -255,8 +255,8 @@ class WeakPasswordIntegrationTest {
     @Test
     void loginLockThresholdConfigurable() {
         // fms.login.max-failures=3 + 已有 2 次失败则第 3 次失败即锁定，配置生效，默认 6，
-        // 计数与锁定走 auth.record_login_failure 闸口（2026-08-13 并发安全修复，行级原子自增
-        // 取代 Java 侧读-改-写，达阈值同事务置 LOCKED，返回 {failed_login_count, locked}）
+        // 计数与锁定走 auth.record_login_failure 闸口（行级原子自增，
+        // 达阈值同事务置 LOCKED，返回 {failed_login_count, locked}）
         FmsProperties props = new FmsProperties();
         props.getLogin().setMaxFailures(3);
         when(authFunctionMapper.verifyLogin(anyString(), anyString()))

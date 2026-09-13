@@ -479,18 +479,24 @@ public class ArServiceImpl implements ArService {
     /**
      * 核销入口（收款单对发票），事务内顺序执行，防重双闸 + 防并发超分 + 请求级幂等，
      *
-     *   ① FOR UPDATE 锁收款单（selectByIdForUpdate，写事务内），并发核销
-     *       同一收款单串行化，status 须 RECEIVED，锁内校验，防超分，
-     *   ② 发票须 ISSUED/PARTIAL，同对已有有效核销行且请求金额与累计金额相同
-     *       则 40900 防重复核销，同一请求重复提交不产生第二次生效，
-     *   ③ selectAllocatedSumByInvoice 取发票已核销累计，本次 ≤ total - 已核销
-     *       （超分则 40900），
-     *   ④ selectAllocatedSumByReceipt 取收款单已核销累计，本次 ≤ 收款金额
-     *       （合并路径防循环累加超分则 40900），
-     *   ⑤ 同对有行则乐观锁合并金额（updateWithVersion，uk_ar_alloc 唯一约束保持
-     *       "同对仅一行"，不同金额视为部分核销推进），无行则 INSERT（version 0），
-     *   ⑥ 累计 = total 则发票置 PAID 且收款单置 ALLOCATED，否则发票 PARTIAL，发票状态迁移由 trg_ar_invoice_immutable 终审，仅 ISSUED/PARTIAL 起迁
-     *       允许，若 db 侧拒绝按 40900 上抛，事务整体回滚保持核销一致性。
+     * FOR UPDATE 锁收款单（selectByIdForUpdate，写事务内），并发核销
+
+     * 同一收款单串行化，status 须 RECEIVED，锁内校验，防超分，
+     * 发票须 ISSUED/PARTIAL，同对已有有效核销行且请求金额与累计金额相同
+
+     * 则 40900 防重复核销，同一请求重复提交不产生第二次生效，
+     * selectAllocatedSumByInvoice 取发票已核销累计，本次 ≤ total - 已核销
+
+     * （超分则 40900），
+     * selectAllocatedSumByReceipt 取收款单已核销累计，本次 ≤ 收款金额
+
+     * （合并路径防循环累加超分则 40900），
+     * 同对有行则乐观锁合并金额（updateWithVersion，uk_ar_alloc 唯一约束保持
+
+     * "同对仅一行"，不同金额视为部分核销推进），无行则 INSERT（version 0），
+     * 累计 = total 则发票置 PAID 且收款单置 ALLOCATED，否则发票 PARTIAL，发票状态迁移由 trg_ar_invoice_immutable 终审，仅 ISSUED/PARTIAL 起迁
+
+     * 允许，若 db 侧拒绝按 40900 上抛，事务整体回滚保持核销一致性。
      *
      * 收款单到凭证联动（voucher_id）为尽力生成，收款登记时已联动则此处跳过，幂等，
      * 存量未联动收款单在核销时补联动。

@@ -123,9 +123,9 @@ public class AdminController {
     }
 
     /**
-     * 登录日志分页（设计 615 登录审计：loginName 模糊 + 时间范围 + success 成功失败 +
+     * 登录日志分页（loginName 模糊 + 时间范围 + success 成功失败 +
      * locked 锁定触发可选；um.login_log 按月分区只读）：admin 经 RLS 权限点 audit:read:all
-     * 放行全量（init/um_login_log_query.sql 策略调整：PG 层 fms_operator 下 is_self 仅本人可见）。
+     * 放行全量（PG 层 fms_operator 下 is_self 仅本人可见）。
      */
     @GetMapping("/login-logs")
     public ApiResponse<PageResult<LoginLogView>> pageLoginLogs(
@@ -177,7 +177,7 @@ public class AdminController {
     }
 
     /**
-     * API 密钥列表（admin.api_key 模块，X6-2 系统间集成）：仅本人密钥（RLS is_self +
+     * API 密钥列表（admin.api_key 模块）：仅本人密钥（RLS is_self +
      * user_id 双保险），key_hash 盲索引恒不返回，key_prefix 仅展示。
      */
     @GetMapping("/api-keys")

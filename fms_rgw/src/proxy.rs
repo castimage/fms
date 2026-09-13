@@ -6,7 +6,7 @@
 //! 全局熔断粒度降为整体兜底(任一实例成功即record，true，最后一次错误才record，false，
 //! 实例级健康由pool探测/剔除管理)
 //!
-//! 调用关系，`proxy_handler` ← 安全链分发(非ws的`/api`/**)，`lb::UpstreamPool`用send
+//! 调用关系，安全链分发调用`proxy_handler`(非ws的`/api`/**)，`lb::UpstreamPool`用send
 #![forbid(unsafe_code)]
 
 use crate::circuit::CircuitError;
@@ -132,10 +132,10 @@ impl UpstreamClient {
     /// 转发，http用，请求体已是`BufferedBody`，bytes(`mw_sign`保证，ws场景退化为空体)，
     /// 重建上游请求(原path含`/api`前缀、query保留，带上已注入头 + `X-Forwarded-For`/`Proto`)，
     /// 响应头到达即返回，响应体由调用方流式透传。头处理与uri组装经
-    /// [0]统一，多上游重试路径共用同一重建逻辑，防漂移。
+    /// `build_upstream_request_from` 统一，多上游重试路径共用同一重建逻辑，防漂移。
     ///
     /// `req`，经安全链处理后的客户端请求(extensions含`BufferedBody`，头已含
-    ///            auth注入的身份头与sign注入的`X-FMS-Signature`，原样带往上游)
+    /// auth注入的身份头与sign注入的`X-FMS-Signature`，原样带往上游)
     ///
     /// @return上游响应，响应头已透传，body为流式，失败分类见`ProxyError`
     pub async fn forward(&self, req: Request<Body>) -> Result<Response<Body>, ProxyError> {
@@ -289,7 +289,7 @@ pub fn strip_hop_by_hop(headers: &mut HeaderMap) {
 }
 
 /// 剥离hop-by-hop头但保留指定字段名(ws升级场景须保留`Connection`/`Upgrade`)，
-/// 与[0]共享同一清单，防清单漂移
+/// 与 `strip_hop_by_hop` 共享同一清单，防清单漂移
 pub(crate) fn strip_hop_by_hop_keep(headers: &mut HeaderMap, keep: &[&str]) {
     const HOP_BY_HOP: &[&str] = &[
         "connection",
@@ -359,10 +359,14 @@ const X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host")
 const X_REAL_IP: HeaderName = HeaderName::from_static("x-real-ip");
 
 /// 处理函数(`/api`/{*rest}，body来自extensions.`BufferedBody`)，
-/// 1. `circuit.is_ready` 不通过则 503 + `Retry-After`
-/// 2. `upstream.forward` 成功则 record 置 true，失败则 record 置 false 并 503
-/// 3. 响应头透传，剥离hop-by-hop，响应体`Body::from_stream`流式透传，不缓冲
-/// 4. 防御性，上游响应头声明超限则拒绝，非2xx透传原状态码
+///`circuit.is_ready` 不通过则 503 + `Retry-After`
+
+///`upstream.forward` 成功则 record 置 true，失败则 record 置 false 并 503
+
+///响应头透传，剥离hop-by-hop，响应体`Body::from_stream`流式透传，不缓冲
+
+///防御性，上游响应头声明超限则拒绝，非2xx透传原状态码
+
 pub async fn proxy_handler(
     State(state): State<Arc<AppState>>,
     req: Request<Body>,

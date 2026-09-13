@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * JwtRole 角色短名 ↔ pg 职责角色映射单元测试。
+ * JwtRole 角色短名与 pg 职责角色映射单元测试。
  */
 class JwtRoleTest {
 
@@ -31,7 +31,7 @@ class JwtRoleTest {
 
     @Test
     void pgRoleMappingMatchesSpec() {
-        //，operator 映射 fms_operator、viewer 映射 fms_viewer、auditor 映射 fms_auditor、
+        // operator 映射 fms_operator、viewer 映射 fms_viewer、auditor 映射 fms_auditor、
         // report 映射 fms_report、admin 映射 fms_operator（fms_admin 为 SUPERUSER 仅限初始化期）
         assertEquals("fms_operator", JwtRole.OPERATOR.pgRole());
         assertEquals("fms_viewer", JwtRole.VIEWER.pgRole());

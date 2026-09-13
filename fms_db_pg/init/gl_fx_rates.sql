@@ -1,18 +1,24 @@
 -- FMS 财务系统（gl 域补充实现，执行库，fms），
--- ① gl.fx_rates 期末汇率表（rls 公司范围 + 职责角色授权 + updated_at 触发器 + 审计触发器挂载）
--- ② gl.fn_fx_adjustment 期末调汇，外币科目期末余额 × 期末汇率 − 按 1:1 计价的账面本币
+--gl.fx_rates 期末汇率表（rls 公司范围 + 职责角色授权 + updated_at 触发器 + 审计触发器挂载）
+
+--gl.fn_fx_adjustment 期末调汇，外币科目期末余额 × 期末汇率 − 按 1:1 计价的账面本币
+
 --    （记账汇率不可得，voucher_lines 仅存 currency 无 rate，折本币差额按「原币余额 ×（期末汇率−1）」简化，设计决策见下文），生成 DRAFT 调汇凭证草稿
--- ③ gl.fn_cron_voucher_number_check，断号发现写 audit.record（voucher_gap），缺口可追溯
--- ④ fa.fn_run_depreciation，凭证生成补 created_by/company_id（NOT NULL 约束）、资产累加累计折旧、
+--gl.fn_cron_voucher_number_check，断号发现写 audit.record（voucher_gap），缺口可追溯
+
+--fa.fn_run_depreciation，凭证生成补 created_by/company_id（NOT NULL 约束）、资产累加累计折旧、
+
 --    批次回填 voucher_id，与 Java 侧 FaServiceImpl 同口径
--- ⑤ um.params 种子，fx.gain.account / fx.loss.account（存科目 code，沿用 fa.depr.*.account 约定，um.params 全局无 company_id，存 code 而非 id 才能跨公司生效），
+--um.params 种子，fx.gain.account / fx.loss.account（存科目 code，沿用 fa.depr.*.account 约定，um.params 全局无 company_id，存 code 而非 id 才能跨公司生效），
+
 --    um.permissions 种子，gl.period.close / gl.period.reopen / gl.period.fx_adjustment（函数体内已引用，operator 会话调用须经 require_permission）
 
 -- 全部幂等可重跑（CREATE OR REPLACE / DROP ... IF EXISTS / ON CONFLICT DO NOTHING）
 
 SET ROLE fms_admin;
 
--- ① gl.fx_rates 期末汇率表
+--gl.fx_rates 期末汇率表
+
 
 -- 列语义，company_id 公司范围（rls can_access_org 收敛），currency CHAR，3 ISO 币种，
 --   period 'YYYY-MM'，rate NUMERIC(18,6) 期末汇率（本币单位=1，如 USD 对 CNY 7.25），
@@ -35,7 +41,7 @@ CREATE TABLE IF NOT EXISTS gl.fx_rates (
     created_at  timestamptz    NOT NULL DEFAULT now(),
     deleted_at  timestamptz
 );
--- 幂等迁移，旧全量唯一约束（uk_fx_rate）删除 + 部分唯一索引创建（软删行不占键，upsert 复活路径）
+-- 幂等迁移，删除全量唯一约束（uk_fx_rate）+ 创建部分唯一索引（软删行不占键，upsert 复活路径）
 ALTER TABLE gl.fx_rates DROP CONSTRAINT IF EXISTS uk_fx_rate;
 -- DROP INDEX 带 schema 限定，本文件 SET ROLE 后 search_path 为 "$user", public，不含 gl，
 -- 未限定的 DROP INDEX IF EXISTS 按 search_path 解析找不到 gl schema 中的索引而静默跳过，
@@ -83,7 +89,8 @@ CREATE TRIGGER trg_fx_rates_audit
     AFTER INSERT OR UPDATE OR DELETE ON gl.fx_rates
     FOR EACH ROW EXECUTE FUNCTION audit.fn_audit_log();
 
--- ⑤ um.params / um.permissions 种子
+--um.params / um.permissions 种子
+
 -- 调汇损益科目映射参数（存科目 code，um.params 全局唯一无 company_id 列，存 code 运行时按公司解析，
 -- 与 fa.depr.expense.account 同约定，缺省 6603 财务费用，种子科目无独立汇兑损益码，admin 可改）
 INSERT INTO um.params (code, value, updated_by)
@@ -116,7 +123,8 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
  WHERE r.code IN ('fms_admin_role','accountant')
 ON CONFLICT (role_id, perm_id) DO NOTHING;
 
--- ② gl.fn_fx_adjustment 期末调汇实现
+--gl.fn_fx_adjustment 期末调汇实现
+
 
 -- 调汇算法与账务简化设计决策，
 --   * 记账汇率不可得（voucher_lines 仅 currency 无 rate 列），账面本币无法精确还原，
@@ -379,7 +387,8 @@ COMMENT ON FUNCTION gl.fn_fx_adjustment(uuid, text, text)
 REVOKE ALL ON FUNCTION gl.fn_fx_adjustment(uuid, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_fx_adjustment(uuid, text, text) TO fms_operator;
 
--- ③ gl.fn_cron_voucher_number_check 断号审计告警
+--gl.fn_cron_voucher_number_check 断号审计告警
+
 -- 断号发现写 audit.record（action='voucher_gap'，new_values = {gap_count,
 -- gaps:[{company_id, period, gap_from, gap_to, gap_count}]}），前端 gapAlert 经审计/断号
 -- 在线查询（GET /api/gl/voucher-gaps）展示。
@@ -429,7 +438,8 @@ COMMENT ON FUNCTION gl.fn_cron_voucher_number_check()
 REVOKE ALL ON FUNCTION gl.fn_cron_voucher_number_check() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_cron_voucher_number_check() TO fms_operator;
 
--- ④ 折旧过账双路径统一（fa.fn_run_depreciation 重建）
+--折旧过账双路径统一（fa.fn_run_depreciation 重建）
+
 -- pg 与 Java（FaServiceImpl）双路径同口径，
 --   * created_by 落 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 无 guc 用户，
 --     分录补 company_id，两列 NOT NULL 无缺省，缺失则凭证生成恒被拦截，
@@ -602,7 +612,8 @@ COMMENT ON FUNCTION fa.fn_run_depreciation(uuid,text)
 REVOKE ALL ON FUNCTION fa.fn_run_depreciation(uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION fa.fn_run_depreciation(uuid, text) TO fms_operator;
 
--- ④b gl 侧配套小函数（Java FaServiceImpl 凭证生成共用，避免 Java 直读 um.params，无表级授权
+--b gl 侧配套小函数（Java FaServiceImpl 凭证生成共用，避免 Java 直读 um.params，无表级授权
+
 -- 与科目解析重复实现，科目映射参数单一来源仍在 pg），
 --   * gl.fn_depr_accounts(p_company_id)，按 um.params fa.depr.*.account 解析该公司折旧凭证
 --     两科目 id（jsonb {depreciation, accumulated}，科目缺失为 null）

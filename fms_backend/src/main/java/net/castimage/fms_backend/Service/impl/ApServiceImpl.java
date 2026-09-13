@@ -504,14 +504,18 @@ public class ApServiceImpl implements ApService {
     /**
      * 付款核销入口，一次核销多张发票，事务内顺序执行，防重双闸 + 防并发超分，
      *
-     *   ① FOR UPDATE 锁付款单（selectByIdForUpdate，写事务内），并发核销
-     *       同一付款单串行化，status 须 PAID，锁内校验，
-     *   ② 逐张发票预检，status 须 ISSUED/PARTIAL + 累计已核销 + 本次 ≤ total
-     *       （超分则 40900），同时累加本次核销合计，不得超付款单金额，
-     *   ③ 批量 INSERT payment_allocations，uk_ap_alloc(payment_id, invoice_id)
-     *       唯一约束防同对重复核销（23505 映射 40900），version 乐观锁写入 0，
-     *   ④ 发票累计 = total 则置 PAID，否则 PARTIAL，不可变触发器终审，
-     *       核销合计 = 付款金额则付款单置 ALLOCATED。
+     * FOR UPDATE 锁付款单（selectByIdForUpdate，写事务内），并发核销
+
+     * 同一付款单串行化，status 须 PAID，锁内校验，
+     * 逐张发票预检，status 须 ISSUED/PARTIAL + 累计已核销 + 本次 ≤ total
+
+     * （超分则 40900），同时累加本次核销合计，不得超付款单金额，
+     * 批量 INSERT payment_allocations，uk_ap_alloc(payment_id, invoice_id)
+
+     * 唯一约束防同对重复核销（23505 映射 40900），version 乐观锁写入 0，
+     * 发票累计 = total 则置 PAID，否则 PARTIAL，不可变触发器终审，
+
+     * 核销合计 = 付款金额则付款单置 ALLOCATED。
      *
      * 付款单到凭证联动（voucher_id）为尽力生成，付款登记时已联动则此处跳过，幂等，
      * 存量未联动付款单在核销时补联动。

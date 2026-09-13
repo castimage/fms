@@ -116,9 +116,9 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
 
         Connection conn = executor.getTransaction().getConnection();
         // 业务请求先重置会话角色，匿名注入（fms_public/fms_operator）残留会破坏 set_session
-        // （fms_public 无 auth USAGE 则 42501，实测教训），脏连接，中止事务残留 ROLLBACK 后重试。
+        // （fms_public 无 auth USAGE 则 42501），脏连接，中止事务残留 ROLLBACK 后重试。
 
-        // 匿名分支不 RESET，登录等认证路径依赖 AuthServiceImpl 手动 SET ROLE fms_operator，注释见其 53 行
+        // 匿名分支不 RESET，登录等认证路径依赖 AuthServiceImpl 手动 SET ROLE fms_operator
         try (Statement st0 = conn.createStatement()) {
             st0.execute("RESET ROLE");
         } catch (SQLException e) {

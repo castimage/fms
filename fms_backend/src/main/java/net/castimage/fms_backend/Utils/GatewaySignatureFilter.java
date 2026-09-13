@@ -46,20 +46,20 @@ import java.security.InvalidKeyException;
  *
  * 与 fms_rgw sign.rs 同构，X-FMS-Signature 协议，
  *
- *   body_hash = hex(sha256(body))                          // 空 body = e3b0c442...
- *   input     = method|path|body_hash|t|nonce|uid|role     // '|' = 0x7C，无转义
- *   sig       = hex(hmac-sha256(sign_secret, input))       // 64 位小写 hex
+ * body_hash = hex(sha256(body))                          // 空 body = e3b0c442...
+ * input     = method|path|body_hash|t|nonce|uid|role     // '|' = 0x7C，无转义
+ * sig       = hex(hmac-sha256(sign_secret, input))       // 64 位小写 hex
  *
  * 处理流程，
  *
- *   请求体缓存，CachedBodyHttpServletRequest 贯穿到 Controller，防二次读流，
- *   读取 X-FMS-Signature，缺失则 40100，解析 t=&nonce=&sig= 三字段，非法则 40001，
- *   时间窗，|now - t| > replay-window-secs，300 则 40100，防重放，
- *   重算 hmac（身份头 uid/role 纳入输入），恒定时间比较（MessageDigest.isEqual）失败则 40100，
- *   nonce 去重，NonceStore，时间窗与签名之后、采信身份之前命中则 40100（第二道闸），
- *   采信身份，X-FMS-UserId 必须 canonical uuid，X-FMS-Role 必须命中五白名单，否则 40100，api-key 模式携非空 X-api-key 豁免，身份由 ApiKeyFilter order=3 采信，
- *   剥离伪造 X-FMS-* 头，仅保留已采信的 X-FMS-UserId/X-FMS-Role，纵深防御，
- *   填充 RequestContext，finally 清理，防 ThreadLocal 泄漏。
+ * 请求体缓存，CachedBodyHttpServletRequest 贯穿到 Controller，防二次读流，
+ * 读取 X-FMS-Signature，缺失则 40100，解析 t=&nonce=&sig= 三字段，非法则 40001，
+ * 时间窗，|now - t| > replay-window-secs，300 则 40100，防重放，
+ * 重算 hmac（身份头 uid/role 纳入输入），恒定时间比较（MessageDigest.isEqual）失败则 40100，
+ * nonce 去重，NonceStore，时间窗与签名之后、采信身份之前命中则 40100（第二道闸），
+ * 采信身份，X-FMS-UserId 必须 canonical uuid，X-FMS-Role 必须命中五白名单，否则 40100，api-key 模式携非空 X-api-key 豁免，身份由 ApiKeyFilter order=3 采信，
+ * 剥离伪造 X-FMS-* 头，仅保留已采信的 X-FMS-UserId/X-FMS-Role，纵深防御，
+ * 填充 RequestContext，finally 清理，防 ThreadLocal 泄漏。
  *
  * X-api-key 模式，系统间集成，网关不注入身份头、签名身份段为空串，hmac 校验以上述空串参与输入，步骤 6 已通过，本过滤器对携带非空 X-api-key 的
  * 请求不按「X-FMS-UserId 缺失」拒绝，跳过身份采信放行，由 ApiKeyFilter（order=3，
@@ -83,7 +83,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
     /**
      * 匿名端点，与 fms_rgw auth.rs is_anonymous_path 同列表，登录发生在身份建立之前，
      * 网关对这些路径不注入身份头、签名输入 uid/role 为空串，此处同样放行空身份，
-     * 否则经网关登录恒 40100，联调实测死锁，登录页公开端点，背景配置/背景图同属
+     * 否则经网关登录恒 40100；登录页公开端点，背景配置/背景图同属
      * 匿名白名单，无身份可采信，签名以空身份参与输入。
      */
     private static final List<String> ANONYMOUS_PATHS = List.of(
@@ -110,9 +110,9 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
     /**
      * 便捷构造，内部自建 InMemoryNonceStore（非 Bean，无 @Scheduled 兜底清理，仅供测试/独立
      * 装配场景，生产经 WebConfig 注入 Bean，按 fms.session-store 选择内存或 Redis 实现），
-     * 容量按 effectiveCapacity 推导，显式 nonce-capacity（>0）优先，兼容既有配置，
+     * 容量按 effectiveCapacity 推导，显式 nonce-capacity（>0）优先，
      * 否则按 noncePeakQps × replayWindowSecs 动态计算（默认 1000×300=300000，
-     * 压测教训，6 万 qps 可击穿 10000 固定容量）。
+     * 6 万 qps 可击穿 10000 固定容量）。
      *
      * @param signSecret      sign_secret（与 fms_rgw sign.sign_secret 共享，≥32 字符，启动期 fail-fast）
      * @param replayWindowSecs 防重放窗口秒数，默认 300
@@ -129,7 +129,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 注入外部 NonceStore（Spring Bean，含 @Scheduled 兜底清理，审查 -M）。
+     * 注入外部 NonceStore（Spring Bean，含 @Scheduled 兜底清理）。
      *
      * @param signSecret       sign_secret（≥32 字符，启动期 fail-fast）
      * @param replayWindowSecs 防重放窗口秒数
@@ -253,7 +253,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         // 匿名白名单路径若带身份头（网关对 /api/auth/totp/* 携带有效 Bearer 时
         //    "尽力注入"身份），同样采信身份与角色，否则 RequestContext 有 userId 无
         //    role，SandboxSessionInterceptor 拒绝注入，连接退化为 fms_app 空壳，
-        //    permission denied（2fa setup/enable/disable 联调实测 40300）。
+        //    permission denied（2fa setup/enable/disable 报 40300）。
         String path = request.getRequestURI();
         UUID userId = parseCanonicalUuid(uid);
         JwtRole jwtRole = null;
@@ -275,7 +275,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         HttpServletRequest trusted = cached;
 
         // 填充身份上下文（orgIds/deptIds 传 null，由 pg 侧 auth.set_session 从 scope 表预载，
-        //     traceId 统一取 Utils.TraceIdUtil（审查  收敛）），匿名端点无身份可采信，不设上下文
+        //     traceId 统一取 Utils.TraceIdUtil），匿名端点无身份可采信，不设上下文
         try {
             if (userId != null) {
                 RequestContext.set(new RequestContext(userId, jwtRole, null, null, TraceIdUtil.current()));
@@ -287,7 +287,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
     }
 
-    // ---------------- 签名计算 ----------------
+    // 签名计算
 
     /** 按 fms_rgw 精确算法重算签名（method|path|body_hash|t|nonce|uid|role） */
     private String computeSignature(String method, String path, String bodyHash,
@@ -363,11 +363,11 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
     }
 
-    // ---------------- 统一错误响应 ----------------
+    // 统一错误响应
 
     /** 写统一错误响应（四字段，{code,message,data:null,traceId}），错误路径 data 恒为 null */
     private void writeError(HttpServletResponse response, int status, int code, String message) throws IOException {
-        // traceId 统一取 Utils.TraceIdUtil（审查  收敛，MDC 优先 + v4 兜底）
+        // traceId 统一取 Utils.TraceIdUtil（MDC 优先 + v4 兜底）
         String traceId = TraceIdUtil.current();
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
@@ -383,7 +383,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
     private record ParsedSignature(long t, String nonce, String sig) {
     }
 
-    // ---------------- 请求体缓存 + 头剥离包装 ----------------
+    // 请求体缓存 + 头剥离包装
 
     /**
      * 请求包装器，读流缓存到 byte[]（贯穿 Controller，防二次读流），
@@ -423,7 +423,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
 
         /**
          * multipart parts 自解析，本过滤器已消费原始请求流，Tomcat parseParts 再读
-         * 已耗尽的 coyote 流必然得到空 parts（联调实测 MissingServletRequestPartException
+         * 已耗尽的 coyote 流必然得到空 parts（MissingServletRequestPartException
          * "Required part file is not present"），故必须从缓存 body 重新解析。
          *
          * 非 multipart 请求不触发，Spring StandardServletMultipartResolver 先查 Content-Type。
@@ -507,7 +507,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
 
         /** 取 multipart 文本 part（无 filename）的 utf-8 值，值已由 parseMultipart 剥离分隔行尾，
-         *  此处仅二次兜底防御 */
+         * 此处仅二次兜底防御 */
         private String multipartTextParameter(String name) {
             try {
                 for (Part p : getParts()) {
@@ -572,7 +572,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
                 }
                 // part 内容，空行之后至下一分隔行，行终止符属分隔行，天然排除的原始字节切片，
                 // 剥离末尾一个 CRLF/LF（RFC 2046，该行尾属边界分隔符而非值，不剥离会让文件
-                // part 内容被污染，下载时多出 \r\n 实测、文本 part 值带行尾（已由
+                // part 内容被污染，下载时多出 \r\n，文本 part 值带行尾（已由
                 // multipartTextParameter 二次剥离，此处统一后幂等）
                 int cStart = skipLineEnd(body, headerEnd);
                 int cEnd = indexOfBoundaryAtLineStart(body, delim, cStart);
@@ -626,10 +626,9 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
 
         /** 自 from 起查找空行起始，该行为空，行首即 \r\n/\n 或为 body 末尾，未命中返回 -1。
-         *  语义修正，此前把"任意行尾 \r\n"误判为空行，单行头 part，文本字段侥幸正常，
-         *  双行头 part（文件，Content-Disposition + Content-Type）会把第二行头并入内容
-         *  写盘（实测下载多出 "Content-Type: ...\r\n\r\n" 前缀）。行首判定，body[0] 或
-         *  前一字节为 \n 处且当前字节为 \r/\n 才是空行 */
+         * 仅"行首 + 当前字节为 \r/\n"判为空行：把任意行尾 \r\n 判为空行时，双行头 part
+         * （文件，Content-Disposition + Content-Type）会把第二行头并入内容写盘（下载多出
+         * "Content-Type: ...\r\n\r\n" 前缀）。行首取 body[0] 或前一字节为 \n 处 */
         private static int indexOfEmptyLine(byte[] body, int from) {
             int i = Math.max(from, 0);
             while (i < body.length) {
@@ -656,7 +655,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
 
         /** 剥离末尾一个 CRLF/LF（RFC 2046 边界分隔行尾，二进制文件真实以 \r\n 结尾时
-         *  分隔符 CRLF 恰在其后，剥离一个即还原真实内容，不误伤） */
+         * 分隔符 CRLF 恰在其后，剥离一个即还原真实内容，不误伤） */
         private static byte[] stripTrailingCrlf(byte[] content) {
             int end = content.length;
             if (end > 1 && content[end - 2] == '\r' && content[end - 1] == '\n') {
@@ -792,7 +791,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
 
         @Override
         public Enumeration<String> getHeaders(String name) {
-            // Servlet 契约要求空 Enumeration 而非 null（个别下游组件遍历头时 NPE，审查 -M）
+            // Servlet 契约要求空 Enumeration 而非 null（个别下游组件遍历头时 NPE）
             return isStripped(name) ? Collections.emptyEnumeration() : super.getHeaders(name);
         }
 

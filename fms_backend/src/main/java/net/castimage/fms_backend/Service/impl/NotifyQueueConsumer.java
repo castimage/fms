@@ -17,23 +17,23 @@ import java.util.UUID;
 
 /**
  * 通知生成源消费者（PGMQ 到 notify.notifications，@Scheduled 轮询）：q_notify_task
- * （wf 任务完成/超时催办，05 文件投递）与 q_budget_warning（cron 预算预警，05 文件投递）
- * 此前零消费者、通知表仅种子数据——本组件补齐闭环。
+ * （wf 任务完成/超时催办）与 q_budget_warning（cron 预算预警）投递后由此消费，
+ * 通知表数据由此闭环生成。
  *
- * 消费语义（SPEC.md 消费约定 + 07 文件队列说明）：pgmq.read 按 vt 可见性超时 + SKIP
+ * 消费语义（pgmq 消费约定）：pgmq.read 按 vt 可见性超时 + SKIP
  * LOCKED 并发领取（多实例各读各的，互不抢同一条）；成功即 archive（确认消费，不再回投）；
  * 失败不确认——vt 过期自动回投，read_ct 递增，达到 retry-threshold 后放弃（archive +
  * WARN，防死信堆积）。周期 fms.pgmq.notify-consumer-interval-ms（默认 30s）独立于
  * cache-cleanup；总开关 fms.pgmq.notify-consumer-enabled（默认开，关停时消息留队可重拾）。
  *
- * 消息体结构（05 文件投递侧逐字对齐）：
+ * 消息体结构（与投递侧逐字对齐）：
  *
- *   q_notify_task：{"type":"wf_task"|"wf_timeout","instance_id":uuid,"task_id":uuid,
- *       "assignee_id":uuid,"action":...,"ts":...|"due_at":...}——用户级，按 assignee_id 落库；
- *       成功后 WS 推送该用户最新未读数（与已读动作同款 unread_count 载荷）；
- *   q_budget_warning：{"company_id":uuid,"dept_id":...,"account_id":...,"period":...,
- *       "ratio":...}——公司级（无用户维度），按 fn_broadcast_notification 广播至全部 ACTIVE
- *       用户（幂等：同 ref_type+ref_id+title 已存在整批跳过），成功后 WS 全量推送。
+ * q_notify_task：{"type":"wf_task"|"wf_timeout","instance_id":uuid,"task_id":uuid,
+ * "assignee_id":uuid,"action":...,"ts":...|"due_at":...}——用户级，按 assignee_id 落库；
+ * 成功后 WS 推送该用户最新未读数（与已读动作同款 unread_count 载荷）；
+ * q_budget_warning：{"company_id":uuid,"dept_id":...,"account_id":...,"period":...,
+ * "ratio":...}——公司级（无用户维度），按 fn_broadcast_notification 广播至全部 ACTIVE
+ * 用户（幂等：同 ref_type+ref_id+title 已存在整批跳过），成功后 WS 全量推送。
  */
 @Component
 public class NotifyQueueConsumer {
@@ -43,7 +43,7 @@ public class NotifyQueueConsumer {
     /** pgmq.read 可见性超时（秒）：30s 内未 archive 自动回投重试 */
     private static final int VISIBILITY_TIMEOUT_SECS = 30;
 
-    /** 每队列每轮最大读取条数（与 07 文件 log 消费批 500 同量级内收敛为 50，防止单轮长事务） */
+    /** 每队列每轮最大读取条数（与 log 消费批 500 同量级内收敛为 50，防止单轮长事务） */
     private static final int BATCH_SIZE = 50;
 
     private final NotificationMapper notificationMapper;
@@ -85,9 +85,9 @@ public class NotifyQueueConsumer {
     }
 
     /**
-     * PGMQ 可用性自探测（部署形态差异自动降级，2026-08 修复）：消费前查
+     * PGMQ 可用性自探测（部署形态差异自动降级）：消费前查
      * pg_extension 是否安装 pgmq——无 pgmq 的部署（镜像未编译该扩展）下消费者
-     * 整体停用、消息留队，不再每 30s 抛 'schema pgmq does not exist' 报错刷屏；
+     * 整体停用、消息留队，避免每 30s 抛 'schema pgmq does not exist' 报错刷屏；
      * 探测结果缓存并按 PROBE_INTERVAL_MS 周期重探测，pgmq 补齐（重启或运行时
      * CREATE EXTENSION）后自动恢复消费。显式配置 fms.pgmq.notify-consumer-enabled
      * =false 仍为最高优先级的硬关停。
@@ -208,7 +208,7 @@ public class NotifyQueueConsumer {
     private void handleFailure(String queue, long msgId, int readCt, RuntimeException e) {
         int threshold = fmsProperties.getPgmq().getRetryThreshold();
         if (readCt >= threshold) {
-            // read_ct 超限：放弃并归档，防死信堆积（SPEC.md 消费约定）
+            // read_ct 超限：放弃并归档，防死信堆积
             try {
                 notificationMapper.archiveMessage(queue, msgId);
             } catch (RuntimeException archiveEx) {

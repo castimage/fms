@@ -2,7 +2,7 @@
 /**
  * 主布局，响应式三态，桌面（≥992px）侧边栏 220px 可折叠 64px + 全功能顶栏，
  * 平板（768–991px）侧边栏 64px 折叠 + 精简顶栏，手机（<768px）隐藏侧边栏 + 抽屉菜单。
- * 断点唯一事实源，utils/breakpoint.ts ↔ styles/variables.css --fms-bp-*。
+ * 断点唯一事实源，utils/breakpoint.ts 与 styles/variables.css --fms-bp-*。
  *
  * 背景半透明，启用背景图时，内容区容器，卡片/表格/表单等按 contentOpacity 滑杆
  * 经 css color-mix 半透明化，露出底层背景图。侧边栏/顶栏/弹层同步覆盖。
@@ -136,11 +136,11 @@ function visibleTo(roles?: string[]) {
 }
 
 /** 写操作入口仅 admin/operator 可见，auditor/report/viewer 只读，不显写菜单，
- *  数据安全由后端五层模型兜底，统一常量见 utils/perm.ts */
+ * 数据安全由后端五层模型兜底，统一常量见 utils/perm.ts */
 const WRITE_ROLES = [...PERM_WRITE_ROLES]
 
 /** 业务模块菜单，key 即路由 path，与路由收口一致，审计中心仅 auditor/admin 可见，
- *  写操作子菜单按 WRITE_ROLES 过滤，viewer 只读角色仅保留查询入口 */
+ * 写操作子菜单按 WRITE_ROLES 过滤，viewer 只读角色仅保留查询入口 */
 const moduleMenu = computed<MenuOption[]>(() => {
   const groups: { key: string; label: string; icon: Component; roles?: string[]; children: { key: string; label: string; roles?: string[] }[] }[] = [
     {

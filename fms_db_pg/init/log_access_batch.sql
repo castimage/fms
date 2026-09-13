@@ -17,7 +17,7 @@
 -- grants_base.sql 的 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA log FROM PUBLIC 早于本文件执行，
 --       新建函数默认 PUBLIC EXECUTE，本文件必须显式 REVOKE 兜底。
 
--- 依赖，queues_cron.sql 已建 q_log_access 队列且 pgmq 核心函数已改 SECURITY DEFINER（属主 fms_admin），
+-- 依赖，queues_cron.sql 已建 q_log_access 队列且 pgmq 核心函数为 SECURITY DEFINER（属主 fms_admin），
 --       grants_base.sql 已授 fms_app log schema USAGE。全部 DDL 幂等可重跑。
 SET ROLE fms_admin;
 
@@ -66,9 +66,11 @@ REVOKE ALL ON FUNCTION log.fn_apply_access_log(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log.fn_apply_access_log(jsonb) TO fms_app;
 
 -- 批量投递，双路径，p_items 为 jsonb 数组（元素 = q_log_access 约定消息体）
---   ① pgmq 可用（pgmq.send 函数存在性探测）则逐条 pgmq.send（第三参 delay_sec=0 即时投递），
+--pgmq 可用（pgmq.send 函数存在性探测）则逐条 pgmq.send（第三参 delay_sec=0 即时投递），
+
 --      单条失败 NOTICE 不阻断整批，由 queues_cron.sql 消费链落库，本地库形态，
---   ② pgmq 不可用则逐条经 log.fn_apply_access_log 直落 log.access_logs 兜底，同一审计
+--pgmq 不可用则逐条经 log.fn_apply_access_log 直落 log.access_logs 兜底，同一审计
+
 --      目标，跳过队列中转，两形态最终数据均落审计表。
 CREATE OR REPLACE FUNCTION log.fn_send_access_batch(p_items jsonb)
 RETURNS int

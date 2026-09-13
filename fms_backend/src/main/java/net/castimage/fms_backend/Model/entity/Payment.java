@@ -45,7 +45,7 @@ public class Payment {
     private UUID voucherId;
 
     /** 幂等键（uk_ap_payments_dup）：由 公司/供应商/银行账户/金额/付款日期 规范化派生，
-     *  同一有效付款单防重复登记，DB 部分唯一索引 + Service 预检双闸（23505 映射 40900） */
+     * 同一有效付款单防重复登记，DB 部分唯一索引 + Service 预检双闸（23505 映射 40900） */
     private UUID dupKey;
 
     /** 创建时间 */

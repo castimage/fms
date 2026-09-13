@@ -409,7 +409,7 @@ CREATE POLICY budget_budget_adjustments_update ON budget.budget_adjustments FOR 
 -- 函数（全部 OR REPLACE 可重复执行，SECURITY DEFINER 属主 fms_admin）
 -- 6.1 budget.fn_block_if_exceeded(p_company_id, p_period, p_account_id, p_dept_id, p_amount) 预算超支判定，锁定预算计划行（FOR UPDATE 防并发超支）后比较执行比例
 -- 已执行金额优先读 rpt.budget_actual immv（rpt_log_base.sql 建，WITH (automatic) 提交即一致），若本文件先于 rpt_log_base.sql 执行，immv 不存在，运行期 to_regclass 探测并回退为 gl 表内联聚合（口径一致，POSTED/REVERSED 凭证 × 期间×科目×部门），开关/阈值读 um.params（budget.block.enabled / budget.block.ratio，缺省视为启用、阈值 100%）
--- 类型适配，入参 p_company_id/p_account_id/p_dept_id 转 uuid，dept_id 空值匹配由 COALESCE(...,0) 改为 IS NOT DISTINCT FROM（uuid 无 = 0 比较）
+-- 类型适配，入参 p_company_id/p_account_id/p_dept_id 转 uuid，dept_id 空值匹配用 IS NOT DISTINCT FROM（uuid 无 = 0 比较，COALESCE(...,0) 不可行）
 CREATE OR REPLACE FUNCTION budget.fn_block_if_exceeded(
     p_company_id uuid,
     p_period     text,
@@ -934,7 +934,8 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 
-    -- 1) 任务置终态
+    --任务置终态
+
     UPDATE wf.tasks
        SET status = CASE p_action
                         WHEN 'APPROVE'  THEN 'APPROVED'
@@ -945,13 +946,15 @@ BEGIN
            updated_at = now()
      WHERE id = p_task_id;
 
-    -- 2) 事件留痕
+    --事件留痕
+
     INSERT INTO wf.task_events (company_id, task_id, action, operator_id,
                                 from_node, to_node, remark)
     VALUES (v_task.company_id, p_task_id, p_action, p_assignee_id,
             v_task.node_code, v_task.node_code, COALESCE(p_remark,''));
 
-    -- 3) 实例状态机推进
+    --实例状态机推进
+
     IF p_action = 'REJECT' THEN
         UPDATE wf.instances
            SET status = 'REJECTED', current_node = v_task.node_code,
@@ -984,7 +987,8 @@ BEGIN
         END IF;
     END IF;
 
-    -- 4) pgmq 通知（queues_cron.sql 预创建 q_notify_task，pgmq 不可用时静默降级）
+    --pgmq 通知（queues_cron.sql 预创建 q_notify_task，pgmq 不可用时静默降级）
+
     BEGIN
         PERFORM pgmq.send('q_notify_task',
             jsonb_build_object('type','wf_task','instance_id',v_task.instance_id,
@@ -1310,7 +1314,7 @@ CREATE TRIGGER trg_budget_budget_adjustments_updated
     BEFORE UPDATE ON budget.budget_adjustments
     FOR EACH ROW EXECUTE FUNCTION gl.fn_set_updated_at();
 
--- 7.3 通用审计触发器，条件挂载，见节首说明
+-- 通用审计触发器，条件挂载
 DO $$
 DECLARE
     t text;
@@ -1464,7 +1468,8 @@ END $$;
 -- 重复数据，与 gl.vouchers uk_voucher_idem / cash.transactions uk_trx_idem 同族
 -- 模式）。软删行不占键位，删除后可重建同键位。
 
--- ① 调整单幂等键列 + 部分唯一索引（同 body 重复提交去重）
+--调整单幂等键列 + 部分唯一索引（同 body 重复提交去重）
+
 ALTER TABLE budget.budget_adjustments ADD COLUMN IF NOT EXISTS idem_key varchar(64);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_adjustment_idem ON budget.budget_adjustments
     (company_id, plan_id, idem_key)
@@ -1478,21 +1483,25 @@ SELECT 'FIX_BUDGET_ADJ_IDEM' AS k,
          LIKE '%deleted_at IS NULL%' AS idem_partial;
 
 -- wf 流程实例发起链路（POST /api/wf/instances 后端支撑），
---   1) uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
+--uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
+
 --      （发起幂等 + 并发双保险，冲突 23505 映射 40900），
---   2) wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
+--wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
+
 --      首个 APPROVE 节点任务集（处理人解析与策略展开见 fn_activate_node）。
 --      SECURITY DEFINER 以属主（fms_admin，本文件 SET ROLE）身份执行，规避
 --      um.users / um.user_role 的 rls 空集，fms_operator 对 um.users 仅可见本人。
 -- 幂等，CREATE OR REPLACE FUNCTION + CREATE UNIQUE INDEX IF NOT EXISTS + GRANT
 -- 重复执行无害。
 
--- 1) 同一业务单据仅允许一个未删除审批实例
+--同一业务单据仅允许一个未删除审批实例
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wf_inst_business
     ON wf.instances (business_type, business_id)
     WHERE deleted_at IS NULL;
 
--- 2) 流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
+--流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
+
 -- 读 ACTIVE 定义 node_json，取首个 APPROVE 节点为当前节点，任务集经 fn_activate_node
 -- 依节点策略生成（单审 1 票，会签/或签多票），处理人解析见 fn_activate_node。
 -- 发起入口为 5 参，单节点单角色入参重载不保留（DROP 幂等清理）
@@ -1553,7 +1562,8 @@ $$;
 COMMENT ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     IS '流程发起：创建 RUNNING 实例并激活首个审批节点任务集，节点策略见 fn_activate_node';
 
--- 3) 授权，运行时连接角色经 SET ROLE fms_operator 调用
+--授权，运行时连接角色经 SET ROLE fms_operator 调用
+
 GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     TO fms_operator;
 

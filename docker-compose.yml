@@ -32,7 +32,7 @@
 #     而不是静默接管网关上游，这正是期望的防护行为，
 #   - 严禁用"-f docker-compose.yml -f docker-compose.cluster.yml"合并两文件
 #     up/--force-recreate，合并栈项目名取后文件（fms），会把本文件的独立
-#     fms-backend 单实例并入集群项目（重复消费 pgmq/定时任务的历史事故）。
+#     fms-backend 单实例并入集群项目（重复消费 pgmq/定时任务）。
 #     cluster 文件内已设同名的 profiles 守卫占位服务，合并后该单实例不会
 #     被启动，但正确做法仍是只用单个形态文件，
 #   - 切换形态必须先"docker compose -f <另一形态文件> down"再 up。
@@ -151,7 +151,7 @@ services:
     logging: *default-logging
 
   # fms-pgbouncer， PgBouncer 1.24（transaction 连接池，后端 DB 访问唯一入口）
-  # 职责，fms-backend 不再直连 fms-db:5432，一律经 6432 transaction 池，
+  # 职责，fms-backend 不直连 fms-db:5432，一律经 6432 transaction 池，
   #       每事务归还前 DISCARD ALL 复位会话（SET ROLE/GUC/临时表不跨事务
   #       残留），并把 Hikari 连接数上限从 PG 后端连接数解耦，为集群形态
   #       （backend×2）平滑铺路，entrypoint 以 .env 密码生成 userlist.txt
@@ -211,7 +211,7 @@ services:
       # 连接数上限从 PG 后端连接数解耦，集群形态（backend×2）与单机共用
       # 同一连接语义，pgbouncer 懒连接，无需等主库
       # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句
-      #（PG JDBC 默认 prepareThreshold=5 会触发 PREPARE 协议报错），禁用后
+      # （PG JDBC 默认 prepareThreshold=5 会触发 PREPARE 协议报错），禁用后
       # 客户端侧模拟预编译，功能等价仅少一次服务端缓存（FMS 规模无感）
       SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
       SPRING_DATASOURCE_USERNAME: fms_app

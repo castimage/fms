@@ -45,7 +45,7 @@ COMMENT ON TABLE rpt.budget_actual IS
 '预算执行实际数 IMMV：凭证分录按（公司×期间×科目×部门）SUM(debit-credit)；pg_ivm 自动增量维护，提交即一致';
 
 -- 1.2 rpt.ar_aging_paid 已核销金额增量聚合，ar_aging 降级方案，pg_ivm 1.15 不允许"聚合函数 + 左连接"及"含聚合的子查询"，LEFT JOIN 骨架不可直接物化，改为基于 ar.receipt_allocations 的单表增量聚合，按发票分组，+ 普通视图 rpt.ar_aging 计算余额
--- CASCADE，rpt.ar_aging 视图依赖本 immv，重跑时需连带删除后再重建，见 2.5 节
+-- CASCADE，rpt.ar_aging 视图依赖本 immv，重跑时需连带删除后再重建
 SELECT pgivm.create_immv(
     'rpt.ar_aging_paid',
     'SELECT ra.invoice_id, SUM(ra.amount) AS paid_amount
@@ -86,7 +86,7 @@ COMMENT ON TABLE rpt.cash_flow_daily IS
 '资金日报 IMMV：银行流水按（公司×日期）聚合收入/支出，资金日报与趋势图数据源';
 
 -- 核心报表普通 sql 视图，非物化，避免维护成本，利润表/资产负债表/试算平衡表用普通视图 + 基表索引，查询计划走基表索引，全部为汇总级（GROUP BY 聚合），不暴露凭证/分录明细，符合 fms_report 角色"汇总只读、无明细敏感列"定位
--- 视图属主 fms_admin（SUPERUSER），视图内部对基表的访问不触发 rls，查询者可看到全部公司汇总数，全部视图 ALTER VIEW SET (security_invoker = on)，见 2.6 节，使基表行级策略按调用者身份生效，与 audit.safe_voucher_view 同模式，防止补授权后跨公司汇总泄漏
+-- 视图属主 fms_admin（SUPERUSER），视图内部对基表的访问不触发 rls，查询者可看到全部公司汇总数，全部视图 ALTER VIEW SET (security_invoker = on)，使基表行级策略按调用者身份生效，与 audit.safe_voucher_view 同模式，防止补授权后跨公司汇总泄漏
 -- 2.1 rpt.trial_balance 试算平衡表（公司×期间×科目 借/贷/余额）
 CREATE OR REPLACE VIEW rpt.trial_balance AS
 SELECT v.company_id,
@@ -245,7 +245,7 @@ CREATE POLICY log_task_runs_select ON log.task_runs
 SET ROLE fms_admin;
 
 -- rpt 4 个报表对象为 pg_ivm immv（rpt_log_base.sql 建，automatic 模式事务内自动增量维护），无普通物化视图可刷，
--- 废弃刷新包装函数 rpt.fn_cron_refresh_mvs 不再重建（对 relkind='r' 的 immv 执行 REFRESH 恒报错，queues_cron.sql 已 DROP）
+-- rpt.fn_cron_refresh_mvs 不重建（对 relkind='r' 的 immv 执行 REFRESH 恒报错，queues_cron.sql 已 DROP）
 CREATE UNIQUE INDEX IF NOT EXISTS uk_mv_budget_actual
     ON rpt.budget_actual (company_id, period, account_id, dept_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_mv_ar_aging_paid

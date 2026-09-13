@@ -27,8 +27,8 @@ import java.util.Map;
  *
  * 网关零外部基础设施依赖，访问日志仅写
  * jsonl 到 stdout+文件，不直连 pg/pgmq，pgmq 投递必须经 http 中转，网关批量 POST 本端点，该路径豁免网关签名，但需头 X-FMS-Int-Token 与配置 fms.security.internal-token 一致，随后
- * 本端点批量 pgmq.send("q_log_access")，由后端 cron（log.fn_consume_log_queues 每分钟，
- * 07 文件，链路已存在勿改）消费落 log.access_logs。
+ * 本端点批量 pgmq.send("q_log_access")，由后端 cron（log.fn_consume_log_queues 每分钟）
+ * 消费落 log.access_logs。
  *
  * 安全模型（fail-closed），internal-token 未配置，默认空=端点禁用或头不匹配一律 40300，
  * 请求无身份采信，db 连接保持 fms_app 空壳，投递经 log.fn_send_access_batch SECURITY
@@ -36,7 +36,7 @@ import java.util.Map;
  * 继续，返回成功条数，整批失败，如 db 不可达记录 WARN 后 accepted=0，不阻断网关请求路径。
  *
  * payload 映射，网关 9 字段转 q_log_access 约定 {method,path,status,latency,ip,ts}
- * + 扩展 req_id/user/ua，消费链（07 fn_consume_log_queues）固定读取 user_id/trace_id 键，
+ * + 扩展 req_id/user/ua，消费链（fn_consume_log_queues）固定读取 user_id/trace_id 键，
  * 故同值双写别名保证 log.access_logs.user_id/trace_id 审计列落库，链路勿改，别名在发送侧完成。
  * latency 由浮点毫秒重映射为整数（消费链 NULLIF，...::int 落库，浮点文本 cast 必失败）。
  */
@@ -63,7 +63,7 @@ public class InternalLogController {
      *
      * @param token 内部 token（头 X-FMS-Int-Token，缺失/不匹配/未配置则 40300 fail-closed）
      * @param items 日志条目数组（[{ts,req_id,method,path,status,latency_ms,ip,user,ua}...]，
-     *              与 rgw AccessLogEntry serde 序列化逐字一致，Java 组件经 @JsonProperty 映射）
+     * 与 rgw AccessLogEntry serde 序列化逐字一致，Java 组件经 @JsonProperty 映射）
      * @return {@code {accepted: N}}，N 为成功 send 条数，整批失败为 0，不抛错
      */
     @PostMapping("/log-batch")
@@ -71,12 +71,12 @@ public class InternalLogController {
             @RequestHeader(name = HEADER_INT_TOKEN, required = false) String token,
             @RequestBody String rawBody) {
         // 内部投递角色提示，匿名请求经 SandboxSessionInterceptor 注入 fms_operator（日志投递函数
-        // EXECUTE 授 fms_operator，fms_app 仅 CONNECT + 认证函数，用户 2026-08-19 明确）
+        // EXECUTE 授 fms_operator，fms_app 仅 CONNECT + 认证函数）
         SandboxRoleHint.set(SandboxRoleHint.Hint.INTERNAL_OPERATOR);
         try {
             // 解析（fastjson2 手动，与项目统一，@RequestBody 自动绑定走 Boot 默认 Jackson 3
             //    tools.jackson，不认 fastjson2 @JSONField，record 组件 camelCase 绑 snake_case
-            //    键必 null，实测 reqId/latencyMs 恒空，故手动 parseArray 与回归测试同路径）
+            //    键恒 null，reqId/latencyMs 取不到值，故手动 parseArray）
             List<AccessLogItem> items;
             try {
                 items = JSON.parseArray(rawBody, AccessLogItem.class);
@@ -137,7 +137,7 @@ public class InternalLogController {
         o.put("user", item.user());
         o.put("ua", truncate(item.ua(), fmsProperties.getLog().getUaMaxLen()));
 
-        // 消费链别名，07 fn_consume_log_queues 固定读 user_id/trace_id 键落
+        // 消费链别名，fn_consume_log_queues 固定读 user_id/trace_id 键落
         // log.access_logs.user_id/trace_id（reqId 即 trace_id、user 即 claims.sub）
         o.put("trace_id", item.reqId());
         o.put("user_id", item.user());

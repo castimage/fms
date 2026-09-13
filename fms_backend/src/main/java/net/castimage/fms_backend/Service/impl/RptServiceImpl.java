@@ -44,7 +44,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 报表模块业务实现，全部报表直查 06 文件视图/immv（security_invoker=on 行级收敛，Java 不拼公司
+ * 报表模块业务实现，全部报表直查 rpt 视图/immv（security_invoker=on 行级收敛，Java 不拼公司
  * 白名单，companyId 仅 ui 提示，越权值返回空集），看板聚合，资金日报 immv + 预算执行 top +
  * 应收账龄分桶在 Java 侧组合，导出为 utf-8 BOM csv（无 POI 依赖）。
  */
@@ -173,11 +173,16 @@ public class RptServiceImpl implements RptService {
      * {@inheritDoc}
      *
      * 看板聚合七路数据，① 资金日报，rpt.cash_flow_daily immv 近 30 日，net=income-expense，
-     * ② 预算执行 top（rpt.budget_actual immv 对键最新 APPROVED budget_plans，实际数倒序 top10），
-     * ③ 应收账龄分桶，rpt.ar_aging 视图全部未核销行按 due_date 相对 date 分桶合计 open_balance，
-     * ④ 资金汇总，cash.transactions 当日 IN/OUT + 截至当日净额，rls 收敛，
-     * ⑤ 待办审批，wf.tasks PENDING/CLAIMED 计数 + 当日到期 + due_at 升序 top N 列表，
-     * ⑥ 异常告警，rpt.fn_dashboard_alerts SECURITY DEFINER，预算执行率阈值 + 银行账户余额安全线，
+     * 预算执行 top（rpt.budget_actual immv 对键最新 APPROVED budget_plans，实际数倒序 top10），
+
+     * 应收账龄分桶，rpt.ar_aging 视图全部未核销行按 due_date 相对 date 分桶合计 open_balance，
+
+     * 资金汇总，cash.transactions 当日 IN/OUT + 截至当日净额，rls 收敛，
+
+     * 待办审批，wf.tasks PENDING/CLAIMED 计数 + 当日到期 + due_at 升序 top N 列表，
+
+     * 异常告警，rpt.fn_dashboard_alerts SECURITY DEFINER，预算执行率阈值 + 银行账户余额安全线，
+
      * 阈值语义与 budget.fn_cron_budget_warning 同源，jsonb 解析后拼装中文文案。
      * 全部读路径 readOnly 事务，rls 按调用者收敛。
      */
@@ -256,7 +261,7 @@ public class RptServiceImpl implements RptService {
         }
     }
 
-    // ---- csv 导出，每类型表头 + 行，字段 RFC 4180 转义 ----
+    // csv 导出，每类型表头 + 行，字段 RFC 4180 转义
 
     private void exportTrialBalance(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("科目编码", "科目名称", "方向", "期初余额", "本期借方", "本期贷方", "期末余额");
@@ -303,7 +308,7 @@ public class RptServiceImpl implements RptService {
         }
     }
 
-    // ---- 私有方法 ----
+    // 私有方法
 
     /**
      * 看板待办任务行转精简项，标题 = 流程名，业务类型 #单号前 8 位待审批，

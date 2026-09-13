@@ -45,7 +45,7 @@ public class SystemInfoServiceImpl implements SystemInfoService {
     /** 进程启动时刻，首次访问时近似，用于 uptime 展示 */
     private final Instant startedAt = Instant.now();
 
-    /** 对等探测 HttpClient，实例级复用（连接池 keep-alive），不再每次新建 */
+    /** 对等探测 HttpClient，实例级复用（连接池 keep-alive），避免每次新建 */
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .build();

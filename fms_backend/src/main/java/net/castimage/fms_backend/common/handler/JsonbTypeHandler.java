@@ -14,8 +14,8 @@ import java.sql.SQLException;
 /**
  * String ↔ PG jsonb 列类型处理器（WfDefinition.nodeJson 等 JSONB 文本列）。
  *
- * 2026-08 联调实测 sqlState=42804：MyBatis-Plus BaseMapper INSERT 把 String 参数
- * 以 character varying 绑定到 jsonb 列被 PG 拒绝（'column "node_json" is of type
+ * 绑定 String 参数到 jsonb 列报 sqlState=42804：MyBatis-Plus BaseMapper INSERT
+ * 把 String 参数以 character varying 绑定，被 PG 拒绝（'column "node_json" is of type
  * jsonb but expression is of type character varying'）。本处理器写入侧以
  * {@link PGobject}(type=jsonb) 经 pgjdbc 原生类型绑定——PG 自动按 jsonb 解析（非法
  * JSON 由 PG 侧报错兜底），读取侧 jsonb 转 text 字符串（与 DB 返回语义一致）。

@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 public interface VoucherLineMapper extends BaseMapper<VoucherLine> {
 
     /** 凭证分录列表（LEFT JOIN 联查科目 code/name，按 line_no 排序；Wrapper 无 JOIN 能力）。
-     *  列序与列别名必须与 VoucherLineView record 组件序一致（camelCase 别名），否则 MyBatis 按位映射会把 char(3) currency 'CNY' 读到 BigDecimal debit，报 22003 映射 500 */
+     * 列序与列别名必须与 VoucherLineView record 组件序一致（camelCase 别名），否则 MyBatis 按位映射会把 char(3) currency 'CNY' 读到 BigDecimal debit，报 22003 映射 500 */
     @Select("""
             SELECT vl.id AS id,
                    vl.voucher_id AS voucherId,

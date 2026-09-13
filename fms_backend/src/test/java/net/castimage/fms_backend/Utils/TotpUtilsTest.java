@@ -78,4 +78,38 @@ class TotpUtilsTest {
         assertEquals(5, codes.size());
         assertEquals(12, codes.get(0).length()); // XXXX-XXXX-XX
     }
+
+    @Test
+    void verifyInteropsWithStandardTotp() {
+        // 独立参考实现算码，校验委托产物与独立参考实现一致
+        String secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+        long now = System.currentTimeMillis() / 1000L;
+        String ref = referenceTotp(secret, now);
+        assertTrue(TotpUtils.verify(secret, ref, 1), "窗口 ±1 内参考码应通过");
+        assertFalse(TotpUtils.verify(secret, "000000", 0), "错误码应拒绝");
+        assertFalse(TotpUtils.verify("A!B!C!D!E!F!G!H!I!J!", ref, 1), "非法 base32 应返回 false");
+    }
+
+    private static String referenceTotp(String secretBase32, long epochSec) {
+        byte[] key = new org.apache.commons.codec.binary.Base32().decode(secretBase32);
+        long counter = epochSec / 30L;
+        byte[] msg = new byte[8];
+        for (int i = 7; i >= 0; i--) {
+            msg[i] = (byte) (counter & 0xFF);
+            counter >>= 8;
+        }
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
+            mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA1"));
+            byte[] hash = mac.doFinal(msg);
+            int offset = hash[hash.length - 1] & 0x0F;
+            int binary = ((hash[offset] & 0x7F) << 24)
+                    | ((hash[offset + 1] & 0xFF) << 16)
+                    | ((hash[offset + 2] & 0xFF) << 8)
+                    | (hash[offset + 3] & 0xFF);
+            return String.format("%06d", binary % 1_000_000);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
 }

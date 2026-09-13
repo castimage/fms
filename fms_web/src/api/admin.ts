@@ -1,7 +1,6 @@
 /**
  * 管理后台 api，/api/admin 端点，AdminController，参数/应用日志/任务记录
- * + /api/org 用户/角色端点，OrgController，管理后台消费，与 api/org.ts 并存，
- * 旧文件 assignRole 传 roleCode、permTree 路径与后端不符，本文件以实际签名为准。
+ * + /api/org 用户/角色端点，OrgController，管理后台消费，与 api/org.ts 并存。
  */
 import { request } from './http'
 import type { PageResult } from '@/types/api'

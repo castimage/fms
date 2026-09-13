@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * 定时任务执行记录实体（log.task_runs，仅追加）：pg_cron 任务（07 文件）执行结果统一落库
+ * 定时任务执行记录实体（log.task_runs，仅追加）：pg_cron 任务执行结果统一落库
  * （close-check 汇总、audit-chain-check 哈希链校验结果等）；status OK/FAIL（ck_task_runs_status），
  * detail JSONB（实体映射 String）；FORCE RLS + 仅 SELECT 策略，写入由 pg_cron/超级用户完成——本实体只读。
  */

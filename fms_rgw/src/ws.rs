@@ -3,7 +3,7 @@
 //! 用户维度限流 + 熔断，上游重建后send，101 则立即返回并后台双向泵(先101再await升级防死锁，
 //! 升级超时10s清理)，非101透传状态码
 //!
-//! 调用关系，`ws_handler` ← 安全链分发，`verify_jwt`/`rate_key`/`is_ready`复用各模块
+//! 调用关系，安全链分发调用`ws_handler`，`verify_jwt`/`rate_key`/`is_ready`复用各模块
 #![forbid(unsafe_code)]
 
 use crate::auth::{AuthError, verify_jwt};

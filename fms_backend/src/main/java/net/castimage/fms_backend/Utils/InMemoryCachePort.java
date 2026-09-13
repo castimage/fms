@@ -42,7 +42,7 @@ public class InMemoryCachePort implements CachePort {
         }
 
         // 已过期，视为不存在，原子重登记新窗口，compute 兜住 putIfAbsent 与重登记之间的
-        // 并发窗，并发先行写入新窗口时保留其值，且本次未实际写入者返回 false，与 Redis SETNX 逐条对齐，同 nonce 并发恒至多放行一个，验证  观察项修复
+        // 并发窗，并发先行写入新窗口时保留其值，且本次未实际写入者返回 false，与 Redis SETNX 逐条对齐，同 nonce 并发恒至多放行一个
         boolean[] wrote = new boolean[1];
         store.compute(key, (k, existing) -> {
             if (existing != null && existing.expireAtMillis() > now) {

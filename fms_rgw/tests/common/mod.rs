@@ -2,10 +2,10 @@
 //!
 //! 职责，
 //! `MockUpstream`，tokio::net::TcpListener + hyper 1 http1 手写上游。
-//!   记录每个收到的请求(method/path/query/headers/body)到共享状态(Arc<Mutex<Vec>>)，
-//!   返回可配置响应(状态码/头/体，Arc<Mutex<MockResponse>>)。
+//! 记录每个收到的请求(method/path/query/headers/body)到共享状态(Arc<Mutex<Vec>>)，
+//! 返回可配置响应(状态码/头/体，Arc<Mutex<MockResponse>>)。
 //! `test_config`，构造 Config 结构直接注入 AppState(fms_rgw::build_state)，
-//!   随机端口由 MockUpstream 绑定 127.0.0.1:0 取得。
+//! 随机端口由 MockUpstream 绑定 127.0.0.1:0 取得。
 //! 请求/断言助手，oneshot 直调路由、body 收集、jwt 签发、ConnectInfo 注入。
 //!
 //! 注，本模块被 integration/e2e 两个测试二进制分别编译，各自只用子集，
@@ -361,7 +361,7 @@ impl StaticFixture {
         std::fs::write(dir.join("assets/app.3f9a2c1d.js"), "console.log('hashed')")
             .expect("静态夹具写 hash 资源失败");
         std::fs::write(dir.join(".env"), "SECRET=leak-me").expect("静态夹具写 .env 失败");
-        //  Web 攻击测试用敏感文件( 枚举/ 穿越目标)，
+        // Web 攻击测试用敏感文件(枚举/穿越目标)
         std::fs::create_dir_all(dir.join("db")).expect("静态夹具建 db 目录失败");
         std::fs::create_dir_all(dir.join(".git")).expect("静态夹具建 .git 目录失败");
         std::fs::write(
@@ -399,7 +399,7 @@ impl Drop for StaticFixture {
     }
 }
 
-// — 真实网关(原始 tcp 攻击测试用，CRLF/CL 谎报/chunked/TRACE/CONNECT/超长头)，—
+// 真实网关(原始 tcp 攻击测试用，CRLF/CL 谎报/chunked/TRACE/CONNECT/超长头)
 
 /// 真实网关环境，随机端口 + mock 上游 + 静态夹具 + 访问日志文件
 pub struct RealGw {
@@ -421,7 +421,7 @@ pub fn real_gateway() -> &'static RealGw {
     real_gateway_with(|_| {})
 }
 
-/// [0] 的可定制配置版本，初始化时对 Config 施加 tweak
+/// `test_state_with` 的可定制配置版本，初始化时对 Config 施加 tweak
 /// (各测试二进制按需收紧/调整额度，OnceLock 单例每二进制仅生效一次)。
 /// e2e.rs 复用此入口(login 限流收紧等)，消除重复的环境装配。
 pub fn real_gateway_with(tweak: impl FnOnce(&mut Config) + Send + 'static) -> &'static RealGw {
@@ -589,7 +589,7 @@ pub async fn raw_http_probe(port: u16, raw: &[u8]) -> (u16, Vec<u8>) {
     (status, buf)
 }
 
-// — http/2 详情测试工具(tests/http2_detail.rs 使用，tests/http2.rs 保持自带实现)，—
+// http/2 详情测试工具，
 // 全部 helper 服务于，tls serve 拉起、rcgen 自签证书、tls/h1/h2 客户端、就绪轮询。
 
 /// 探测一个空闲端口(bind :0 取端口后释放，serve 真正绑定前有竞态窗口，测试内可接受)

@@ -144,7 +144,7 @@ export interface TrialBalanceView {
 }
 
 /** 凭证断号视图，GET /api/gl/voucher-gaps 行，镜像 gl.fn_cron_voucher_number_check，
- *  gapFrom~gapTo 为缺失号段，单号缺口 gapFrom==gapTo 且 gapCount=1，仅统计 POSTED/REVERSED 已取号凭证 */
+ * gapFrom~gapTo 为缺失号段，单号缺口 gapFrom==gapTo 且 gapCount=1，仅统计 POSTED/REVERSED 已取号凭证 */
 export interface VoucherGapView {
   companyId: string
   period: string

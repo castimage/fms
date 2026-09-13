@@ -64,7 +64,7 @@ class NonceStoreTest {
         // 未显式配置，0 哨兵则按 peak_qps × window 动态推导（1000 × 300 = 300000）
         assertEquals(300_000, NonceStore.effectiveCapacity(0, 1000, 300),
                 "未配置时容量 = noncePeakQps × replayWindowSecs");
-        // 显式 capacity 优先，兼容既有配置，yaml 显式 nonce-capacity 10000 保持原行为
+        // 显式 capacity 优先，兼容既有配置，yaml 显式 nonce-capacity 10000 时取该值
         assertEquals(10_000, NonceStore.effectiveCapacity(10_000, 1000, 300),
                 "显式 nonce-capacity 优先于动态推导");
         // 其它峰值/窗口组合按公式推导，推导结果封顶 int（1000 万 × 300 = 30 亿 > int 上限）

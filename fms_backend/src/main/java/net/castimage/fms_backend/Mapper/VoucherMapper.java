@@ -18,7 +18,7 @@ import java.util.UUID;
 public interface VoucherMapper extends BaseMapper<Voucher> {
 
     /** 过账（APPROVED 转 POSTED）：调 PG SECURITY DEFINER 函数原子完成鉴权+状态推进+触发器取号+审计（grants_base 已授 EXECUTE，规避 RLS 更新拦截与不可变触发器拒绝顺序；异常 RAISE 映射 40900）。
-     *  函数返回 void，直接 SELECT 会返回单行 void 列，MyBatis 无法映射到 void 返回类型（ExecutorException），故经子查询剥离结果列后取常量 1 */
+     * 函数返回 void，直接 SELECT 会返回单行 void 列，MyBatis 无法映射到 void 返回类型（ExecutorException），故经子查询剥离结果列后取常量 1 */
     @Options(flushCache = Options.FlushCachePolicy.TRUE) // 函数以 SELECT 形式调用，MyBatis 不会自动失效 L1 缓存——执行前清缓存，防 buildDetail 回读到事务早前的陈旧状态
     @Select("""
             SELECT 1
@@ -33,9 +33,9 @@ public interface VoucherMapper extends BaseMapper<Voucher> {
                         @Param("reason") String reason);
 
     /** 驳回（SUBMITTED 转 REJECTED）：调 PG SECURITY DEFINER 函数原子完成鉴权（gl.voucher.reject）+
-     *  SoD 复核 + 状态推进 + 状态历史 remark=原因（GUC 透传）+ 审计（GRANT 已授 EXECUTE；
-     *  异常 RAISE 映射 40900）。函数返回 void，直接 SELECT 会返回单行 void 列，MyBatis 无法
-     *  映射到 void 返回类型（ExecutorException），故经子查询剥离结果列后取常量 1 */
+     * SoD 复核 + 状态推进 + 状态历史 remark=原因（GUC 透传）+ 审计（GRANT 已授 EXECUTE；
+     * 异常 RAISE 映射 40900）。函数返回 void，直接 SELECT 会返回单行 void 列，MyBatis 无法
+     * 映射到 void 返回类型（ExecutorException），故经子查询剥离结果列后取常量 1 */
     @Options(flushCache = Options.FlushCachePolicy.TRUE) // 同 postVoucher：函数以 SELECT 形式调用，防 L1 缓存回读陈旧状态
     @Select("""
             SELECT 1
@@ -45,8 +45,8 @@ public interface VoucherMapper extends BaseMapper<Voucher> {
                       @Param("reason") String reason);
 
     /** 退回（REJECTED 转 DRAFT）：调 PG SECURITY DEFINER 函数 gl.fn_revert_voucher 原子完成鉴权
-     *  （gl.voucher.revert）+ 状态推进 + 状态历史 + 审计（GRANT 已授 EXECUTE；异常 RAISE 映射 40900
-     *  映射）。函数返回 void，同 rejectVoucher 经子查询剥离结果列后取常量 1 */
+     * （gl.voucher.revert）+ 状态推进 + 状态历史 + 审计（GRANT 已授 EXECUTE；异常 RAISE 映射 40900
+     * 映射）。函数返回 void，同 rejectVoucher 经子查询剥离结果列后取常量 1 */
     @Options(flushCache = Options.FlushCachePolicy.TRUE) // 同 postVoucher：函数以 SELECT 形式调用，防 L1 缓存回读陈旧状态
     @Select("""
             SELECT 1
@@ -91,8 +91,8 @@ public interface VoucherMapper extends BaseMapper<Voucher> {
     UUID selectVoucherCompanyId(@Param("id") UUID id);
 
     /** 凭证断号清单（镜像 gl.fn_cron_voucher_number_check 的期间缺口 SQL——同口径
-     *  status IN ('POSTED','REVERSED') + voucher_no NOT NULL + lag 窗口差分，但按公司/期间
-     *  在线过滤并返回缺失号段而非计数；companyId/period 可空=全范围扫描，RLS 收敛可见集合） */
+     * status IN ('POSTED','REVERSED') + voucher_no NOT NULL + lag 窗口差分，但按公司/期间
+     * 在线过滤并返回缺失号段而非计数；companyId/period 可空=全范围扫描，RLS 收敛可见集合） */
     @Select("""
             SELECT g.company_id, g.period,
                    (g.prev_no + 1)::integer AS gap_from,

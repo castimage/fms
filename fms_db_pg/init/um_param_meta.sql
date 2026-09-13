@@ -73,11 +73,9 @@ REVOKE ALL ON TABLE um.param_meta FROM fms_app, fms_operator, fms_viewer, fms_au
 REVOKE ALL ON FUNCTION um.fn_page_param_meta() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION um.fn_page_param_meta() TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- ============================================================================
 -- 对象参数子字段元数据（um.param_meta_field），{"v":{...}} 形态参数按字段拆分渲染子表单
 -- （如 ui.login.background 的 enabled/fit/blur/darken/opacity/...），每字段独立控件，
 -- 无子字段元数据的 json 参数保持整段 json 编辑兜底。
--- ============================================================================
 CREATE TABLE IF NOT EXISTS um.param_meta_field (
     code         varchar(64) NOT NULL REFERENCES um.param_meta(code) ON DELETE CASCADE,
     field        varchar(64) NOT NULL,               -- 对象字段名（{"v":{...}} 内层键）

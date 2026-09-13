@@ -14,8 +14,8 @@ import java.util.UUID;
 /**
  * UUID 类型处理器（PG uuid 列）。
  *
- * MyBatis 3.5.x 默认注册表不含 UUID 处理器（验证见
- * UuidTypeHandlerRegistrationTest），注解式 Mapper 语句（如
+ * MyBatis 3.5.x 默认注册表不含 UUID 处理器，
+ * 注解式 Mapper 语句（如
  * {@code #{id}::uuid}）解析参数映射时因「Type handler was null … javaType
  * (UUID)」直接抛异常，导致 SqlSessionFactory/应用上下文启动失败。
  * 本处理器经 {@code mybatis-plus.type-handlers-package} 全局注册：

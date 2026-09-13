@@ -357,8 +357,8 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
  WHERE r.code = 'fms_admin_role' AND p.deleted_at IS NULL AND p.is_enabled
 ON CONFLICT (role_id, perm_id) DO NOTHING;
 
--- 职责角色新标识迁移（accountant=会计，记账，seed_data 旧矩阵 voucher:create/post/reverse + 种子演示 operator01 审核），
--- 旧码（voucher:post:dept 等）在新体系下不参与 require_permission 判定，须补授新标识，否则 fn_post_voucher/fn_reverse_voucher 闸口拒绝
+-- 职责角色标识（accountant=会计，记账，voucher:create/post/reverse 矩阵 + 种子演示 operator01 审核），
+-- voucher:post:dept 等码不参与 require_permission 判定，须补授新标识，否则 fn_post_voucher/fn_reverse_voucher 闸口拒绝
 INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
        (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()
@@ -506,11 +506,13 @@ GRANT EXECUTE ON FUNCTION auth.has_permission(text) TO fms_app, fms_operator, fm
 GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
 -- operator 权限面（职责角色 accountant/approver/cashier），
--- 1) 补授 wf.* 权限点，wf.fn_complete_task 的 require_permission
+--补授 wf.* 权限点，wf.fn_complete_task 的 require_permission
+
 --    ('wf.instance.approve'/'wf.instance.reject') 闸口放行，期望矩阵，WF 任务
 --    approve/reject/transfer = operator 业务操作
 
--- 2) 闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
+--闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
+
 -- auth.assign_role / auth.revoke_role，admin.user.grant 闸口，防自助分配/自升
 -- auth.upsert_role，admin.role.create 闸口，角色创建/更新
 -- auth.grant_role_permission / auth.revoke_role_permission，admin.role.grant 闸口
@@ -523,7 +525,8 @@ GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator
 
 SET ROLE fms_admin;
 
--- 1. operator 业务角色补授 WF 权限点（fms_admin_role 已有全量，此处仅补职责角色）
+--operator 业务角色补授 WF 权限点（fms_admin_role 已有全量，此处仅补职责角色）
+
 INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
        (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()
@@ -536,7 +539,8 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
    AND p.deleted_at IS NULL AND p.is_enabled
 ON CONFLICT (role_id, perm_id) DO NOTHING;
 
--- 2. 闸口收敛（sql 侧纵深防御）
+--闸口收敛（sql 侧纵深防御）
+
 
 -- 2.1 auth.assign_role，仅持 admin.user.grant 者可分配角色，防自助分配/自升
 CREATE OR REPLACE FUNCTION auth.assign_role(p_user_id uuid, p_role_code text)
@@ -591,7 +595,7 @@ BEGIN
 END
 $$;
 
--- 2.3 auth.upsert_role，仅持 admin.role.create 者可创建/更新角色，原逻辑，公司取调用者公司，兜底最早公司
+-- 2.3 auth.upsert_role，仅持 admin.role.create 者可创建/更新角色，公司取调用者公司，兜底最早公司
 CREATE OR REPLACE FUNCTION auth.upsert_role(p_code text, p_name text, p_is_system boolean)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -618,7 +622,7 @@ BEGIN
 END
 $$;
 
--- 2.4 auth.grant_role_permission，仅持 admin.role.grant 者可绑定角色-权限，原逻辑，权限点/角色存在性校验+幂等
+-- 2.4 auth.grant_role_permission，仅持 admin.role.grant 者可绑定角色-权限，权限点/角色存在性校验+幂等
 CREATE OR REPLACE FUNCTION auth.grant_role_permission(p_role_id uuid, p_perm_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -646,7 +650,7 @@ BEGIN
 END
 $$;
 
--- 2.5 auth.revoke_role_permission，仅持 admin.role.grant 者可解绑角色-权限，原逻辑，软删幂等
+-- 2.5 auth.revoke_role_permission，仅持 admin.role.grant 者可解绑角色-权限，软删幂等
 CREATE OR REPLACE FUNCTION auth.revoke_role_permission(p_role_id uuid, p_perm_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -665,7 +669,7 @@ BEGIN
 END
 $$;
 
--- 2.6 org.fn_upsert_company，仅持 org.company.create 者可创建/更新公司，原逻辑，幂等 upsert + company_id 自引用回填
+-- 2.6 org.fn_upsert_company，仅持 org.company.create 者可创建/更新公司，幂等 upsert + company_id 自引用回填
 CREATE OR REPLACE FUNCTION org.fn_upsert_company(
     p_code text, p_name text, p_currency text,
     p_fiscal_year_start date, p_status text)
@@ -698,7 +702,7 @@ BEGIN
 END
 $$;
 
--- 保持函数授权不漂移，与原授权一致
+-- 保持函数授权不漂移，与授权矩阵一致
 GRANT EXECUTE ON FUNCTION auth.assign_role(uuid,text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION auth.revoke_role(uuid,text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION auth.upsert_role(text,text,boolean) TO fms_operator;

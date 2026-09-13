@@ -25,15 +25,15 @@ import java.util.Map;
  * api-key 模式透传 X-api-key、剥离客户端 X-FMS-*、不注入身份头、签名身份段为空串，
  * 校验收敛在后端。本过滤器位于签名校验通过后、身份采信前，
  *
- *   jwt 模式，GatewaySignatureFilter 已采信身份或匿名端点则直接透传，
- *   读 X-api-key，经 ApiKeyService 的 SECURITY DEFINER 函数 auth.api_key_validate
- *       在库内计算 hex(hmac(key, blind_key, 'sha256'))（盲索引密钥 sec.app_secrets
- *       不对任何角色授权，Java 不可直读）等值查 um.api_keys.key_hash，校验
- *       status='ACTIVE' 且未过期并回写 last_used_at，
- *   通过后身份由 key.user_id + scope 决定（read 映射 fms_viewer、read_write 映射 fms_operator），
- *       不采信任何 X-FMS-* 头，网关不注入、伪造头在签名环节已失败，此处双保险，
- *   任何失败，key 缺失/无效/非 ACTIVE/过期/吊销/db 异常一律 40100 fail-closed，
- *       不泄露失败原因，防枚举。
+ * jwt 模式，GatewaySignatureFilter 已采信身份或匿名端点则直接透传，
+ * 读 X-api-key，经 ApiKeyService 的 SECURITY DEFINER 函数 auth.api_key_validate
+ * 在库内计算 hex(hmac(key, blind_key, 'sha256'))（盲索引密钥 sec.app_secrets
+ * 不对任何角色授权，Java 不可直读）等值查 um.api_keys.key_hash，校验
+ * status='ACTIVE' 且未过期并回写 last_used_at，
+ * 通过后身份由 key.user_id + scope 决定（read 映射 fms_viewer、read_write 映射 fms_operator），
+ * 不采信任何 X-FMS-* 头，网关不注入、伪造头在签名环节已失败，此处双保险，
+ * 任何失败，key 缺失/无效/非 ACTIVE/过期/吊销/db 异常一律 40100 fail-closed，
+ * 不泄露失败原因，防枚举。
  */
 @RequiredArgsConstructor
 public class ApiKeyFilter extends OncePerRequestFilter {

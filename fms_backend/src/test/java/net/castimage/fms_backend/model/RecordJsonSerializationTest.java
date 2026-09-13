@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * record dto/vo json 序列化/反序列化契约测试，审查 J1 重构，dto/vo 已 record 化。
+ * record dto/vo json 序列化/反序列化契约测试。
  *
  * 运行时（Spring Boot 4）为 Jackson 3（tools.jackson.*），本测试同时覆盖
  * Jackson 3，真实运行时路径与 Jackson 2，与既有序列化契约测试同栈，

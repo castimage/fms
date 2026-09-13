@@ -7,7 +7,7 @@
 #   与主编排叠加（-f 顺序后者覆盖同名服务，fms-db 段与 docker-compose.yml
 #   保持同步，仅多注入 FMS_REPL_PASSWORD），
 #       docker compose -f docker-compose.yml -f docker-compose.pg-repl.yml up -d
-# 【前置】.env 需新增 FMS_REPL_PASSWORD（replicator 复制用户密码，
+# 【前置】.env 需配置 FMS_REPL_PASSWORD（replicator 复制用户密码，
 #   fms_init.sh 末段据此创建角色、对齐密码并追加 pg_hba 复制授权，
 #   均为从库 pg_basebackup 的前置条件）。
 

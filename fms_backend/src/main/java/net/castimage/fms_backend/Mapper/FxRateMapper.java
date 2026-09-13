@@ -11,8 +11,8 @@ import java.util.UUID;
 /**
  * 期末汇率 Mapper（gl.fx_rates）：查询/软删走 BaseMapper + Wrapper；
  * 写入经自定义 upsert——ON CONFLICT (company_id, currency, period) WHERE deleted_at IS NULL
- * DO UPDATE（同键活跃行 PUT 为更新语义；软删行不占部分唯一索引键则按新行插入复活，
- * BaseMapper.insert 会 23505；2026-08 修复：唯一键改部分索引 uk_fx_rate_active 后
+ * DO UPDATE（同键活跃行 PUT 为更新语义；软删行不占部分唯一索引键则按新行插入复活。
+ * 唯一键为部分索引 uk_fx_rate_active，BaseMapper.insert 直接插入报 23505，
  * ON CONFLICT 须带索引谓词方可仲裁）。
  */
 public interface FxRateMapper extends BaseMapper<FxRate> {

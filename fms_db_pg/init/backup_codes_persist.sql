@@ -1,12 +1,13 @@
 -- FMS 2fa 备用恢复码持久化（执行库，fms），
--- ① um.backup_codes（备用码盲索引落盘，code_hash = hmac(明文, blind_key)，库内不存明文，
+--um.backup_codes（备用码盲索引落盘，code_hash = hmac(明文, blind_key)，库内不存明文，
+
 --    与 um.api_keys 同模式），② auth.issue_backup_codes，签发，先软删旧未用码再批量插新行，
 --    返回落库数，③ auth.consume_backup_code，核销，hmac 等值 + 条件更新 used_at 原子消费，
 --    防并发双用。
 
--- 动机，原实现经 CachePort 会话存储（ttl 30min），恢复码随 ttl/实例重启丢失，用户未
--- 及时抄录即失效，核销无持久记录，无法审计"何时用哪个码恢复过"。db 落盘后有效期由
--- valid_days 控制（Java 侧 fms.mfa.backup-code-valid-days，默认 30 天）。
+-- 动机，恢复码需持久落盘：会话存储（CachePort，ttl 30min）下恢复码随 ttl/实例重启
+-- 丢失，用户未及时抄录即失效，核销无持久记录，无法审计"何时用哪个码恢复过"。db 落盘
+-- 后有效期由 valid_days 控制（Java 侧 fms.mfa.backup-code-valid-days，默认 30 天）。
 
 -- 生成/核销审计（um.login_log fail_reason='backup_codes_generated'/'backup_code_used'）
 -- 由 Java 侧 auth.record_login 完成，本文件不含。

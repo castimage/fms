@@ -494,7 +494,7 @@ mod tests {
         tampered.replace_range(len - 1..len, &(repl as char).to_string());
         let err = verify_jwt(Some(&format!("Bearer {tampered}")), secret, None, None, 60)
             .expect_err("篡改签名必须拒绝");
-        // 签名不符显式映射为InvalidSignature，不再是死代码变体
+        // 签名不符显式映射为InvalidSignature
         assert_eq!(err, AuthError::InvalidSignature);
     }
 

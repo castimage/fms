@@ -11,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * nonce 防重放去重表内存实现，单实例缺省，ConcurrentHashMap，与 fms_rgw nonce.rs
  * 同构，ttl=重放窗口，容量超限 fail-closed 拒绝，防内存耗尽，多实例部署需切
- * {@link RedisNonceStore}（fms.session-store=redis）。实现逻辑原属 NonceStore，
- * 接口化后整体迁移至此，语义与水位监控口径保持不变。
+ * {@link RedisNonceStore}（fms.session-store=redis）。
  */
 public class InMemoryNonceStore implements NonceStore {
 
@@ -55,7 +54,7 @@ public class InMemoryNonceStore implements NonceStore {
 
             // 已过期，以新窗口重登记，CAS 原子替换，并发先行更新则取最新窗口，
             // 仅实际写入新窗口者放行，并发先行更新时本次返回 false（与 Redis SETNX
-            // 逐条对齐，同 nonce 并发恒至多放行一个，验证  观察项修复）
+            // 逐条对齐，同 nonce 并发恒至多放行一个）
             boolean[] wrote = new boolean[1];
             nonces.computeIfPresent(nonce, (k, v) -> {
                 if (v > now) {
@@ -120,8 +119,8 @@ public class InMemoryNonceStore implements NonceStore {
 
     /**
      * 定时兜底清理 + 水位监控，周期 fms.cache-cleanup-interval-ms 默认 5 分钟，与
-     * AuthServiceImpl 内存票据/黑名单清扫同周期，原硬编码 60s 改为配置驱动，先清过期
-     * 条目再测水位。容量按显式配置或 peak_qps × window 推导，见 effectiveCapacity，
+     * AuthServiceImpl 内存票据/黑名单清扫同周期，先清过期条目再测水位。
+     * 容量按显式配置或 peak_qps × window 推导，见 effectiveCapacity，
      * 水位为动态容量的观测窗口，接近上限说明容量推导偏低或存在异常流量，需扩容或排查
      */
     @Scheduled(initialDelayString = "${fms.cache-cleanup-interval-ms:300000}",

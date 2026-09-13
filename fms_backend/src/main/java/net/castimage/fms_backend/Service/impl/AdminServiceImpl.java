@@ -30,9 +30,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 管理侧业务实现，系统参数读写（um.params 业务参数，敏感密钥已迁 sec.app_secrets，Java 侧
+ * 管理侧业务实现，系统参数读写（um.params 业务参数，敏感密钥存 sec.app_secrets，Java 侧
  * 敏感键白名单禁写双保险，value jsonb 经 fastjson2 校验合法 json 后 ::jsonb 落库，标量/对象
- * 两种形态均兼容 05 文件读取分支），应用日志/任务监控两表仅追加只读（FORCE rls + 08 授权矩阵）。
+ * 两种形态均兼容读取分支），应用日志/任务监控两表仅追加只读（FORCE rls）。
  */
 @Service
 public class AdminServiceImpl implements AdminService {
@@ -98,8 +98,9 @@ public class AdminServiceImpl implements AdminService {
      * {@inheritDoc}
      *
      * 写路径三重防护，① RequestContext.requireWriteRole，只读角色 40300，
-     * ② 敏感键白名单（jwt./pgcrypto. 前缀 + secret/password/token/… 子串则 40300，
-     * 与 09b 密钥收敛策略一致，敏感键只存 sec.app_secrets），③ value fastjson2 校验
+     * 敏感键白名单（jwt./pgcrypto. 前缀 + secret/password/token/… 子串则 40300，
+
+     * 敏感键只存 sec.app_secrets），③ value fastjson2 校验
      * 合法 json（标量/对象均可，落库 ::jsonb）。code 存在则原子更新 value/updated_by，
      * 不存在则 INSERT（uk_params_code 冲突由 23505 映射 40900 兜底）。
      */
@@ -160,7 +161,7 @@ public class AdminServiceImpl implements AdminService {
                 trim(jobName), trim(status)));
     }
 
-    // ---- 私有方法 ----
+    // 私有方法
 
     /** 敏感键白名单判定，前缀 + 子串双匹配，大小写不敏感 */
     private void assertNotSensitive(String code) {

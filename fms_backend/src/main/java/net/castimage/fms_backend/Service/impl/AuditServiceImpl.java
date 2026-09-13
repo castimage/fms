@@ -25,7 +25,7 @@ import java.util.UUID;
 
 /**
  * 审计模块业务实现：审计日志查询/哈希链校验/导出全部为只读路径（readOnly 事务）；RLS
- * （auth.has_role('fms_auditor') OR current_user='fms_admin'）+ 08 授权仅 fms_auditor
+ * （auth.has_role('fms_auditor') OR current_user='fms_admin'）+ 授权仅 fms_auditor
  * 授 SELECT/USAGE，其他职责角色查询 42501 映射 40300；哈希链校验委托 PG 函数
  * audit.audit_log_chain_check()（STABLE + SECURITY DEFINER），Java 不做重算（口径同源）。
  */
@@ -58,7 +58,7 @@ public class AuditServiceImpl implements AuditService {
      *
      * 哈希链校验语义：PG 函数自链首（prev='0'×64）按 fn_audit_log_hash 同式逐行重算
      * （ip/request_id 入公式 + occurred_at 时区无关化 to_char AT TIME ZONE 'UTC'），与存储值
-     * 比对，首处不符即停——prevOk=false + brokenAt=首断链点（修复建议从断点行起全链重算）。
+     * 比对，首处不符即停——prevOk=false + brokenAt=首断链点（从断点行起全链重算）。
      */
     @Override
     @Transactional(readOnly = true)
@@ -109,7 +109,7 @@ public class AuditServiceImpl implements AuditService {
         }
     }
 
-    // ---- 私有方法 ----
+    // 私有方法
 
     private String trim(String s) {
         return s == null ? null : s.trim();

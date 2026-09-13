@@ -252,14 +252,17 @@ async fn missing_cert_fallback_false_serve_returns_err() {
 /// 【行为】serve用`Semaphore`，8192 做连接上限，tcp accept后先取permit，满员后新连接被
 /// drop，不进入服务。用明文模式避免8192次tls握手开销。
 /// 【断言】1) 8192个保持连接全部被受理，第1个仍可正常请求200，未误伤存量连接，
-///        2) 满员后的新连接立即被关闭，raw请求0字节无响应，status=0，
-///        3) 连续8个新连接一致被拒，上限稳定。
+///满员后的新连接立即被关闭，raw请求0字节无响应，status=0，
+
+///连续8个新连接一致被拒，上限稳定。
+
 #[tokio::test]
 async fn connection_cap_8192_drops_excess() {
     let (port, _roots, _handle) = spawn_tls_server(|_| {}, None).await;
     wait_ready_plain(port).await;
 
-    // 1) 批量建立8192个保持连接，不发数据，仅持有，每批256个
+    //批量建立8192个保持连接，不发数据，仅持有，每批256个
+
     let mut conns: Vec<tokio::net::TcpStream> = Vec::with_capacity(8192);
     for batch in 0..32 {
         for _ in 0..256 {
@@ -272,7 +275,8 @@ async fn connection_cap_8192_drops_excess() {
     }
     assert_eq!(conns.len(), 8192);
 
-    // 2) 轮询等待上限生效，满员后新连接应被drop，无任何响应字节
+    //轮询等待上限生效，满员后新连接应被drop，无任何响应字节
+
     let mut cap_reached = false;
     for _ in 0..200 {
         let (status, buf) = raw_http(
@@ -288,7 +292,8 @@ async fn connection_cap_8192_drops_excess() {
     }
     assert!(cap_reached, "8192 个连接后未观察到第 8193 个连接被拒绝");
 
-    // 3) 上限稳定，连续8个新连接全部被拒，status=0且零字节
+    //上限稳定，连续8个新连接全部被拒，status=0且零字节
+
     for i in 0..8 {
         let (status, buf) = raw_http(
             port,
@@ -304,7 +309,8 @@ async fn connection_cap_8192_drops_excess() {
         assert!(buf.is_empty(), "被拒连接不得收到任何字节，实际 {:?}", buf);
     }
 
-    // 4) 存量连接不受影响，第1个连接发送/healthz 应回 200
+    //存量连接不受影响，第1个连接发送/healthz 应回 200
+
     conns[0]
         .write_all(b"GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         .await
@@ -375,7 +381,8 @@ async fn inflight_completes_and_accept_keeps_serving() {
     .await;
     wait_ready_tls(port, &roots).await;
 
-    // 1) 发起慢请求，jwt鉴权后到达慢上游
+    //发起慢请求，jwt鉴权后到达慢上游
+
     let token = make_jwt(
         "3f9a2c1d-0000-4000-8000-000000000002",
         "operator",
@@ -395,13 +402,15 @@ async fn inflight_completes_and_accept_keeps_serving() {
         .await
     });
 
-    // 2) in-flight期间，serve未提前退出，accept继续工作，新h2请求200
+    //in-flight期间，serve未提前退出，accept继续工作，新h2请求200
+
     tokio::time::sleep(Duration::from_millis(150)).await;
     assert!(!handle.is_finished(), "未收到关闭信号 serve 不得返回");
     let (status, _) = h2_request(&mut client, "GET", "https://localhost/healthz", &[]).await;
     assert_eq!(status, 200, "in-flight 期间新请求必须仍被服务");
 
-    // 3) 慢请求完整返回，in-flight不被中断
+    //慢请求完整返回，in-flight不被中断
+
     let (status, body) = slow_req.await.expect("慢请求任务 panic 或失败");
     assert_eq!(status, 200, "in-flight 请求必须完成并返回 200");
     assert_eq!(body, b"ok");
@@ -517,8 +526,10 @@ async fn h2_concurrent_10_requests_single_connection() {
 /// 【行为】对tls端口发送非tls垃圾字节则 `TlsAcceptor::accept` 失败，rustls 回
 /// tls fatal alert后关闭连接，或直接断开，服务器不panic，继续服务正常tls请求。
 /// 【断言】1) 垃圾字节连接只得到tls alert，首字节0x15/EOF/错误，绝不得到http响应，
-///        2) 连续3个垃圾连接同样被拒，重复攻击不击穿，
-///        3) 之后h2 `/healthz`仍200，服务器存活且未panic。
+///连续3个垃圾连接同样被拒，重复攻击不击穿，
+
+///之后h2 `/healthz`仍200，服务器存活且未panic。
+
 #[tokio::test]
 async fn tls_handshake_garbage_does_not_panic() {
     let _ = rustls::crypto::ring::default_provider().install_default();

@@ -12,7 +12,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbouncer postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     # 显式创建 pgbouncer 系统用户（幂等）：Debian 包版本间行为不一致
-    #（部分 bookworm 构建不创建同名用户，chown 会失败），此处兜底保证确定
+    # （部分 bookworm 构建不创建同名用户，chown 会失败），此处兜底保证确定
     && (id -u pgbouncer >/dev/null 2>&1 \
         || (groupadd -r pgbouncer && useradd -r -g pgbouncer -s /usr/sbin/nologin pgbouncer))
 

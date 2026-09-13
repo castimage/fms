@@ -52,7 +52,8 @@ async fn ws_token_log_masking_variant_check() {
     }
     let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
     let token_frag = &token[..24]; // 用前缀做日志泄漏指纹
-    // 1) 规范路径应被脱敏
+    //规范路径应被脱敏
+
     {
         let raw = format!(
             "GET /api/nt/ws?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
@@ -60,7 +61,8 @@ async fn ws_token_log_masking_variant_check() {
         let _ = raw_http(port, raw.as_bytes()).await;
         let _ = mock.take_filtered("/api/nt/ws");
     }
-    // 2) 双斜杠变体，规范化后仍为合法ws路径，则观察日志
+    //双斜杠变体，规范化后仍为合法ws路径，则观察日志
+
     {
         let raw = format!(
             "GET //api/nt/ws?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
@@ -68,7 +70,8 @@ async fn ws_token_log_masking_variant_check() {
         let _ = raw_http(port, raw.as_bytes()).await;
         let _ = mock.take_filtered("/api/nt/ws");
     }
-    // 3) 大小写变体，落静态404，但query仍入日志
+    //大小写变体，落静态404，但query仍入日志
+
     {
         let raw = format!(
             "GET /API/NT/WS?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
