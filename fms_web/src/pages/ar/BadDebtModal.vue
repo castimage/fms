@@ -32,7 +32,7 @@ const STATUS_OPTIONS = [
 ]
 
 // 期间选择，n-date-picker 的 v-model:value 类型为 number|string|数组|null，与 Ref<string>
-// 逆变不兼容，故改用 :value + @update:formatted-value 拿格式化字符串
+// 逆变不兼容，用 :value + @update:formatted-value 拿格式化字符串
 function onPeriodChange(v: string | [string, string] | null) {
   period.value = Array.isArray(v) ? v[0] : (v ?? '')
 }

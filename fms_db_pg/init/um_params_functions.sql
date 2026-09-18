@@ -9,7 +9,8 @@
 
 -- 依赖，init/um_perm.sql（auth.require_permission / admin.param.view / admin.param.update 种子）。
 
--- 1. 参数分页（keyword 按 code 模糊，STABLE）
+--参数分页（keyword 按 code 模糊，STABLE）
+
 CREATE OR REPLACE FUNCTION um.fn_page_params(p_keyword text DEFAULT NULL)
 RETURNS TABLE (id uuid, code text, value text, updated_by uuid, created_at timestamptz, updated_at timestamptz)
 LANGUAGE plpgsql
@@ -27,7 +28,8 @@ BEGIN
          ORDER BY q.code;
 END $$;
 
--- 2. 单参数查询，按 code，未命中返回空集，服务层 40400
+--单参数查询，按 code，未命中返回空集，服务层 40400
+
 CREATE OR REPLACE FUNCTION um.fn_get_param(p_code text)
 RETURNS TABLE (id uuid, code text, value text, updated_by uuid, created_at timestamptz, updated_at timestamptz)
 LANGUAGE plpgsql
@@ -43,7 +45,8 @@ BEGIN
          WHERE q.code = p_code AND q.deleted_at IS NULL;
 END $$;
 
--- 3. 参数 upsert（插入或原子更新 value/updated_by/updated_at，返回行 id）。
+--参数 upsert（插入或原子更新 value/updated_by/updated_at，返回行 id）。
+
 --    双保险，Java 侧 assertNotSensitive 先行，40300，db 侧白名单镜像，消息含"无权限"则同样 40300。
 CREATE OR REPLACE FUNCTION um.fn_upsert_param(p_code text, p_value jsonb, p_updated_by uuid)
 RETURNS uuid
@@ -77,7 +80,8 @@ BEGIN
     RETURN v_id;
 END $$;
 
--- 4. 公共参数值读取（配置下发 /api/admin/params/public 支撑），任意登录角色可读的轻量读口，
+--公共参数值读取（配置下发 /api/admin/params/public 支撑），任意登录角色可读的轻量读口，
+
 --    仅返回单码 jsonb 值，参数缺失/异常返回 p_default，调用方必须传缺省值，防删参数后崩溃，
 --    敏感键（jwt./pgcrypto. 前缀或含 secret/password/token/master_key/blind_key）一律返回
 --    p_default，与写口白名单（fn_upsert_param）镜像双保险，密钥恒不经本通道外泄，
@@ -112,7 +116,8 @@ END $$;
 COMMENT ON FUNCTION um.fn_get_param_value(text, jsonb)
     IS '公共参数值读取（配置下发）：非敏感单码 JSONB 值，缺失/异常/敏感键返回 p_default（调用方须传缺省值）';
 
--- 5. 授权（对齐 init 层惯例，新函数默认 PUBLIC EXECUTE 须自收，EXECUTE 授给后端连接角色与全部职责角色）
+--授权（对齐 init 层惯例，新函数默认 PUBLIC EXECUTE 须自收，EXECUTE 授给后端连接角色与全部职责角色）
+
 REVOKE ALL ON FUNCTION um.fn_page_params(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION um.fn_get_param(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION um.fn_upsert_param(text, jsonb, uuid) FROM PUBLIC;
@@ -122,7 +127,8 @@ GRANT EXECUTE ON FUNCTION um.fn_get_param(text) TO fms_app, fms_operator, fms_vi
 GRANT EXECUTE ON FUNCTION um.fn_upsert_param(text, jsonb, uuid) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT EXECUTE ON FUNCTION um.fn_get_param_value(text, jsonb) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- 6. 文件末尾自查
+--文件末尾自查
+
 SELECT 'um_params_functions' AS file_name,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'um' AND p.proname IN ('fn_page_params','fn_get_param','fn_upsert_param','fn_get_param_value')) AS definer_fn_cnt,

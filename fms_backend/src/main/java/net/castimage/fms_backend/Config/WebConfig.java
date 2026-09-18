@@ -85,7 +85,7 @@ public class WebConfig implements WebMvcConfigurer {
      * nonce 去重表内存实现（缺省，保持既有语义；挂 @Scheduled 按 fms.cache-cleanup-interval-ms
      * 兜底清理 + 水位监控）：容量/窗口来自 fms.security.*，显式 nonce-capacity 配置优先，
      * 否则按 nonce-peak-qps × replay-window-secs 动态推导（默认 1000×300=300000，
-     * 压测教训 6 万 QPS 击穿 10000）
+     * 6 万 QPS 可击穿 10000）
      */
     @Bean
     @ConditionalOnMissingBean(NonceStore.class)
@@ -122,7 +122,7 @@ public class WebConfig implements WebMvcConfigurer {
     }
 
     /**
-     * API-Key 校验（X6-2，设计 7.1 系统间集成）：位于签名校验通过后、身份采信前——
+     * API-Key 校验：位于签名校验通过后、身份采信前——
      * JWT 模式身份已采信或匿名端点透传；API-Key 模式（网关不注入身份头）读 X-API-Key
      * 经 SECURITY DEFINER 函数闸口校验 um.api_keys，通过后按 key.user_id + scope 注入
      * 身份，任何失败 40100 fail-closed。

@@ -1,7 +1,7 @@
 //! 红队验证3，ws 101升级流程，`pump_bidirectional`先返回101再await升级防死锁，
 //! hyper 1.x服务端需先写出101才完成升级并触发upgrade future，同步await会死锁
 //! 客户端永远收不到响应、任务+连接永久占用，高危。
-//! 现逻辑，立即返回101，透传上游头，后台任务await升级，10s超时并双向泵。
+//! 实现为立即返回101，透传上游头，后台任务await升级，10s超时并双向泵。
 //! 【断言】客户端必须在5s读超时内收到101 Switching Protocols。
 mod common;
 

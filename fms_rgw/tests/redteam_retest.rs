@@ -1,8 +1,8 @@
-//! `tests/redteam_retest.rs`，安全复审，缺陷复测，红队视角，真实tcp请求
+//! `tests/redteam_retest.rs`，安全复审，红队视角，真实tcp请求
 //!
 //! 独立于`security_web.rs`的复测用例，自建真实网关(真实tcp监听 + mock上游 +
 //! 自控静态目录含`a.sql/package.json`)，用`raw_http`发送原始http请求，
-//! 逐项复测-修复效果，打印实际状态码与证据。
+//! 逐项复测拦截结果，打印实际状态码与证据。
 //!
 //! 运行，cargo test --test `redteam_retest` -- --nocapture --test-threads=1
 
@@ -85,7 +85,7 @@ async fn redteam_retest_all_replayed_attacks() {
     let port = gw.port;
     let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
 
-    // 双编码sql注入打 /api/x 则必须 400，不再透传
+    // 双编码sql注入打 /api/x 则必须 400，不透传
     {
         let mut req =
             b"GET /api/x?q=%2527%2520or%25201%253D1 HTTP/1.1\r\nHost: 127.0.0.1\r\n".to_vec();

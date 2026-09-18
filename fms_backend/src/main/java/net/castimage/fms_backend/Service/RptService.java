@@ -13,8 +13,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/** 报表模块业务接口（rpt）：全部直查 06 文件视图/IMMV（security_invoker=on 行级收敛，Java 不拼公司白名单），
- *  看板聚合 + UTF-8 BOM CSV 导出（无 POI 依赖，Excel 兼容） */
+/** 报表模块业务接口（rpt）：全部直查 rpt 视图/IMMV（security_invoker=on 行级收敛，Java 不拼公司白名单），
+ * 看板聚合 + UTF-8 BOM CSV 导出（无 POI 依赖，Excel 兼容） */
 public interface RptService {
 
     /**

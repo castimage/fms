@@ -254,5 +254,5 @@ services:
         condition: service_completed_successfully
     logging: *default-logging
 
-# 【遗留风险】同 docker-compose.cluster.yml，附件卷单机共享、redis 单点、
+# 【部署风险】同 docker-compose.cluster.yml，附件卷单机共享、redis 单点、
 #   主从同机演练形态，本文件与集群/单机/多机形态互斥（name: fms-custom）。

@@ -11,7 +11,8 @@
 
 SET ROLE fms_admin;
 
--- 1) 全量广播闸口，系统公告/公司级预警，向全部 ACTIVE 用户逐行 INSERT（rls 由
+--全量广播闸口，系统公告/公司级预警，向全部 ACTIVE 用户逐行 INSERT（rls 由
+
 -- SECURITY DEFINER 绕过，属主 fms_admin 超级用户不受 rls 限制），幂等，同
 -- ref_type+ref_id+title 的通知已存在则整批跳过，防 cron/重试重复，budget-warning
 -- 每 15 分钟触发一次，同一公司同一标题不得反复打扰全员。返回实际插入行数。
@@ -52,7 +53,8 @@ $$;
 COMMENT ON FUNCTION notify.fn_broadcast_notification(text,text,text,uuid)
     IS '系统公告/公司级预警全量广播：向全部 ACTIVE 用户逐行 INSERT（SECURITY DEFINER 绕过 RLS）；幂等（同 ref_type+ref_id+title 已存在整批跳过），返回插入行数';
 
--- 2) 单用户通知插入闸口，pgmq 消费落库，q_notify_task 任务完成/超时催办按 assignee_id 落库，
+--单用户通知插入闸口，pgmq 消费落库，q_notify_task 任务完成/超时催办按 assignee_id 落库，
+
 -- rls 由 SECURITY DEFINER 绕过，消费者线程无会话身份，auth.current_uid 恒 NULL。
 CREATE OR REPLACE FUNCTION notify.fn_insert_notification(
     p_user_id uuid, p_title text, p_content text,
@@ -79,14 +81,16 @@ $$;
 COMMENT ON FUNCTION notify.fn_insert_notification(uuid,text,text,text,text,uuid)
     IS '单用户通知插入（PGMQ 消费落库）：SECURITY DEFINER 绕过 RLS，收件人须为现存 ACTIVE 用户';
 
--- 3) 授权，应用角色仅持 EXECUTE，函数体以 fms_admin 身份执行，不授予表级写权限，
+--授权，应用角色仅持 EXECUTE，函数体以 fms_admin 身份执行，不授予表级写权限，
+
 -- 与 log_access_batch 同款最小授权模式
 GRANT EXECUTE ON FUNCTION notify.fn_broadcast_notification(text,text,text,uuid)
     TO fms_app, fms_operator;
 GRANT EXECUTE ON FUNCTION notify.fn_insert_notification(uuid,text,text,text,text,uuid)
     TO fms_app, fms_operator;
 
--- 4) 安全告警检测函数族，AlertService 定时调度，以 fms_app 直连调用，无会话身份，
+--安全告警检测函数族，AlertService 定时调度，以 fms_app 直连调用，无会话身份，
+
 -- 全部 SECURITY DEFINER 只读/通知类，无提权面，暴力破解聚合、审计链状态、admin 站内信
 CREATE OR REPLACE FUNCTION notify.fn_alert_login_failures(
     p_threshold int DEFAULT 20, p_window_min int DEFAULT 15)
@@ -152,7 +156,8 @@ END $$;
 COMMENT ON FUNCTION notify.fn_alert_notify_admin(text, text)
     IS '安全告警站内信：发 admin（SECURITY 类型），无 admin 用户时静默跳过';
 
--- 5) 主从复制延迟检测（AlertService 定时调度），pg_stat_replication 仅 superuser/
+--主从复制延迟检测（AlertService 定时调度），pg_stat_replication 仅 superuser/
+
 -- pg_monitor 可见，fms_app 无权限，经 SECURITY DEFINER 属主（fms_admin）读取后
 -- 返回聚合 jsonb {replicas, max_lag_ms, degraded}，replicas=walsender 总数，含
 -- 非 streaming 状态，max_lag_ms=streaming 中最大 replay 延迟，毫秒，无则 0，

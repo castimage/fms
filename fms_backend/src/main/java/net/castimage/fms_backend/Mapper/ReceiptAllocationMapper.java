@@ -13,8 +13,10 @@ import java.util.UUID;
 
 /**
  * 收款核销明细 Mapper（ar.receipt_allocations）：核销防重双闸——
- * ① uk_ar_alloc(receipt_id, invoice_id) 唯一约束（23505 映射 40900）；
- * ② version 乐观锁（updateWithVersion 带 WHERE version=?，0 行则 40900）。
+ * uk_ar_alloc(receipt_id, invoice_id) 唯一约束（23505 映射 40900）；
+
+ * version 乐观锁（updateWithVersion 带 WHERE version=?，0 行则 40900）。
+
  */
 public interface ReceiptAllocationMapper extends BaseMapper<ReceiptAllocation> {
 

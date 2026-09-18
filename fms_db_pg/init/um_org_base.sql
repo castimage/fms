@@ -4,7 +4,7 @@
 -- 部署入口为 deploy/init/fms_init.sh，本文件由白名单调度执行
 -- 内容，存量重加密、密钥写入 sec.app_secrets、敏感参数移出 um.params、current_uid、
 -- um.users MFA/身份证敏感列、软删除统一出口，auth.is_admin 判定 + admin rls 策略
---（users/user_role/scope/companies/departments）+ fn_soft_delete（白名单含 um.roles/role_perm、范围放宽 is_admin）
+-- （users/user_role/scope/companies/departments）+ fn_soft_delete（白名单含 um.roles/role_perm、范围放宽 is_admin）
 
 SET ROLE fms_admin;
 
@@ -28,7 +28,7 @@ REVOKE ALL ON TABLE sec.app_secrets FROM PUBLIC;
 
 -- 盲索引用带密钥 hmac（encode(hmac(value, blind_key,'sha256'),'hex')），纯 digest 无防字典攻击能力，低熵卡面值可被持库只读者秒级离线爆破，密钥与密文同库存放属已知设计约束，生产可换外部 KMS 注入
 -- 本段 blind_key 仅首写（DO NOTHING），重放不覆盖已部署密钥，覆盖后旧密文
---（api_keys key_hash / id_card_hash / bank_accounts 等）全部失配不可解密，
+-- （api_keys key_hash / id_card_hash / bank_accounts 等）全部失配不可解密，
 -- 与 seed_data 对 jwt.secret 的防覆盖语义一致。
 -- 注，防覆盖仅限本首写段，的 master_key/blind_key 写入为 DO UPDATE（重放收敛回
 -- 本文件声明常量、仅 jwt.secret 被 WHERE 排除）
@@ -38,7 +38,7 @@ INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- CREATE SCHEMA IF NOT EXISTS + 建表 IF NOT EXISTS，重放不清空既有数据
---（schema 演进由文件内幂等 ALTER 段与 um_perm.sql 补齐）
+-- （schema 演进由文件内幂等 ALTER 段与 um_perm.sql 补齐）
 CREATE SCHEMA IF NOT EXISTS um AUTHORIZATION fms_admin;
 COMMENT ON SCHEMA um IS '用户、角色、权限、上下文预载数据源、系统参数（9 表）';
 
@@ -47,7 +47,7 @@ COMMENT ON SCHEMA org IS '公司、部门树（ltree）（2 表）';
 
 -- um.modules 模块树（本文件建表/种子，先于 seed_data 执行，seed_data 的权限 INSERT
 -- 经 um.modules JOIN 解析 module_id，um_perm.sql 内同名建表/种子为幂等空操作
---（IF NOT EXISTS / ON CONFLICT DO NOTHING），存量库升级路径不受影响）
+-- （IF NOT EXISTS / ON CONFLICT DO NOTHING），存量库升级路径不受影响）
 CREATE TABLE IF NOT EXISTS um.modules (
     id          uuid         PRIMARY KEY DEFAULT uuidv7(),
     identifier  varchar(64)  NOT NULL,             -- 唯一标识，'gl' / 'gl.voucher' / 'gl.voucher.approve' 风格
@@ -210,7 +210,7 @@ BEGIN
     END IF;
     v_ids := NULLIF(current_setting('fms.dept_ids', true), '');
     IF v_ids IS NOT NULL AND p_dept_id::text = ANY (string_to_array(v_ids, ',')) THEN
-        RETURN true;                              -- 直接授予部门，原语义
+        RETURN true;                              -- 直接授予部门
     END IF;
     RETURN EXISTS (
         SELECT 1
@@ -337,7 +337,7 @@ END $$;
 -- 2.7b jwt 验签（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets，与 jwt_sign 对称）
 -- 参数，p_token 待验紧凑 jwt，三段式，p_secret 缺省 NULL 时读 sec.app_secrets 的 jwt.secret，须与签发侧同密钥
 -- 行为，委托 pgjwt.verify 做签名验证 + 时间窗校验，仅对携带 exp/nbf 的载荷生效，签发侧已强制注入 exp，无 exp 令牌永不过期问题被签发约束封堵，校验通过返回 payload jsonb
--- 边界与错误，签名失败/令牌被篡改/密钥不匹配则 RAISE，保持原错误语义，调用方不可继续处理，密钥未配置则 RAISE，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
+-- 边界与错误，签名失败/令牌被篡改/密钥不匹配则 RAISE，保持错误语义，调用方不可继续处理，密钥未配置则 RAISE，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
 -- 调用约定，后端 refresh 路径经本函数验签（AuthServiceImpl.verifyRefreshToken），与网关 auth.verify_jwt 同密钥同算法，令牌跨网关/后端双端互验，任一端签发的令牌另一端可验证
 CREATE OR REPLACE FUNCTION auth.jwt_verify(p_token text, p_secret text DEFAULT NULL)
 RETURNS jsonb
@@ -354,7 +354,7 @@ BEGIN
     IF v_secret IS NULL OR NULLIF(btrim(v_secret), '') IS NULL THEN
         RAISE EXCEPTION 'jwt_verify: 密钥未配置（参数或 sec.app_secrets.jwt.secret）';
     END IF;
-    -- 委托 pgjwt.verify，签名失败/篡改则 valid=false，RAISE，保持原错误语义
+    -- 委托 pgjwt.verify，签名失败/篡改则 valid=false，RAISE，保持错误语义
     SELECT * INTO v_result FROM pgjwt.verify(p_token, v_secret, 'HS256');
     IF NOT v_result.valid THEN
         RAISE EXCEPTION 'jwt_verify: 签名校验失败（令牌被篡改或密钥不匹配）';
@@ -379,11 +379,11 @@ DECLARE
     v_key text;
     v_no  text;
 BEGIN
-    -- 守卫用 current_user（SET ROLE 后的职责身份），原 session_user 判定对任何 fms_app 会话恒真（fms_app 恰为职责角色成员），fms_operator 为 NOLOGIN，fms_app 直连时 current_user=fms_app 必被拒
+    -- 守卫用 current_user（SET ROLE 后的职责身份），session_user 判定对任何 fms_app 会话恒真（fms_app 恰为职责角色成员），fms_operator 为 NOLOGIN，fms_app 直连时 current_user=fms_app 必被拒
     IF current_user NOT IN ('fms_admin', 'fms_operator') THEN
         RAISE EXCEPTION 'decrypt_bank_account: 无权限（仅 fms_admin/资金职责角色）';
     END IF;
-    -- 主密钥收敛到 sec.app_secrets（原 um.params 全角色可读）
+    -- 主密钥收敛到 sec.app_secrets（um.params 全角色可读，须收敛）
     SELECT value->>'v' INTO v_key FROM sec.app_secrets
      WHERE code = 'pgcrypto.master_key';
     IF v_key IS NULL THEN
@@ -747,7 +747,7 @@ END $$;
 
 -- 1.2 写入旋转后的密钥（幂等，master_key/blind_key 重放时经 DO UPDATE 收敛回本文件声明常量，本段为
 -- 密钥权威写入点，覆盖上文 L32 首写，jwt.secret 被 WHERE 排除仅首次落库，防重放覆盖已旋转值），
--- 新增 pgcrypto.blind_key（盲索引 hmac 密钥，本文件上文 L32 已首写同值），盲索引必须带密钥，
+-- pgcrypto.blind_key（盲索引 hmac 密钥，本文件上文 L32 已首写同值），盲索引必须带密钥，
 -- 纯 digest 可被持库只读者对低熵值离线字典爆破
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
     ('pgcrypto.master_key', '{"v":"FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c"}'::jsonb,
@@ -793,7 +793,8 @@ ALTER TABLE um.users ADD COLUMN IF NOT EXISTS mfa_secret_enc  bytea;
 ALTER TABLE um.users ADD COLUMN IF NOT EXISTS id_card_enc     bytea;
 ALTER TABLE um.users ADD COLUMN IF NOT EXISTS id_card_hash    char(64);
 
--- 1. auth.is_admin，当前用户（fms.user_id guc）是否挂接系统管理业务角色
+--auth.is_admin，当前用户（fms.user_id guc）是否挂接系统管理业务角色
+
 SET ROLE fms_admin;
 
 CREATE OR REPLACE FUNCTION auth.is_admin()
@@ -818,7 +819,8 @@ COMMENT ON FUNCTION auth.is_admin()
 REVOKE EXECUTE ON FUNCTION auth.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth.is_admin() TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- 2. rls 策略，管理员可见/可写全部用户/公司/部门，其余语义不变，fail-closed
+--rls 策略，管理员可见/可写全部用户/公司/部门，其余语义不变，fail-closed
+
 
 -- um.users，管理员可查/可改他人行，预检 selectById / 列表 / 详情 / 更新回读
 ALTER TABLE um.users ENABLE ROW LEVEL SECURITY;
@@ -855,7 +857,7 @@ CREATE POLICY companies_select ON org.companies
         AND (auth.can_access_org(id) OR auth.is_admin() OR current_user = 'fms_admin'));
 
 -- org.departments，管理员全量可见，写策略放开为数据范围（应用角色直写经
--- can_access_org 收敛，管理员 is_admin 放行，原 current_user='fms_admin' 恒拒应用）
+-- can_access_org 收敛，管理员 is_admin 放行，current_user='fms_admin' 对应用会话恒拒）
 DROP POLICY IF EXISTS depts_select ON org.departments;
 CREATE POLICY depts_select ON org.departments
     FOR SELECT USING (deleted_at IS NULL
@@ -961,7 +963,8 @@ GRANT EXECUTE ON FUNCTION auth.fn_soft_delete_v(text, text, uuid, int) TO fms_op
 COMMENT ON FUNCTION auth.fn_soft_delete_v(text, text, uuid, int)
     IS '版本化软删除出口（SECURITY DEFINER）：核销明细撤销专用，乐观锁 version 条件后置 deleted_at=now()';
 
--- 4. auth.fn_soft_delete（保持属主 postgres，以连接用户 postgres 重建，勿 SET ROLE），
+--auth.fn_soft_delete（保持属主 postgres，以连接用户 postgres 重建，勿 SET ROLE），
+
 --    白名单含 um.roles/um.role_perm，数据范围放宽 is_admin
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete(p_schema text, p_table text, p_id uuid)
 RETURNS boolean

@@ -3,7 +3,7 @@
  * 凭证录入/编辑，/gl/vouchers/new 与 /gl/vouchers/:id/edit 复用，mode 由路由决定，
  * 分录校验，科目必选且末级、借/贷互斥、金额 ≤2 位小数、禁止双零行，差额 ≠ 0 或分录为空
  * 时提交 disabled，保存草稿允许不平衡，编辑模式 getVoucher 回填，status≠DRAFT 提示并跳详情，
- * 期间不可变更、科目/币种禁改，附件上传/下载/删除已接通。
+ * 期间不可变更、科目/币种禁改，附件支持上传/下载/删除。
  */
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NDatePicker, NInput, NUpload, useMessage, type UploadFileInfo } from 'naive-ui'

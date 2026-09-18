@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * 直调 Mapper 绕过了 http 过滤器链，身份须经 RequestContext（ThreadLocal）
  * 手工填充，这正是拦截器的真实数据源，生产由 GatewaySignatureFilter 填充，
- * 已由 GatewaySignatureIT 覆盖全链路。
+ * 全链路由 GatewaySignatureIT 覆盖。
  */
 class VoucherMapperIT extends IntegrationTestSupport {
 

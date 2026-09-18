@@ -6,11 +6,12 @@
 --       Java 侧无法直读 blind_key，故盲索引计算 + 等值查 + last_used_at 回写必须
 --       收敛于 SECURITY DEFINER 函数，以 fms_admin 身份读密钥，明文永不离开库内。
 
--- 网关中 'key_hash=sha256(key)' 表述与部署实现（hmac 盲索引
---       防字典攻击）不一致，以 init/fill_missing.sql 与本文件为准。
+-- 网关中 'key_hash=sha256(key)' 为 sha256 表述，本部署实现为 hmac 盲索引
+--       （防字典攻击），故校验必须在库内完成。
 -- 幂等，全部 CREATE OR REPLACE，可重复执行。
 
--- 1) api-key 校验 + last_used_at 回写，单次往返原子完成
+--api-key 校验 + last_used_at 回写，单次往返原子完成
+
 --    任何失败（哈希未命中/非 ACTIVE/已吊销/已过期/已软删/空串）一律返回 NULL，
 --    由后端过滤器按 40100 fail-closed，不向调用方泄露失败原因，防枚举。
 CREATE OR REPLACE FUNCTION auth.api_key_validate(p_key text)
@@ -52,7 +53,8 @@ REVOKE ALL ON FUNCTION auth.api_key_validate(text) FROM PUBLIC;
 -- 调用方仅需 EXECUTE 权限，内部权限与 rls 由属主身份决定，不存在提权面。
 GRANT EXECUTE ON FUNCTION auth.api_key_validate(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- 2) 吊销（软删除语义，revoked_at + status=REVOKED，行保留与 uk_api_keys_hash 唯一约束共存）
+--吊销（软删除语义，revoked_at + status=REVOKED，行保留与 uk_api_keys_hash 唯一约束共存）
+
 --    仅本人可吊销，维护会话 fms_admin/postgres 可代吊销，重复吊销幂等返回。
 CREATE OR REPLACE FUNCTION auth.revoke_api_key(p_key_id uuid)
 RETURNS void

@@ -3,7 +3,7 @@
 //! 304由其处理，未命中则返回 `index.html`(no-store + `ETag` 304)，`Cache-Control`分级
 //! (`index.html` no-store，hash资源immutable 1y，其余3600)
 //!
-//! 调用关系，`static_handler` ← `main::build_router` fallback，仅外层链trace/安全头/日志
+//! 调用关系，`main::build_router` fallback调用`static_handler`，仅外层链trace/安全头/日志
 #![forbid(unsafe_code)]
 
 use crate::filter::{decode_for_check, normalize_path};
@@ -201,7 +201,7 @@ async fn serve_index_fallback(
     let mut resp = resp.map(Body::new);
 
     // index.html，no-store(spa入口页不缓存，no-store允许存储并revalidate，
-    // 部分浏览器/标签页场景仍命中旧缓存导致加载旧bundle，no-store每次访问必拿最新)
+    // 浏览器/标签页命中缓存会加载过时bundle，no-store每次访问必取最新)
     resp.headers_mut()
         .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     if !resp.headers().contains_key(ETAG)
@@ -226,8 +226,8 @@ pub fn make_etag(meta: &std::fs::Metadata) -> String {
 }
 
 /// `Cache-Control`分级(max-age取配置`static.hash_max_age_secs` / `asset_max_age_secs`)，
-///   `index.html` 则 "no-store"，spa更新语义不变量，不配置化，带hash资源 则
-///   "public, max-age={hash_max_age_secs}, immutable"，其余 "public, max-age={asset_max_age_secs}"
+/// `index.html` 则 "no-store"，spa更新语义不变量，不配置化，带hash资源 则
+/// "public, max-age={hash_max_age_secs}, immutable"，其余 "public, max-age={asset_max_age_secs}"
 pub fn cache_control_for(path: &str, hash_max_age_secs: u64, asset_max_age_secs: u64) -> String {
     if path.ends_with("index.html") {
         "no-store".to_string()
@@ -242,7 +242,7 @@ pub fn cache_control_for(path: &str, hash_max_age_secs: u64, asset_max_age_secs:
 /// 主文件名含hash段，
 /// '.' 分段整体为8+ 位纯十六进制(如`app.3f9a2c1d.js`、`app.3f9a2c1d.min.css`)，
 /// 'name-<hash>.ext' 形态，'-' 分隔的尾段为8+ 位base64url风格hash(如
-///     `index-nK2IYyuW.js`、`vendor-DKX9Ih78.min.css`，K/I/Y/W等非hex字符)。
+/// `index-nK2IYyuW.js`、`vendor-DKX9Ih78.min.css`，K/I/Y/W等非hex字符)。
 /// 
 /// 两类命中均为immutable缓存。误判边界，形如`my-nicelibrary.js`的8+ 位字母尾段
 /// 会被视为hash，immutable缓存，与hex规则同类取舍，文档化接受。
@@ -465,7 +465,7 @@ mod tests {
         let app = axum::Router::new()
             .fallback(static_handler)
             .with_state(state);
-        // 黑名单扩展一律404，不再200下载
+        // 黑名单扩展一律 404
         for uri in [
             "/backup.sql",
             "/app.bak",

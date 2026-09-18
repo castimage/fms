@@ -179,7 +179,7 @@ pub fn build_state(cfg: config::Config) -> Result<Arc<AppState>, Box<dyn std::er
 
     // 访问日志器，采样 + 有界通道 + 后台sink批量双写 / pgmq http中转投递
     // (backend_base_url = 上游地址，多实例取servers[0]作为pgmq投递目标，
-    // servers空时 = base_url，单上游行为不变)
+    // servers空时 = base_url，单上游等价 base_url)
     let backend_base = if cfg.upstream.servers.is_empty() {
         cfg.upstream.base_url.clone()
     } else {
@@ -251,7 +251,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route_layer(trace_mw)
         .route_layer(ip_allowlist_mw) // 最外层，ip白名单最先判定，非白名单直接丢弃
         // /healthz在安全链route_layer之后注册则豁免限流/认证，下一行route_layer
-        // 作用于此前已注册的全部路由(/api与/healthz)，/healthz获得trace，
+        // 作用于其上已注册的全部路由(/api与/healthz)，/healthz获得trace，
         // /api的trace层被重复套用(幂等，两层复用同一TraceSampled采样判定，
         // 外层生成/透传后内层重写同值TraceCtx与请求头，无副作用)
         .route("/healthz", get(health_handler))
@@ -292,13 +292,13 @@ async fn periodic_cleanup(state: Arc<AppState>) {
 /// tls优先，alpn h2/http1.1双协议，hyper-util auto按协商结果选协议，upgrade路径供ws升级，
 /// 证书缺失/加载失败仅在`allow_insecure_fallback`=true时降级明文，生产直接启动失败。
 /// 关闭信号由内部`ctrl_c`/SIGTERM触发(二次`ctrl_c`强制退出)，测试用
-/// [0]注入外部信号通道，生产行为不变
+/// `serve_with_shutdown` 注入外部信号通道
 pub async fn serve(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error>> {
     serve_with_shutdown(state, None).await
 }
 
 /// [0]的可注入关闭信号版本，`None` = 内部watch通道由`ctrl_c`/SIGTERM触发，与serve一致，
-/// `Some`，rx = 外部触发，测试用，不再注册os信号，关闭路径可完整断言。
+/// `Some`，rx = 外部触发，测试用，不注册os信号，关闭路径可完整断言。
 ///
 /// 完整启动序，先 `build_router`，再解析监听地址，随后 spawn后台任务(健康探测
 /// `health_probe_loop`、`limits.cleanup_interval_secs`周期清理限流表、访问日志sink

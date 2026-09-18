@@ -17,11 +17,11 @@ DECLARE
 BEGIN
     -- pgmq 可用性以 pg_extension 扩展记录为准（定制镜像已源码内置 pgmq 并正式
     -- CREATE EXTENSION，记录缺失即视为未安装），扩展未装则跳过队列预创建，
-    -- 安装 pgmq 后重跑本文件即补齐队列与授权，无需重建容器
+    -- 预期降级路径，安装 pgmq 后重跑本文件即补齐队列与授权，无需重建容器
     IF NOT EXISTS (
         SELECT 1 FROM pg_extension WHERE extname = 'pgmq'
     ) THEN
-        RAISE NOTICE 'queues_cron: pgmq 扩展未安装，跳过 7 条队列预创建（视为无此功能）';
+        RAISE NOTICE 'queues_cron: pgmq 扩展未安装，跳过 7 条队列预创建（预期降级路径）';
         RETURN;
     END IF;
     FOREACH q IN ARRAY ARRAY['q_notify_task','q_notify_mail','q_notify_ws',
@@ -48,7 +48,8 @@ DECLARE
     v_rec  record;
     v_ok   boolean;
 BEGIN
-    -- ① 发送，pgmq.send(queue, message jsonb, delay_sec)
+    --发送，pgmq.send(queue, message jsonb, delay_sec)
+
     SELECT pgmq.send('q_sys_retry',
                      jsonb_build_object('biz_type', 'smoke_test', 'demo', 'archive',
                                         'ts', to_char(clock_timestamp(), 'YYYY-MM-DD"T"HH24:MI:SS')),
@@ -58,11 +59,13 @@ BEGIN
                                         'ts', to_char(clock_timestamp(), 'YYYY-MM-DD"T"HH24:MI:SS')),
                      0) INTO v_msg2;
 
-    -- ② 消费，pgmq.read(queue, vt_sec, batch_size)，返回 msg_id/read_ct/vt/enqueued_at/message
+    --消费，pgmq.read(queue, vt_sec, batch_size)，返回 msg_id/read_ct/vt/enqueued_at/message
+
     SELECT * INTO v_rec FROM pgmq.read('q_sys_retry', 30, 10) LIMIT 1;
 
     IF v_rec.msg_id IS NOT NULL THEN
-        -- ③ 确认消费，pgmq.archive（vt 超时未确认自动回投）
+        --确认消费，pgmq.archive（vt 超时未确认自动回投）
+
         SELECT pgmq.archive('q_sys_retry', v_rec.msg_id) INTO v_ok;
         RAISE NOTICE 'PGMQ 冒烟测试：send->read(msg_id=%, read_ct=%, vt=%, enqueued_at=%)->archive=%',
                      v_rec.msg_id, v_rec.read_ct, v_rec.vt, v_rec.enqueued_at, v_ok;
@@ -70,7 +73,8 @@ BEGIN
         RAISE NOTICE 'PGMQ 冒烟测试：消息未读出（并发消费者已取走），跳过';
     END IF;
 
-    -- ④ 彻底删除，不归档、零残留，pgmq.delete
+    --彻底删除，不归档、零残留，pgmq.delete
+
     PERFORM pgmq.delete('q_sys_retry', v_msg2);
     PERFORM pgmq.delete('q_sys_retry', v_msg1);
 EXCEPTION WHEN OTHERS THEN
@@ -78,12 +82,13 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- pgmq 权限，最小授权，队列内部表 q_q_* 绝不直接 GRANT，消息访问一律经 pgmq.* 函数，全部 pgmq 函数默认 PUBLIC EXECUTE（含 purge_queue/drop_queue/delete 管理函数），REVOKE FROM PUBLIC 后按最小授权重授
--- 本环境 pgmq 核心函数为 invoker 权限、内部直接读写 q_q_* 表，若同时收回表级授权，应用角色经函数访问必 permission denied，故将核心消息路径函数（send/read/archive/pop/set_vt/meta/list/archived）改为 SECURITY DEFINER（属主 fms_admin），应用角色仅持 EXECUTE，管理函数仅 fms_admin（SUPERUSER 隐含 EXECUTE）
--- pgmq 未安装（pg_extension 无记录）时跳过授权段（GRANT ... ON SCHEMA pgmq 在 schema 缺失时直接报错），
--- 本段以 pg_extension 记录为唯一依据，与队列预创建段同一口径，安装 pgmq 后重跑本文件补齐
+-- 本环境 pgmq 核心函数为 invoker 权限、内部直接读写 q_q_* 表，若同时收回表级授权，应用角色经函数访问必 permission denied，故核心消息路径函数（send/read/archive/pop/set_vt/meta/list/archived）采用 SECURITY DEFINER（属主 fms_admin），应用角色仅持 EXECUTE，管理函数仅 fms_admin（SUPERUSER 隐含 EXECUTE）
+-- pgmq 未安装（pg_extension 无记录或 pgmq schema 缺失）时跳过授权段（GRANT ... ON SCHEMA pgmq 在 schema 缺失时直接报错），
+-- 本段按 pg_extension 记录 + pg_namespace 探测，与队列预创建段同一口径，安装 pgmq 后重跑本文件补齐
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgmq')
+       OR NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'pgmq') THEN
         RAISE NOTICE 'queues_cron: pgmq 未安装，跳过 PGMQ 最小授权段';
         RETURN;
     END IF;
@@ -209,7 +214,8 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN
         v_batch := 500; v_vt := 60;              -- 参数表异常，回落现状缺省
     END;
-    -- ① q_log_app 投 log.app_logs
+    --q_log_app 投 log.app_logs
+
     IF to_regclass('pgmq.q_q_log_app') IS NOT NULL THEN
         FOR v_msg IN SELECT * FROM pgmq.read('q_log_app', v_vt, v_batch) LOOP
             BEGIN
@@ -229,7 +235,8 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- ② q_log_access 投 log.access_logs，消息体到行映射收敛到共享函数
+    --q_log_access 投 log.access_logs，消息体到行映射收敛到共享函数
+
     -- log.fn_apply_access_log，log_access_batch.sql 定义，本文件与其降级路径共用单一映射源防复制漂移，
     -- 补落 user_agent 列，单条消费失败，含瞬时缺函数/单条非法，由外层 EXCEPTION 跳过
     IF to_regclass('pgmq.q_q_log_access') IS NOT NULL THEN
@@ -252,7 +259,7 @@ COMMENT ON FUNCTION log.fn_consume_log_queues() IS
 '批量消费日志队列：q_log_app->log.app_logs、q_log_access->log.access_logs，各批 N 条（um.params log.queue.batch.size 缺省 500）、可见性超时 M 秒（um.params log.queue.vt.seconds 缺省 60），消费成功即 archive';
 GRANT EXECUTE ON FUNCTION log.fn_consume_log_queues() TO fms_app;
 
--- rpt immv 自动维护说明，rpt 4 个报表物化对象为 pg_ivm 增量物化视图（automatic 模式），基表 DML 事务内自动增量维护，提交即一致，无需 cron 兜底刷新，完整性验证见 verify/system_verify.sql「2.11 场景-immv自动维护」，废弃刷新包装函数幂等清理，REFRESH MATERIALIZED VIEW 对 immv 表已无意义
+-- rpt immv 自动维护说明，rpt 4 个报表物化对象为 pg_ivm 增量物化视图（automatic 模式），基表 DML 事务内自动增量维护，提交即一致，无需 cron 兜底刷新，废弃刷新包装函数幂等清理，REFRESH MATERIALIZED VIEW 对 immv 表已无意义
 DROP FUNCTION IF EXISTS rpt.fn_cron_refresh_mvs();
 
 -- LISTEN/NOTIFY 通道说明，仅文档注释，不建对象，fms:q pgmq 队列唤醒信号（payload=队列名，丢失由消费者轮询兜底），fms:notify 审批待办/预算预警实时推送（<8KB json，丢失可容忍），fms:cache 缓存失效广播，报表数据变更则前端缓存/Redis 失效，可靠性原则，NOTIFY 不持久化仅作加速，可靠路径始终是 pgmq
@@ -300,7 +307,7 @@ BEGIN
     FOREACH v_job IN ARRAY v_jobs LOOP
         v_parts := string_to_array(v_job, '|');
         v_name := v_parts[1];
-        -- 幂等，删除同名旧任务（限 database='fms'，防止误删他库同名任务）
+        -- 幂等，删除同名任务（限 database='fms'，防止误删他库同名任务）
         EXECUTE format('SELECT cron.unschedule(jobid) FROM cron.job
                          WHERE jobname = %L AND database = %L', v_name, 'fms');
         -- 注册任务，worker 在 fms 库以 postgres 身份执行命令

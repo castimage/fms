@@ -158,7 +158,7 @@ BEGIN
     RETURN v_no::integer;
 END $$;
 
--- 6.2 POSTED/REVERSED 凭证不可变（BEFORE UPDATE OR DELETE，第二层防线，覆盖超级用户绕过 rls 的场景，终版由 gl_core_functions D.0 升级为 v2，fn_reverse_voucher 互指冲销路径放行）
+-- 6.2 POSTED/REVERSED 凭证不可变（BEFORE UPDATE OR DELETE，第二层防线，覆盖超级用户绕过 rls 的场景，fn_reverse_voucher 互指冲销路径放行）
 CREATE OR REPLACE FUNCTION gl.fn_voucher_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -515,7 +515,7 @@ BEGIN
     RETURN v_gaps;
 END $$;
 
--- 结账检查（每月 1 日 04:00），未过账/未审核计数汇总（p_company_id uuid，cron 以 NULL 字面量调用，见 queues_cron.sql）
+-- 结账检查（每月 1 日 04:00），未过账/未审核计数汇总（p_company_id uuid，cron 以 NULL 字面量调用）
 CREATE OR REPLACE FUNCTION gl.fn_close_check(p_company_id uuid, p_period text)
 RETURNS int
 LANGUAGE plpgsql
@@ -535,7 +535,7 @@ BEGIN
     RETURN v_cnt;
 END $$;
 
--- 期末调汇 cron 回退占位（真实现见 init/gl_fx_rates.sql ②，仅当真实现未部署时判存创建，返回 0 保证任务可执行，含 require_permission('gl.period.fx_adjustment') 闸口，cron 以 postgres 身份调用经维护直通放行）
+-- 期末调汇 cron 回退占位（占位实现，仅当真实现未部署时判存创建，返回 0 保证任务可执行，含 require_permission('gl.period.fx_adjustment') 闸口，cron 以 postgres 身份调用经维护直通放行）
 
 -- 幂等要点，占位定义与真实现签名一致（含 DEFAULT 'CNY'，重放替换不报 'cannot remove
 -- parameter defaults from existing function'），仅当函数不存在时创建占位，pg_proc 判存，
@@ -543,7 +543,7 @@ END $$;
 -- $guard$ 标签避免与内层函数体 $$ 嵌套美元引号冲突。
 DO $guard$
 BEGIN
-    -- 判存依据，pronargs=3（上方 DROP 已清 bigint 旧签名，剩余 3 参签名即 uuid 版，
+    -- 判存依据，pronargs=3（上方 DROP 已清 bigint 签名，剩余 3 参签名即 uuid 版，
     -- 不能比较 pg_get_function_identity_arguments 的字面量，其返回含参数名
     -- 'p_company_id uuid, p_period text, p_base_currency text'，实测与 'uuid, text, text'
     -- 不相等导致判存失效重复建函数报 already exists）
@@ -620,7 +620,7 @@ ALTER TABLE gl.voucher_lines ADD COLUMN IF NOT EXISTS cost_amount numeric(18,2) 
 ALTER TABLE gl.voucher_lines ADD COLUMN IF NOT EXISTS summary_tsv tsvector
     GENERATED ALWAYS AS (to_tsvector('fms_zh'::regconfig, COALESCE(summary, ''))) STORED;
 -- DROP INDEX 带 schema 限定，search_path 不含 gl 时未限定名解析不到
--- gl.voucher_lines 上的旧索引，与 gl_fx_rates.sql uk_fx_rate_active 同问题
+-- gl.voucher_lines 上的 ix_line_summary 索引，与 gl_fx_rates.sql uk_fx_rate_active 同问题
 DROP INDEX IF EXISTS gl.ix_line_summary;
 CREATE INDEX IF NOT EXISTS ix_line_summary_tsv ON gl.voucher_lines USING GIN (summary_tsv);
 

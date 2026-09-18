@@ -52,7 +52,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.sql.SQLException;
 
-/** 认证服务实现，登录/刷新/登出/2fa/找回/会话，匿名端点先 SET ROLE fms_operator 再查 um.users（当前 users_select 对匿名恒空集，闭环依赖 03c 闸口），jwt 由 pg auth.jwt_sign 签发，密钥 sec.app_secrets 权威，2fa 票据/黑名单等会话态经 CachePort 收敛，in-memory|redis 双实现，fms.session-store 切换，任意实例写入全局可见 */
+/** 认证服务实现，登录/刷新/登出/2fa/找回/会话，匿名端点先 SET ROLE fms_operator 再查 um.users（当前 users_select 对匿名恒空集，闭环依赖登录闸口），jwt 由 pg auth.jwt_sign 签发，密钥 sec.app_secrets 权威，2fa 票据/黑名单等会话态经 CachePort 收敛，in-memory|redis 双实现，fms.session-store 切换，任意实例写入全局可见 */
 @Service
 public class AuthServiceImpl implements AuthService {
 
@@ -69,10 +69,10 @@ public class AuthServiceImpl implements AuthService {
     private final MailService mailService;
 
     /**
-     * 缓存端口（内存 Map 换成 CachePort，多实例共享），2fa 票据/找回票据/pending 密钥/
+     * 缓存端口（会话态经 CachePort 收敛，多实例共享），2fa 票据/找回票据/pending 密钥/
      * totp 失败计数/令牌黑名单全部收敛于此，任意后端实例写入对全部实例可见，票据 A 实例签发、B 实例可验证，in-memory|redis 双实现由 fms.session-store 切换。
      *
-     * 备用码已 db 落盘（um.backup_codes + auth.* 闸口），不经本端口。
+     * 备用码由 um.backup_codes + auth.* 闸口承载，不走本端口。
      */
     private final CachePort cachePort;
 
@@ -97,7 +97,7 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * 密码登录主流程，事务内，先 SET ROLE fms_operator 以列白名单查 um.users（匿名恒空集，
-     * 配合 03c 闸口防匿名枚举），查得后注入本用户 guc，本用户行更新经 is_self 放行 rls。
+     * 配合登录闸口防匿名枚举），查得后注入本用户 guc，本用户行更新经 is_self 放行 rls。
      * 校验序，锁定未到期拒绝 / 锁定过期自动解锁清零 / 禁用拒绝则 bcrypt 口令校验，失败
      * 累加计数，达阈值置 LOCKED 并记锁定截止时间，成功则清零失败计数并刷新 last_login。
      * 启用 2fa 时仅发两步票据、不签发 jwt，弱密码标记暂存票据，二次验证成功才生效，
@@ -106,7 +106,7 @@ public class AuthServiceImpl implements AuthService {
      * 存在性。
      *
      * 执行细节，查用户用列白名单，pass_hash 参与 bcrypt 校验但不出列给响应，
-     * 匿名阶段 SELECT 因 rls 恒空集，配合 03c 闸口防登录名枚举，查到用户后注入
+     * 匿名阶段 SELECT 因 rls 恒空集，配合登录闸口防登录名枚举，查到用户后注入
      * fms.user_id guc，随后的计数/锁定/last_login 更新经 is_self 策略放行，本用户
      * 只写自己的行。口令失败语义分两档，未达阈值仅累加计数（响应仍统一"用户名或
      * 密码错误"，不泄露是账号问题还是口令问题），达 max-failures 阈值置 LOCKED 并
@@ -129,7 +129,7 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(LoginRequest req, String ip, String userAgent) {
         authFunctionMapper.setRoleOperator();
         try {
-            // 03c 登录闸口（SECURITY DEFINER），匿名 SELECT 因 um.users rls 恒空集恒查不到，
+            // 登录闸口（SECURITY DEFINER），匿名 SELECT 因 um.users rls 恒空集恒查不到，
             // 用户查找 + bcrypt 校验，crypt 比对全部在 pg 内完成，防匿名枚举且 pass_hash 不出库。
 
             // 返回 {user_id, ok, status, locked_until, mfa_enabled, must_change_pwd,
@@ -142,7 +142,7 @@ public class AuthServiceImpl implements AuthService {
             }
             UUID userId = verify.userId();
 
-            // 状态机，闸口返回权威状态，锁定，未到期拒绝，锁定已过期自动解锁（03c update_user 闸口，
+            // 状态机，闸口返回权威状态，锁定，未到期拒绝，锁定已过期自动解锁（update_user 闸口，
             // 锁定态 current_uid 为 NULL，直接 UPDATE 会被 rls is_self 挡回），禁用拒绝。
             if ("LOCKED".equals(verify.status()) && verify.lockedUntil() != null
                     && verify.lockedUntil().isAfter(Instant.now())) {
@@ -162,9 +162,9 @@ public class AuthServiceImpl implements AuthService {
             }
 
             // 口令校验结果（闸口内 crypt 比对，失败计数原子递增 + 暴力锁定全部下沉 pg 闸口
-            // auth.record_login_failure 行级原子自增，避免 Java 侧读改写并发下计数被低估
-            // （5 并发实测漏计使计数仍为 0 而非 1），防暴力破解锁定被绕过，
-            // 现由单条 UPDATE 行级原子自增，行锁串行化，达阈值同事务直接置 LOCKED+locked_until）
+            // auth.record_login_failure 行级原子自增：Java 侧读改写并发下会漏计，暴力破解
+            // 锁定可被绕过；单条 UPDATE 行级原子自增，行锁串行化，达阈值同事务直接置
+            // LOCKED+locked_until）
             if (!verify.ok()) {
                 JSONObject failRes = JSON.parseObject(authFunctionMapper.recordLoginFailure(
                         userId, fmsProperties.getLogin().getMaxFailures(),
@@ -178,7 +178,7 @@ public class AuthServiceImpl implements AuthService {
             }
 
             // 口令正确，注入本用户 guc 后读全量行，is_self 放行 rls，
-            // 经 auth.update_user 门面清计数/解锁/刷登录时间（03c 白名单含
+            // 经 auth.update_user 门面清计数/解锁/刷登录时间（白名单含
             // last_login_at，列级授权下 operator 直更 users 仅 display_name）
             authFunctionMapper.setLocalUserId(userId);
             User user = userMapper.selectById(userId);
@@ -204,8 +204,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse verifyTotp(TotpVerifyRequest req, String ip, String userAgent) {
-        // 内存 Map 换成 CachePort，多实例共享，2fa 票据 A 实例签发、B 实例可验证，
-        // ttl 过期即 key 消失，等价原 expireAt 判断，解析失败按"票据无效"处理（fail-closed）
+        // 会话态经 CachePort 收敛，多实例共享，2fa 票据 A 实例签发、B 实例可验证，
+        // ttl 过期即 key 消失，解析失败按"票据无效"处理（fail-closed）
         MfaTicket ticket = cachePort.get(ticketKey(req.ticket()))
                 .map(this::parseMfaTicket).orElse(null);
         if (ticket == null) {
@@ -213,8 +213,8 @@ public class AuthServiceImpl implements AuthService {
         }
         // 暴力防护，totp 连续失败 totpMaxFails 次，totpFailWindow 窗口拒绝。
 
-        // 内存 Map 换成 CachePort，多实例共享，滑动窗口语义，fail 时 increment 刷新 ttl，
-        // ttl 过期自动归零，等价原窗口滚动，无值按 0 计
+        // 会话态经 CachePort 收敛，多实例共享，滑动窗口语义，fail 时 increment 刷新 ttl，
+        // ttl 过期自动归零，无值按 0 计
         if (!totpFailTryAcquire(ticket.userId())) {
             throw new UnauthorizedException("TOTP 验证失败次数过多，请稍后再试");
         }
@@ -224,7 +224,7 @@ public class AuthServiceImpl implements AuthService {
 
             // 备用码路径审计区分，同口径，成功 success=true + fail_reason='backup_code_used'
             // （区分"经备用码登录"与普通 totp 登录，安全审计可追溯降级通道），失败归
-            // 'bad_backup_code'，totp 错 + 备用码无/错统一走此原因，原 bad_totp 语义并入
+            // 'bad_backup_code'，totp 错 + 备用码无/错统一走此原因
             boolean usedBackupCode = false;
             String secret = authFunctionMapper.getMfaSecret(ticket.userId());
             if (secret == null || !TotpUtils.verify(secret, req.code(),
@@ -281,7 +281,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse refresh(RefreshRequest req) {
-        // 内存 Map 换成 CachePort，多实例共享，黑名单任意实例写入、任意实例校验
+        // 会话态经 CachePort 收敛，多实例共享，黑名单任意实例写入、任意实例校验
         if (cachePort.get(blacklistKey(req.refreshToken())).isPresent()) {
             throw new TokenExpiredException("refresh token 已失效，请重新登录");
         }
@@ -299,7 +299,7 @@ public class AuthServiceImpl implements AuthService {
             }
             LoginResponse response = issueLogin(user);
 
-            // 刷新后旧 refresh 立即失效，旋转语义，内存 Map 换成 CachePort，多实例共享，
+            // 刷新后旧 refresh 立即失效，旋转语义，会话态经 CachePort 收敛，多实例共享，
             // 值占位 "1"，ttl 与令牌对齐自动过期
             cachePort.set(blacklistKey(req.refreshToken()), "1",
                     fmsProperties.getJwt().getRefreshTtl());
@@ -327,7 +327,7 @@ public class AuthServiceImpl implements AuthService {
         if (req == null) {
             return;
         }
-        // 内存 Map 换成 CachePort，多实例共享，值占位 "1"，ttl 与对应令牌 ttl 对齐，自动过期
+        // 会话态经 CachePort 收敛，多实例共享，值占位 "1"，ttl 与对应令牌 ttl 对齐，自动过期
         if (req.accessToken() != null && !req.accessToken().isBlank()) {
             cachePort.set(blacklistKey(req.accessToken()), "1",
                     fmsProperties.getJwt().getAccessTtl());
@@ -364,7 +364,7 @@ public class AuthServiceImpl implements AuthService {
         }
         String secret = TotpUtils.generateSecret();
         LocalDateTime expireAt = LocalDateTime.now().plus(fmsProperties.getMfa().getPendingSecretTtl());
-        // 内存 Map 换成 CachePort，多实例共享，pending 密钥 ttl 内任意实例可继续 enable 流程
+        // 会话态经 CachePort 收敛，多实例共享，pending 密钥 ttl 内任意实例可继续 enable 流程
         cachePort.set(pendingKey(userId), secret, fmsProperties.getMfa().getPendingSecretTtl());
         String otpauthUrl = TotpUtils.otpauthUrl(
                 fmsProperties.getMfa().getIssuer(), user.getLoginName(), secret);
@@ -383,7 +383,7 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("密码错误");
         }
 
-        // 内存 Map 换成 CachePort，多实例共享，ttl 过期即 key 消失，等价原 expireAt 判断
+        // 会话态经 CachePort 收敛，多实例共享，ttl 过期即 key 消失
         Optional<String> pending = cachePort.get(pendingKey(userId));
         if (pending.isEmpty()) {
             throw new BadRequestException("TOTP 密钥已过期，请重新 setup");
@@ -418,9 +418,9 @@ public class AuthServiceImpl implements AuthService {
     public BackupCodesResponse backupCodes(String ip, String userAgent) {
         UUID userId = RequestContext.requireUserId();
         // 生成事件留痕，同口径，登录/2fa/改密统一落 um.login_log，
-        // 备用码是 2fa 的降级通道，生成/核销都必须可审计，原实现无任何审计，属真实缺口。
+        // 备用码是 2fa 的降级通道，生成/核销都必须可审计。
 
-        // 注，本方法由 readOnly 事务改为读写事务，recordLogin 写 um.login_log，
+        // 本方法为读写事务，recordLogin 写 um.login_log，
         // readOnly 连接下 pg 会以 25006 拒绝 INSERT
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -430,8 +430,8 @@ public class AuthServiceImpl implements AuthService {
                 fmsProperties.getMfa().getBackupCodeLength());
         LocalDateTime expireAt = LocalDateTime.now()
                 .plusDays(fmsProperties.getMfa().getBackupCodeValidDays());
-        // 备用码持久化，db 盲索引落盘，SECURITY DEFINER 闸口，恢复码不再随会话 ttl/
-        // 实例重启丢失，原 CachePort 30min 过期即失效，核销留 used_at 可审计，
+        // 备用码持久化，db 盲索引落盘，SECURITY DEFINER 闸口，不随会话 ttl/
+        // 实例重启丢失，核销留 used_at 可审计，
         // 明文仅函数体/事务内处理，库内只存 hmac 盲索引
         int inserted = authFunctionMapper.issueBackupCodes(userId,
                 codes.toArray(new String[0]), fmsProperties.getMfa().getBackupCodeValidDays());
@@ -448,7 +448,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public RecoveryResponse recovery(RecoveryRequest req) {
         // email 为加密存储（bytea + hmac 盲索引），应用侧无法比对明文、也无法取出明文，
-        // 且匿名期 rls is_self 恒拒、selectOne 恒空集，联调实测，一致性校验走
+        // 且匿名期 rls is_self 恒拒、selectOne 恒空集，一致性校验走
         // auth.recovery_lookup 闸口，SECURITY DEFINER 直读盲索引
         UUID uid = authFunctionMapper.recoveryLookup(req.loginName(), req.email());
         // 防用户名探测，用户不存在/email 不匹配同样返回票据占位（占位票据绑定随机 uuid，
@@ -456,7 +456,7 @@ public class AuthServiceImpl implements AuthService {
         String ticket = UuidV7.next().toString();
         LocalDateTime expireAt = LocalDateTime.now()
                 .plus(fmsProperties.getMfa().getRecoveryTicketTtl());
-        // 内存 Map 换成 CachePort，多实例共享，值=userId 字符串，set 覆盖语义与原 put 等价，
+        // 会话态经 CachePort 收敛，多实例共享，值=userId 字符串，set 为覆盖语义，
         // 占位票据绑随机 uuid，与真实票据同结构不可区分，ttl 自动过期
         cachePort.set(recoveryKey(ticket), (uid == null ? UuidV7.next() : uid).toString(),
                 fmsProperties.getMfa().getRecoveryTicketTtl());
@@ -474,7 +474,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void recoveryReset(RecoveryResetRequest req, String ip, String userAgent) {
-        // 内存 Map 换成 CachePort，多实例共享，ttl 过期即 key 消失，等价原 expireAt 判断，
+        // 会话态经 CachePort 收敛，多实例共享，ttl 过期即 key 消失，
         // 值损坏按无效票据处理，fail-closed，与无效/过期同语义
         Optional<String> ticketUserId = cachePort.get(recoveryKey(req.ticket()));
         if (ticketUserId.isEmpty()) {
@@ -556,11 +556,11 @@ public class AuthServiceImpl implements AuthService {
 
         // 改密唯一写入口 auth.set_password（bcrypt 哈希写入，pass_hash 列级不可直写）
         authFunctionMapper.setPassword(userId, PasswordUtils.encode(req.newPassword()));
-        // 清 must_change_pwd（03c update_user 白名单键，首登强制改密闭环在此解除）
+        // 清 must_change_pwd（update_user 白名单键，首登强制改密闭环在此解除）
         authFunctionMapper.updateUser(userId, patch(JSONObject.of("must_change_pwd", false)));
 
         // 改密事件记 um.login_log（success=true + fail_reason='password_changed' 标记，
-        //，登录/登出/2fa/密码修改统一落登录日志）
+        // 登录/登出/2fa/密码修改统一落登录日志）
         recordLogin(userId, user.getLoginName(), true, "password_changed", ip, userAgent);
         // 会话策略，请求携带的令牌原值入黑名单，当前会话立即失效，防旧口令会话续期
         blacklistTokens(req);
@@ -569,7 +569,7 @@ public class AuthServiceImpl implements AuthService {
 
     /** 改密后令牌失效，请求携带的 access/refresh 原值入 CachePort 黑名单，ttl 与各自令牌对齐，自动过期 */
     private void blacklistTokens(ChangePasswordRequest req) {
-        // 内存 Map 换成 CachePort，多实例共享，值占位 "1"，ttl 与对应令牌 ttl 对齐
+        // 会话态经 CachePort 收敛，多实例共享，值占位 "1"，ttl 与对应令牌 ttl 对齐
         if (req.accessToken() != null && !req.accessToken().isBlank()) {
             cachePort.set(blacklistKey(req.accessToken()), "1",
                     fmsProperties.getJwt().getAccessTtl());
@@ -675,7 +675,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * 2fa 两步票据签发（内存 Map 换成 CachePort，多实例共享，ttl=fms.mfa.ticket-ttl，
+     * 2fa 两步票据签发（会话态经 CachePort 收敛，多实例共享，ttl=fms.mfa.ticket-ttl，
      * 过期即 key 消失，setIfAbsent 防 uuid 碰撞，理论上恒真，重试仅防御性兜底，
      * weakPassword 标记暂存至二次验证成功）。
      */
@@ -737,7 +737,7 @@ public class AuthServiceImpl implements AuthService {
                 o.getInteger("failed_login_count"));
     }
 
-    /** 03c update_user 补丁序列化，白名单键，email/status/must_change_pwd/failed_login_count/locked_until，null 值经 JSONObject 保留 */
+    /** update_user 补丁序列化，白名单键，email/status/must_change_pwd/failed_login_count/locked_until，null 值经 JSONObject 保留 */
     private String patch(JSONObject fields) {
         return fields.toJSONString();
     }
@@ -759,7 +759,7 @@ public class AuthServiceImpl implements AuthService {
         return t;
     }
 
-    //， CachePort 键构造，命名空间 fms:*，与 CachePort 契约一一对应，多实例共享语义见接口注释，
+    // CachePort 键构造，命名空间 fms:*，与 CachePort 契约一一对应，多实例共享语义见接口注释
     private String ticketKey(String ticket) {
         return "fms:ticket:" + ticket;
     }
@@ -794,8 +794,8 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    //， totp 失败计数（内存 Map 换成 CachePort，多实例共享，滑动窗口语义，fail 时
-    // increment 刷新 ttl，滚动窗口，ttl 过期自动归零，与原窗口滚动 + 定时清理等价），
+    // totp 失败计数（会话态经 CachePort 收敛，多实例共享，滑动窗口语义，fail 时
+    // increment 刷新 ttl，滚动窗口，ttl 过期自动归零），
 
     /** 窗口内是否仍可尝试，当前失败计数 < totpMaxFails，无记录视为 0，值损坏按 0 放行一次 */
     private boolean totpFailTryAcquire(UUID userId) {
@@ -815,7 +815,7 @@ public class AuthServiceImpl implements AuthService {
         cachePort.increment(totpFailKey(userId), Duration.ofMillis(totpFailWindowMillis));
     }
 
-    /** 验证通过清零，key 删除，等价原 reset */
+    /** 验证通过清零，key 删除 */
     private void totpFailReset(UUID userId) {
         cachePort.delete(totpFailKey(userId));
     }

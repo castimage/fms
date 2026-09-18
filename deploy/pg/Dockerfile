@@ -2,7 +2,7 @@
 # 基于官方 postgres:18，全部 PG 扩展采用「下载源码 make install」方式安装：
 #   pgaudit（数据库审计）/ pg_cron（定时任务）/ pg_partman（分区维护）/
 #   pgjwt（JWT 验签）/ pg_ivm（增量物化视图）/ zhparser（中文分词）/
-#   pgmq（消息队列），不再安装任何 PGDG 二进制扩展包（postgresql-18-*）。
+#   pgmq（消息队列）；不安装任何 PGDG 二进制扩展包（postgresql-18-*）。
 # PGDG apt 源仅保留用于构建依赖（postgresql-server-dev-18 提供 server 头文件
 # 与 pg_config——官方 postgres:18 镜像不含 dev 文件，源码编译 PG 扩展必需）。
 # shared_preload_libraries 基线写入 postgresql.conf.sample（initdb 以该样例

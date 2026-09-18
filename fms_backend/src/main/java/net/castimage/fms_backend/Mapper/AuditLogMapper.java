@@ -15,7 +15,7 @@ import java.util.UUID;
 /**
  * 审计日志 Mapper（audit.audit_log）：BaseMapper 提供单表查询；分页（多可选过滤）与
  * 哈希链校验（audit.audit_log_chain_check PG 函数，B 类调用）手写。查询仅 fms_auditor
- * 可达（RLS 策略 + 08 授权矩阵），写入封闭（不可变触发器 + 无写策略）。
+ * 可达（RLS 策略），写入封闭（不可变触发器 + 无写策略）。
  */
 public interface AuditLogMapper extends BaseMapper<AuditLog> {
 

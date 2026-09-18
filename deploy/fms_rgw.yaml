@@ -1,5 +1,4 @@
 # FMS 网关生产配置，部署覆盖件，替换镜像内 config/fms_rgw.yaml 模板
-# 本文件以 fms_rgw/config/fms_rgw.yaml 生产模板为蓝本改写，原模板不改动，
 # 经 compose 挂载到容器 /app/config/fms_rgw.yaml，FMS_RGW_CONFIG 指向。
 # 未列出的配置项，health/限流/熔断/shards/角色等，一律不写，采用代码默认值，
 # upstream 健康检查 /internal/health，interval 5s / timeout 2s

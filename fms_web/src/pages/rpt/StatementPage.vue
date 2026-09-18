@@ -43,7 +43,7 @@ const incomeRows = ref<IncomeStatementRow[]>([])
 const balanceRows = ref<BalanceSheetRow[]>([])
 const cashRows = ref<CashFlowRow[]>([])
 
-/** 期间绑定 appStore.period，月选择器时间戳 <-> YYYY-MM */
+/** 期间绑定 appStore.period，月选择器时间戳与 YYYY-MM 互转 */
 const periodTs = computed(() => (appStore.period ? dayjs(appStore.period + '-01').valueOf() : null))
 function onPeriodChange(ts: number | null) {
   appStore.setPeriod(ts ? dayjs(ts).format('YYYY-MM') : dayjs().format('YYYY-MM'))

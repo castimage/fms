@@ -20,9 +20,9 @@
 #      fms-redis / fms-pgbouncer / fms-web-build / fms-rgw → ["app"]，
 #      保证应用主机不启动 db、db 主机不启动应用服务。
 #   2. fms-db 增加 ports: ["5432:5432"]（仅 db 主机生效）。
-#   3. 应用主机新增 fms-redis，共享会话存储与 fms-pgbouncer（transaction
+#   3. 应用主机含 fms-redis，共享会话存储与 fms-pgbouncer（transaction
 #      连接池），pgbouncer 的 DB_HOST 传 ${FMS_DB_HOST}（跨主机服务名
-#      fms-db 不可解析，直连 db 主机 LAN IP），后端数据源改为本地
+#      fms-db 不可解析，直连 db 主机 LAN IP），后端数据源指向本地
 #      jdbc:postgresql://fms-pgbouncer:6432/fms（单机版为服务名 fms-pgbouncer，
 #      语义一致，仅 pgbouncer 自身指向不同）。
 #   4. fms-backend 的 depends_on fms-db 显式 required: false，compose ≥2.20
@@ -124,7 +124,7 @@ services:
       DB_HOST: ${FMS_DB_HOST:?多机模式请在 .env 设置 FMS_DB_HOST}
     depends_on:
       # 应用主机 --profile app 不启动 fms-db，required: false 必须显式声明
-      #（compose ≥2.20 默认 required: true，指向未激活服务会拒绝启动）
+      # （compose ≥2.20 默认 required: true，指向未激活服务会拒绝启动）
       fms-db:
         condition: service_healthy
         required: false
@@ -216,7 +216,7 @@ services:
       # 依赖条件仅对同次启动的服务生效，应用主机 --profile app 不启动 fms-db。
       # required: false 必须显式声明，compose ≥2.20 默认 required: true，
       # 依赖指向 profile 未激活服务会直接报错拒绝启动
-      #（"service fms-db is required by fms-backend, but is disabled"）
+      # （"service fms-db is required by fms-backend, but is disabled"）
       fms-db:
         condition: service_healthy
         required: false

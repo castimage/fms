@@ -148,9 +148,11 @@ impl AccessLogger {
     }
 
     /// 请求路径提交入口，非阻塞，绝不阻塞/失败请求路径，
-    /// 1. 确定性采样(rate == 1全量，否则`AtomicU64`序号自增，seq % rate == 0才记录，
+    ///确定性采样(rate == 1全量，否则`AtomicU64`序号自增，seq % rate == 0才记录，
+
     ///    非随机数，审计可复现)，
-    /// 2. 有界通道`try_send`，满则丢弃本条目并计数`dropped_logs`，WARN每秒至多一次
+    ///有界通道`try_send`，满则丢弃本条目并计数`dropped_logs`，WARN每秒至多一次
+
     ///    防刷屏，通道已关闭，进程退出则静默丢弃。
     pub fn submit(&self, entry: AccessLogEntry) {
         // 采样判定，确定性序号，非随机，rate=1全量保审计
@@ -269,7 +271,7 @@ impl AccessLogger {
         };
 
         // 复用new构造的投递客户端，跨批keep-alive复用同一tcp连接，
-        // 不再每批新建客户端，每批新建 = 连接池对象反复重建、跨批无连接复用
+        // 避免连接池对象反复重建与跨批无连接复用
         let client = &self.pgmq_client;
         let req = Request::builder()
             .method("POST")
@@ -576,7 +578,7 @@ mod tests {
             "/api/gl/vouchers?page=1&size=20",
             "非 WS 路径保留 query"
         );
-        // 脱敏与路径规范解耦，任意路径的token= 长值统一掩码，路径变体不再绕过
+        // 脱敏与路径规范解耦，任意路径的token= 长值统一掩码
         let uri: axum::http::Uri = "/api/x?token=eyJhbGciOiJIUzI1NiJ9.sig".parse().unwrap();
         assert_eq!(
             log_path(&uri, 1024),

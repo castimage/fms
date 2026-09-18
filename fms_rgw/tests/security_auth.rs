@@ -1,6 +1,6 @@
 //! `tests/security_auth.rs`，红队，认证/签名/会话攻击测试套件，针对FMS网关信任链
 //!
-//! 覆盖，对应任务编号，
+//! 覆盖，
 //! jwt算法混淆，alg:none空签名、HS256用RS256公钥字节作hmac密钥、弱密钥穷举
 //! jwt生命周期，过期 / 未来时间 / 空sub / 超长sub
 //! pgjwt兼容，无iss/aud宽松放行，iss/aud不匹配且未配置则宽松，配置后严格
@@ -15,12 +15,11 @@
 //! 是否到达上游，防绕过关键)。后端侧签名对称校验(`verify_signature_header` / `NonceStore`)
 //! 为公开api，直接复用断言"下游如何拒绝重放"。
 //!
-//! 发现，缺陷/观察，不改src，供后续修复，
-//! 1. 【观察/潜在缺陷】`X-Real-IP`为客户端可控且网关原样透传上游，a6用例断言，
-//!    上游若信任`X-Real-IP`取真实ip会被直连客户端伪造，建议网关覆盖/剥离`X-Real-IP`
-//!    或仅在受信边界，前置代理写入。
-//! 2. 【语义说明】`/api/nt/ws`位于匿名白名单，无token的普通http请求会绕过认证转发到
-//!    上游，a8白名单用例断言，符合INTERFACE设计，但上游必须自行校验ws token。
+//! 语义说明，
+//!`X-Real-IP`由网关覆盖为真实对端ip，客户端伪造值不生效，上游可采信该头。
+
+//!`/api/nt/ws`仅真正的ws升级请求免jwt，非升级http请求必须验签。
+
 
 mod common;
 
@@ -227,8 +226,8 @@ async fn expired_token_rejected_40101() {
 
 /// 【攻击】签发"永不过期"的未来exp，100年后，观察网关是否强制最大有效期。
 /// 【防护层】auth层，无最大exp上限，标准jwt语义，与pgjwt兼容，该token合法通过。
-/// 【预期】200 + 上游收到1次且身份头正确，语义记录，业务侧需自行缩短exp签发期
-/// 网关不做"过期期限过长"限制，非缺陷。
+/// 【预期】200 + 上游收到1次且身份头正确，语义记录，业务侧需自行缩短exp签发期，
+/// 网关不做"过期期限过长"限制。
 #[tokio::test]
 async fn future_exp_far_future_accepted() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
@@ -927,8 +926,7 @@ async fn client_fms_identity_forgery_stripped() {
 /// proxy层，`X-Forwarded-For`仅做"追加真实ip"，不信任原值。
 /// 【预期】同对端ip换不同xff第3次则 429 + 42900 + `Retry-After`，不同对端ip 则 200，
 /// 上游xff尾部为真实对端ip。
-/// 【发现】`X-Real-IP`被客户端控制并原样透传上游，下方断言，若上游信任该头取真实ip会被
-/// 直连客户端伪造，建议网关覆盖/剥离`X-Real-IP`，不改src，仅记录。
+/// 【防护】`X-Real-IP`由网关覆盖为真实对端ip，客户端伪造值不生效，上游可采信该头。
 #[tokio::test]
 async fn xff_xrealip_forgery_cannot_move_ratelimit_key() {
     let (router, mock) = router_with_mock(
@@ -1223,7 +1221,7 @@ async fn anonymous_whitelist_passes_without_token() {
         None,
         "匿名路径上游也不得收到客户端伪造的 X-FMS-*"
     );
-    //，非升级http请求(无Upgrade头)访问/api/nt/ws则 401，不再匿名放行
+    // 非升级http请求(无Upgrade头)访问/api/nt/ws则 401，不匿名放行
     let resp = oneshot(&router, with_ip(request("GET", "/api/nt/ws"), "127.0.0.1")).await;
     assert_eq!(
         resp.status(),

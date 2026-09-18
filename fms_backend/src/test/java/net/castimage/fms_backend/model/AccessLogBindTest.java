@@ -10,11 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * 网关到后端协议对齐回归测试，rgw 侧 AccessLogEntry 以 serde 默认字段名序列化，snake_case，req_id / latency_ms，后端运行路径用 fastjson2 解析
+ * 网关到后端协议对齐测试，rgw 侧 AccessLogEntry 以 serde 默认字段名序列化，snake_case，req_id / latency_ms，后端运行路径用 fastjson2 解析
  * （InternalLogController json.parseArray），record 组件为 camelCase（reqId/latencyMs），
  * 经 @JSONField(name=...) 显式映射，本测试喂入的 RGW_PAYLOAD 即 rgw 实际序列化键名，与 fms_rgw log.rs entries_serialize_as_json_array_for_pgmq 单测断言一致，
  * 若绑定失效 reqId/latencyMs 恒 null 则 q_log_access 的 req_id/trace_id/latency
- * 审计列落空，此处即回归失败。
+ * 审计列落空。
  */
 class AccessLogBindTest {
 

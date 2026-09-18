@@ -96,7 +96,7 @@ class GlServiceImplTest {
         when(voucherLineMapper.selectSum(VOUCHER_ID)).thenReturn(sum);
     }
 
-    // ---------------- submit（DRAFT 转 SUBMITTED） ----------------
+    // submit（DRAFT 转 SUBMITTED）
 
     @Test
     void submitRejectsNonDraftStatus() {
@@ -141,7 +141,7 @@ class GlServiceImplTest {
         verify(voucherMapper).updateById(any(Voucher.class));
     }
 
-    // ---------------- approve（SUBMITTED 转 APPROVED） ----------------
+    // approve（SUBMITTED 转 APPROVED）
 
     @Test
     void approveRejectsNonSubmittedStatus() {
@@ -167,7 +167,7 @@ class GlServiceImplTest {
         verify(voucherMapper).updateById(any(Voucher.class));
     }
 
-    // ---------------- post（APPROVED 转 POSTED） ----------------
+    // post（APPROVED 转 POSTED）
 
     @Test
     void postRejectsNonApprovedStatus() {

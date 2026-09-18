@@ -186,7 +186,7 @@ public class FileServiceImpl implements FileService {
         log.info("附件软删 id={} path={} by={}", id, doc.getStoragePath(), RequestContext.userId());
     }
 
-    // ---------------- 私有辅助 ----------------
+    // 私有辅助
 
     /** 业务对象求所属公司（RLS 收敛查询；越权/软删则 null；背景图类型取当前用户所属公司） */
     private UUID resolveCompanyId(String businessType, UUID businessId) {

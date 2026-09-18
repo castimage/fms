@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * MyBatis record 结果类型映射测试，注解式 Mapper 的 resultType
- * （VoucherListView/VoucherLineView/LedgerView/TrialBalanceRow）已 record 化，
+ * （VoucherListView/VoucherLineView/LedgerView/TrialBalanceRow）为 record，
  * 本测试以 mocked jdbc 驱动 DefaultResultSetHandler 完整结果映射路径，列别名
  * （account_id 映射 accountId，map-underscore-to-camel-case）必须经 record 规范构造器
  * 按组件名自动装配。uuid 列依赖 UuidTypeHandler 注册（与 production

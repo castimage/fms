@@ -498,7 +498,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     /** 报销单创建幂等键：规范化请求内容 SHA-256 十六进制（同 body 必同键，改任一字段即新键）。
-     *  键为 64 字符（列 varchar(64)），uk_reimb_idem 部分唯一索引防同 body 重复提交。 */
+     * 键为 64 字符（列 varchar(64)），uk_reimb_idem 部分唯一索引防同 body 重复提交。 */
     private String reimbIdemKey(UUID companyId, UUID applicantId, ReimbursementRequest req) {
         StringBuilder sb = new StringBuilder();
         sb.append(companyId).append('|')

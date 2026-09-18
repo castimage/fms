@@ -149,7 +149,7 @@ class ArServiceImplTest {
         assertThrows(BadRequestException.class, () -> service.allocate(RECEIPT_ID, req("-10.00")));
     }
 
-    /** 同对同金额重复提交则 40900，防重复核销二次生效 */
+    /** 同对同金额重复提交返回 40900，核销不二次生效 */
     @Test
     void allocateThrows40900OnDuplicateAllocation() {
         stubBaseline();

@@ -248,9 +248,9 @@ public class FaServiceImpl implements FaService {
      *
      * 计提计算（Service 侧，与 PG 函数 fa.fn_run_depreciation 同口径）：
      *
-     *   直线法：monthly = round((原值 - 残值) / 月数, 2)
-     *   双倍余额递减：monthly = round((原值 - 累计折旧) * 2 / 月数, 2)
-     *   计提额封顶：amount = min(monthly, 原值 - 残值 - 累计折旧)（<=0 不计提）
+     * 直线法：monthly = round((原值 - 残值) / 月数, 2)
+     * 双倍余额递减：monthly = round((原值 - 累计折旧) * 2 / 月数, 2)
+     * 计提额封顶：amount = min(monthly, 原值 - 残值 - 累计折旧)（<=0 不计提）
      *
      * 批次写：CONFIRMED 批次存在（同公司同期间）则跳过返回 0；DRAFT 旧批次软删重建（幂等，
      * 旧批次已计提资产本次跳过落资产防双计提）；计提生效落资产（ACTIVE 转 DEPRECIATING +

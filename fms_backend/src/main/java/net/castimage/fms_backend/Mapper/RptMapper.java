@@ -16,7 +16,7 @@ import java.util.UUID;
 
 /**
  * 报表 Mapper（rpt 域）：非 BaseMapper，纯 B 类手写查询接口（JOIN/聚合/视图引用）。
- * 全部报表 SQL 直查 06 文件视图（rpt.trial_balance/income_statement/balance_sheet/cash_flow/ar_aging，
+ * 全部报表 SQL 直查 rpt 视图（rpt.trial_balance/income_statement/balance_sheet/cash_flow/ar_aging，
  * security_invoker=on 行级按调用者 GUC 收敛）与 IMMV（rpt.budget_actual/dept_expense/cash_flow_daily，
  * pg_ivm automatic 提交即一致）——Java 不拼公司白名单，companyId 仅 UI 提示过滤，越权值返回空集。
  */
@@ -63,7 +63,7 @@ public interface RptMapper {
 
     /**
      * 资产负债表（rpt.balance_sheet 视图）：ASSET 借方净额、LIABILITY/EQUITY 贷方净额，按（公司×期间）。
-     * period 显式 jdbcType=VARCHAR（同 selectIncomeStatement 的 42P18 修复）。
+     * period 显式 jdbcType=VARCHAR（与 selectIncomeStatement 一致，避免 42P18）。
      */
     @Select("""
             SELECT t.period, t.total_asset, t.total_liability, t.total_equity
@@ -134,8 +134,7 @@ public interface RptMapper {
     /**
      * 看板-资金日报（rpt.cash_flow_daily IMMV）：按（公司×日）聚合收入/支出，近 N 日窗口过滤；
      * 净额 net = income - expense 由 SQL 内联计算——DailyCashRow 构造器 4 参（trxDate,income,
-     * expense,net）与 4 列严格对齐（此前仅 3 列导致 MyBatis 构造器自动映射失败 HTTP 500，
-     * traceId 4048d42f-10cc-4c30-8e54-389bd6932c84），供资金日报与趋势图。
+     * expense,net）与 4 列严格对齐，供资金日报与趋势图。
      */
     @Select("""
             SELECT t.trx_date, t.income, t.expense, (t.income - t.expense) AS net
@@ -237,7 +236,7 @@ public interface RptMapper {
      * 看板-异常告警（调 PG SECURITY DEFINER 函数 rpt.fn_dashboard_alerts：函数内读 um.params
      * 阈值 + 校验公司范围 + 扫描 bank_accounts 密文表，返回 jsonb 数组字符串
      * [{type,kind,period,dept_name,account_name,ratio,plan_amount,actual_amount,threshold} |
-     *  {type,kind,bank_name,balance,safety_line}]，Service 侧 fastjson2 解析拼装中文文案）。
+     * {type,kind,bank_name,balance,safety_line}]，Service 侧 fastjson2 解析拼装中文文案）。
      */
     @Select("SELECT rpt.fn_dashboard_alerts(#{companyId}::uuid)")
     String selectDashboardAlerts(@Param("companyId") UUID companyId);

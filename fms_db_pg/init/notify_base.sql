@@ -7,7 +7,8 @@
 
 SET ROLE fms_admin;
 
--- 1) schema 与表
+--schema 与表
+
 CREATE SCHEMA IF NOT EXISTS notify;
 
 CREATE TABLE IF NOT EXISTS notify.notifications (
@@ -29,7 +30,8 @@ CREATE INDEX IF NOT EXISTS ix_notify_user ON notify.notifications (user_id, crea
 COMMENT ON TABLE notify.notifications IS
 '站内通知（按收件人 user_id 归属；RLS 按 auth.current_uid() = user_id 收敛，Java 侧恒加 user_id 过滤双保险）';
 
--- 2) rls（FORCE，user_id 收敛，无 company_id 维度）
+--rls（FORCE，user_id 收敛，无 company_id 维度）
+
 ALTER TABLE notify.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notify.notifications FORCE ROW LEVEL SECURITY;
 
@@ -50,12 +52,14 @@ DROP POLICY IF EXISTS notifications_delete ON notify.notifications;
 CREATE POLICY notifications_delete ON notify.notifications
     FOR DELETE USING (user_id = auth.current_uid());
 
--- 3) 授权，全部职责角色本人通知读写，沙箱连接角色 fms_app 保留 USAGE 供 SET ROLE 切换
+--授权，全部职责角色本人通知读写，沙箱连接角色 fms_app 保留 USAGE 供 SET ROLE 切换
+
 GRANT USAGE ON SCHEMA notify TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT SELECT, INSERT, UPDATE ON notify.notifications
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- 4) 审计捕获触发器挂载，与 init 层其余业务表文件同款模式
+--审计捕获触发器挂载，与 init 层其余业务表文件同款模式
+
 DO $$
 BEGIN
     IF to_regclass('notify.notifications') IS NOT NULL THEN
@@ -65,7 +69,8 @@ BEGIN
     END IF;
 END $$;
 
--- 5) 种子，演示用户欢迎通知，幂等，已存在该用户通知则不重复插入
+--种子，演示用户欢迎通知，幂等，已存在该用户通知则不重复插入
+
 INSERT INTO notify.notifications (user_id, title, content, type, created_at)
 SELECT u.id, '欢迎使用 FMS 财务管理系统', '您的账号已就绪，可开始办理业务。', 'SYSTEM', now()
   FROM um.users u

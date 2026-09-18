@@ -3,9 +3,11 @@
 //! 场景，rcgen在测试内生成自签证书，SAN localhost 写入临时 PEM 文件，随后
 //! `Config`指向证书(`allow_insecure_fallback`=false也必须能启动，有证书走tls)，随后
 //! `fms_rgw::serve`真实监听，再做断言，
-//!   1) h2客户端，h2 crate over tokio-rustls，alpn仅h2 时 GET `/healthz` 应回 http/2 200，
+//!h2客户端，h2 crate over tokio-rustls，alpn仅h2 时 GET `/healthz` 应回 http/2 200，
+
 //!      且tls握手alpn协商结果为h2，服务端alpn清单["h2", "http/1.1"]
-//!   2) http/1.1客户端，alpn仅http/1.1 时 raw GET `/healthz` 应回 200，自动降级http1
+//!http/1.1客户端，alpn仅http/1.1 时 raw GET `/healthz` 应回 200，自动降级http1
+
 //!
 //! 明文降级路径，无证书由`accept_smoke` / e2e / security_* 既有用例覆盖，此处不重复。
 
@@ -126,14 +128,16 @@ async fn h2_get_healthz(
 #[tokio::test]
 async fn h2_and_http1_over_tls_alpn() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    // 1) 临时目录 + 自签证书
+    //临时目录 + 自签证书
+
     let dir =
         std::env::temp_dir().join(format!("fms_rgw-h2-{}-{}", std::process::id(), Uuid::now_v7()));
     std::fs::create_dir_all(&dir).expect("临时目录创建失败");
     let (cert_path, key_path) = write_test_cert(&dir);
     let roots = client_roots(&cert_path);
 
-    // 2) 配置，证书就位(allow_insecure_fallback=false也须启动，有证书必须走tls)
+    //配置，证书就位(allow_insecure_fallback=false也须启动，有证书必须走tls)
+
     let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("端口探测绑定失败");
     let port = probe.local_addr().expect("端口探测失败").port();
     drop(probe);
@@ -151,7 +155,8 @@ async fn h2_and_http1_over_tls_alpn() {
         let _ = fms_rgw::serve(state).await;
     });
 
-    // 3) 就绪轮询，tls + http/1.1 raw请求(10s上限，连接被拒=尚未绑定，
+    //就绪轮询，tls + http/1.1 raw请求(10s上限，连接被拒=尚未绑定，
+
     //    用非致命探测重试，spawn后首次探测与TcpListener::bind存在竞态)
     let ready_req = b"GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     let mut ready = false;
@@ -167,7 +172,8 @@ async fn h2_and_http1_over_tls_alpn() {
     }
     assert!(ready, "TLS 网关 10s 内未就绪(/healthz 非 200)");
 
-    // 4) http/2验证，h2客户端，alpn必须协商h2，GET /healthz 应回 200 + json
+    //http/2验证，h2客户端，alpn必须协商h2，GET /healthz 应回 200 + json
+
     let (alpn, status, body) = h2_get_healthz(port, &roots).await;
     println!(
         "[H2E2E] ALPN={:?} HTTP/2 GET /healthz -> status={} body={}",
@@ -184,7 +190,8 @@ async fn h2_and_http1_over_tls_alpn() {
     let v: serde_json::Value = serde_json::from_slice(&body).expect("healthz 响应必须为合法 JSON");
     assert_eq!(v["status"], "ok", "HTTP/2 响应体 status 必须为 ok");
 
-    // 5) http/1.1验证，alpn仅http/1.1的客户端仍可用，自动降级http1
+    //http/1.1验证，alpn仅http/1.1的客户端仍可用，自动降级http1
+
     let resp = tls_raw_h1(port, &roots, ready_req).await;
     println!(
         "[H2E2E] ALPN=http/1.1 GET /healthz -> {}",

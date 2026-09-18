@@ -195,7 +195,7 @@ pub struct Config {
     pub cors: CorsCfg,
     pub ws: WsCfg,
     pub log: LogCfg,
-    /// 由于rust的关键字占用因此需要序列化时改名为static
+    /// `static`为rust关键字，序列化名映射为static
     #[serde(rename = "static")]
     pub static_cfg: StaticCfg,
 }
@@ -271,7 +271,7 @@ impl Default for ServerCfg {
             listen: "0.0.0.0:8080".to_string(),
             max_connections: 8192,
             graceful_shutdown_secs: 10,
-            // 与filter::MAX_BODY_BYTES同源，10mb，改动默认需同步
+            // 与filter::MAX_BODY_BYTES同源，10mb，两处默认值须一致
             max_body_bytes: MAX_BODY_BYTES,
             compression: CompressionCfg::default(),
             ip_allowlist: Vec::new(),
@@ -297,7 +297,7 @@ pub struct TlsCfg {
 #[serde(default)]
 pub struct UpstreamCfg {
     /// 上游base_url，默认http://127.0.0.1:8081(servers为空时的单上游地址，
-    /// 保留向后兼容，现有单url部署与`FMS_RGW_UPSTREAM`环境变量仍工作)
+    /// `FMS_RGW_UPSTREAM`环境变量可覆盖)
     pub base_url: String,
     /// 多服务器列表(url字符串，非空时优先于[base_url]，servers为空时内部等价于vec!\[base_url\]，
     /// 单上游时任何mode行为一致，天然兼容)，`FMS_RGW_UPSTREAM_SERVERS`，逗号分隔覆盖
@@ -761,7 +761,7 @@ mod tests {
         assert_eq!(cfg.upstream.pool_max_idle_per_host, 16);
         assert_eq!(cfg.static_cfg.hash_max_age_secs, 31_536_000);
         assert_eq!(cfg.static_cfg.asset_max_age_secs, 3600);
-        // 访问日志降噪默认值，采样全量保审计、pgmq默认关闭，不改变现有行为
+        // 访问日志降噪默认值，采样全量保审计、pgmq默认关闭
         assert_eq!(cfg.log.sample_rate, 1, "默认全量采样保审计");
         assert_eq!(cfg.log.batch_size, 100);
         assert_eq!(cfg.log.batch_interval_ms, 500);

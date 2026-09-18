@@ -581,7 +581,7 @@ mod tests {
         let uid = "3f9a2c1d-0000-4000-8000-000000000001";
         let role = "operator";
         let sig = compute_signature(secret, method, path, body_hash, t, nonce, uid, role);
-        // 用hmac crate对文档化输入字符串独立重算，锁定input格式，防未来重构改格式
+        // 用hmac crate对同一输入字符串独立重算，锁定input格式
         let input = format!("{method}|{path}|{body_hash}|{t}|{nonce}|{uid}|{role}");
         let mut mac = <HmacSha256 as hmac::digest::KeyInit>::new_from_slice(secret).unwrap();
         mac.update(input.as_bytes());

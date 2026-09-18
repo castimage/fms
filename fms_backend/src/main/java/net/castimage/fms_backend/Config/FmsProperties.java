@@ -84,14 +84,14 @@ public class FmsProperties {
 
         /**
          * 内存 NonceStore 容量上限（fail-closed），0 = 未配置，哨兵，按
-         * noncePeakQps × replayWindowSecs 动态推导，显式配置（>0）优先，
-         * 既有部署经 yaml 显式 nonce-capacity: 10000 保持原行为
+         * noncePeakQps × replayWindowSecs 动态推导，显式配置（>0）优先
+         * （如 yaml nonce-capacity: 10000）
          */
         private int nonceCapacity = 0;
 
         /**
          * 期望峰值 qps（fms.security.nonce-peak-qps，默认 1000），nonce-capacity 未配置时
-         * 容量 = noncePeakQps × replayWindowSecs（如 1000×300=300000）。压测教训，
+         * 容量 = noncePeakQps × replayWindowSecs（如 1000×300=300000）。
          * 6 万 qps 瞬时请求可击穿 10000 容量，fail-closed 拒绝合法请求，动态容量按
          * 峰值预期推导消除该缺口
          */
@@ -622,9 +622,9 @@ public class FmsProperties {
         private int retryThreshold = 5;
 
         /** 通知生成源消费者总开关，默认开，关停时消息留在队列，pgmq vt 过期后仍可被重拾。
-         *  2026-08，NotifyQueueConsumer 已内置 pgmq 可用性自探测，pg_extension 无 pgmq
-         *  的部署，镜像未编译该扩展自动降级停用消费者，消息留队、限频 WARN，扩展补齐后
-         *  自动恢复，本开关为最高优先级的显式硬关停，两者叠加满足"含 pgmq 部署或按部署形态关闭"。 */
+         * NotifyQueueConsumer 内置 pgmq 可用性自探测，pg_extension 无 pgmq 的部署、
+         * 镜像未编译该扩展时自动降级停用消费者，消息留队、限频 WARN，扩展补齐后
+         * 自动恢复。本开关为最高优先级的显式硬关停，两者叠加满足"含 pgmq 部署或按部署形态关闭"。 */
         private boolean notifyConsumerEnabled = true;
 
         /** 通知消费者轮询周期，毫秒，默认 30s，@Scheduled 占位符读取，独立于 cache-cleanup */

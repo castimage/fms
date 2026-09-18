@@ -5,23 +5,32 @@
 --   REJECTED 转 DRAFT，退回修改后即可重新提交，端点 POST /vouchers/{id}/revert
 --                        经 SECURITY DEFINER 闸口 gl.fn_revert_voucher 原子退回，权限 gl.voucher.revert
 
--- 配套改动（同步），
---   1. gl.vouchers.status CHECK 加入 'REJECTED'
---   2. gl.fn_voucher_submit_check 改为显式迁移白名单，防状态回退/跳变，驳回/退回/冲销受控放行
---   3. gl.fn_voucher_status_history 支持事务级 guc fms.voucher_remark 透传驳回原因到 remark
---   4. 新增 SECURITY DEFINER 闸口 gl.fn_reject_voucher，权限 gl.voucher.reject + SoD 驳回人≠制单人
---   5. gl_vouchers_update rls USING 纳入 REJECTED，REJECTED 转 DRAFT 受控路径，WITH CHECK 不变
---   6. gl.fn_close_period 未完成凭证统计纳入 REJECTED，驳回凭证不允许被结账锁死
---   7. um.permissions 种子 'gl.voucher.reject' + accountant 角色/admin 直授
+-- 配套（同步），
+--gl.vouchers.status CHECK 加入 'REJECTED'
+
+--gl.fn_voucher_submit_check 采用显式迁移白名单，防状态回退/跳变，驳回/退回/冲销受控放行
+
+--gl.fn_voucher_status_history 支持事务级 guc fms.voucher_remark 透传驳回原因到 remark
+
+--SECURITY DEFINER 闸口 gl.fn_reject_voucher，权限 gl.voucher.reject + SoD 驳回人≠制单人
+
+--gl_vouchers_update rls USING 纳入 REJECTED，REJECTED 转 DRAFT 受控路径，WITH CHECK 不变
+
+--gl.fn_close_period 未完成凭证统计纳入 REJECTED，驳回凭证不允许被结账锁死
+
+--um.permissions 种子 'gl.voucher.reject' + accountant 角色/admin 直授
+
 
 -- 幂等，全部 CREATE OR REPLACE / IF NOT EXISTS / ON CONFLICT / DROP IF EXISTS，可重复执行
 
--- 1) status CHECK 约束扩容（存量约束名 vouchers_status_check，init/gl_base.sql 同名重建）
+--status CHECK 约束扩容（存量约束名 vouchers_status_check，init/gl_base.sql 同名重建）
+
 ALTER TABLE gl.vouchers DROP CONSTRAINT IF EXISTS vouchers_status_check;
 ALTER TABLE gl.vouchers ADD CONSTRAINT vouchers_status_check
     CHECK (status IN ('DRAFT','SUBMITTED','APPROVED','POSTED','REVERSED','REJECTED'));
 
--- 2) 状态机校验触发器，显式迁移白名单（唯一合法迁移，驳回 SUBMITTED 转 REJECTED、退回 REJECTED 转 DRAFT、
+--状态机校验触发器，显式迁移白名单（唯一合法迁移，驳回 SUBMITTED 转 REJECTED、退回 REJECTED 转 DRAFT、
+
 --    冲销 POSTED 转 REVERSED 经 fn_reverse_voucher 受控路径放行，反向凭证同事务 DRAFT 转 POSTED
 --    在 reversal_of_voucher_id 互指非空时豁免，冲销函数独有特征，其余跳变/回退一律 RAISE）
 CREATE OR REPLACE FUNCTION gl.fn_voucher_submit_check()
@@ -101,8 +110,9 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 3) 状态历史触发器，remark 支持事务级 guc fms.voucher_remark 透传，驳回原因由
---    fn_reject_voucher 写入，未设置时行为与旧版一致，INSERT 记'凭证创建'，迁移记 NULL
+--状态历史触发器，remark 支持事务级 guc fms.voucher_remark 透传，驳回原因由
+
+--    fn_reject_voucher 写入，未设置时 INSERT 记'凭证创建'，迁移记 NULL
 CREATE OR REPLACE FUNCTION gl.fn_voucher_status_history()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -123,7 +133,8 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END $$;
 
--- 4) 驳回闸口（SUBMITTED 转 REJECTED），权限 + SoD + 原因必填 + 状态历史(remark=原因) + 审计，原子完成
+--驳回闸口（SUBMITTED 转 REJECTED），权限 + SoD + 原因必填 + 状态历史(remark=原因) + 审计，原子完成
+
 CREATE OR REPLACE FUNCTION gl.fn_reject_voucher(p_voucher_id uuid, p_reason text)
 RETURNS void
 LANGUAGE plpgsql
@@ -206,7 +217,8 @@ END $$;
 COMMENT ON FUNCTION gl.fn_revert_voucher(uuid)
     IS '凭证退回：REJECTED->DRAFT（被驳回凭证退回修改后可重新提交/删除；状态历史 + 审计留痕）';
 
--- 5) rls，gl_vouchers_update USING 纳入 REJECTED（REJECTED 转 DRAFT 退回路径可用，WITH CHECK 不变，
+--rls，gl_vouchers_update USING 纳入 REJECTED（REJECTED 转 DRAFT 退回路径可用，WITH CHECK 不变，
+
 --    仍禁止 POSTED/REVERSED，状态机迁移白名单由触发器把关，策略层不额外放行）
 DROP POLICY IF EXISTS gl_vouchers_update ON gl.vouchers;
 CREATE POLICY gl_vouchers_update ON gl.vouchers
@@ -214,7 +226,8 @@ CREATE POLICY gl_vouchers_update ON gl.vouchers
         AND deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (status NOT IN ('POSTED','REVERSED') AND auth.can_access_org(company_id));
 
--- 6) 结账检查，REJECTED 属未完成凭证，纳入结账拦截，驳回凭证不允许被结账锁死
+--结账检查，REJECTED 属未完成凭证，纳入结账拦截，驳回凭证不允许被结账锁死
+
 CREATE OR REPLACE FUNCTION gl.fn_close_period(
     p_company_id uuid,
     p_period     text,
@@ -255,7 +268,8 @@ BEGIN
         NULL, NULL);
 END $$;
 
--- 7) 权限种子，幂等，um.permissions 含 'gl.voucher.reject'/'gl.voucher.revert' +
+--权限种子，幂等，um.permissions 含 'gl.voucher.reject'/'gl.voucher.revert' +
+
 --    fms_admin_role/accountant 角色 + admin 用户直授，与 gl.voucher.reverse 同族，
 --    revert = 被驳回凭证退回 DRAFT 的 api 端点权限
 INSERT INTO um.permissions (id, company_id, module_id, code, identifier, name,
@@ -298,11 +312,13 @@ UPDATE um.permissions p
  WHERE p.identifier IN ('gl.voucher.reject','gl.voucher.revert')
    AND p.deleted_at IS NULL AND p.required_permissions = '{}';
 
--- 8) 函数授权（沙箱模型，fms_operator 经 SET ROLE 注入后执行闸口）
+--函数授权（沙箱模型，fms_operator 经 SET ROLE 注入后执行闸口）
+
 GRANT EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION gl.fn_revert_voucher(uuid)         TO fms_operator;
 
--- 9) 自查，期望各 1
+--自查，期望各 1
+
 SELECT 'gl_voucher_reject' AS file_name,
        (SELECT count(*) FROM pg_constraint
          WHERE conrelid = 'gl.vouchers'::regclass AND conname = 'vouchers_status_check'

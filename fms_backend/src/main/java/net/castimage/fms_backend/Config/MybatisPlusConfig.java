@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * MyBatis-Plus 配置：注册沙箱会话注入与分页插件（PostgreSQL 方言，支持 ltree/JSONB 等 PG 特性）。
  * 沙箱必须注册在前：PaginationInnerInterceptor 的 COUNT 子查询经原始 executor 直接执行（不走拦截器链），
- * 若沙箱后注册，COUNT 会以 fms_app 空壳角色运行则 42501 permission denied（实测 sqlState=42501）。
+ * 若沙箱后注册，COUNT 会以 fms_app 空壳角色运行则 42501 permission denied（sqlState=42501）。
  */
 @Configuration
 public class MybatisPlusConfig {

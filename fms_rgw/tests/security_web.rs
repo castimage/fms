@@ -1,8 +1,8 @@
 //! `tests/security_web.rs`，Web攻击面测试(注入/协议/信息泄露/ws/cors/`Host`头)
 //!
-//! 范围， sql注入矩阵、路径穿越矩阵、 CRLF、命令注入、请求体超限、
-//!  http方法滥用、超长url/头、敏感文件枚举、错误信息泄露、
-//!  ws攻击、 cors、 `Host`头、 `/api`前缀绕过、静态穿越。
+//! 范围，sql注入矩阵、路径穿越矩阵、CRLF、命令注入、请求体超限、
+//! http方法滥用、超长url/头、敏感文件枚举、错误信息泄露、
+//! ws攻击、cors、`Host`头、`/api`前缀绕过、静态穿越。
 //!
 //! 方法，oneshot直调`build_router`，mock上游断言"攻击是否到达上游"，防绕过核心
 //! + 真实网关raw tcp，协议层攻击，CL谎报/chunked/TRACE/CONNECT/超长头/CRLF。
@@ -331,7 +331,7 @@ async fn crlf_encoded_payload_no_response_header_injection() {
 async fn crlf_raw_tcp_header_split_no_injection() {
     let gw = real_gateway();
     let port = real_port(gw);
-    //，/api/nt/ws非升级请求需jwt(Authorization)，此处携带有效token保证
+    // /api/nt/ws非升级请求需jwt(Authorization)，此处携带有效token保证
     // 请求被正常处理转发，仍断言响应无注入头
     let token = make_jwt(SUB, "operator", 3600, b"sec-web-jwt-secret");
     let raw = format!(

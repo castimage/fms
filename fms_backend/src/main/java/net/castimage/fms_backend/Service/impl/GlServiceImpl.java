@@ -548,13 +548,12 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
-     * 退回（状态机 REJECTED 转 DRAFT），被驳回凭证退回草稿，2026-08 前无任何 api 路径可退回
-     * 或删除 REJECTED 凭证，updateVoucher/deleteVoucher 仅放行 DRAFT，被驳回凭证成为死数据
-     * 且阻断所在期间结账，fn_close_period 将 REJECTED 计入未完成凭证，本端点补齐闭环，
-     * 退回后凭证回到可编辑 DRAFT，可修改后重新提交或删除。状态推进/状态历史/审计由 pg
-     * SECURITY DEFINER 函数 fn_revert_voucher 原子完成（权限闸口 gl.voucher.revert + 状态机
-     * 白名单触发器终审，白名单已含 REJECTED 转 DRAFT 且退回目标 DRAFT 豁免平衡/期间校验），
-     * 异常 RAISE 统一映射 40900。
+     * 退回（状态机 REJECTED 转 DRAFT），被驳回凭证退回草稿：updateVoucher/deleteVoucher
+     * 仅放行 DRAFT，无退回路径时 REJECTED 凭证成为死数据且阻断所在期间结账，
+     * fn_close_period 将 REJECTED 计入未完成凭证；退回后凭证回到可编辑 DRAFT，可修改后
+     * 重新提交或删除。状态推进/状态历史/审计由 pg SECURITY DEFINER 函数 fn_revert_voucher
+     * 原子完成（权限闸口 gl.voucher.revert + 状态机白名单触发器终审，白名单含 REJECTED
+     * 转 DRAFT 且退回目标 DRAFT 豁免平衡/期间校验），异常 RAISE 统一映射 40900。
      *
      * 状态机语义，仅 REJECTED 可退回，其余状态 Java 层预检直接 40900，退回是可逆的审核
      * 回退动作，与驳回（SUBMITTED 转 REJECTED）互逆，构成驳回-退回闭环，下一批次可重新提交。
@@ -703,7 +702,7 @@ public class GlServiceImpl implements GlService {
      * 结账（OPEN 转 CLOSED）委托 gl.fn_close_period 原子完成，完整性预检（期间内 DRAFT/
      * SUBMITTED/APPROVED 凭证计数 > 0 或 POSTED/REVERSED 断号则 RAISE）+ 置 CLOSED + 记
      * closed_by（函数内取 auth.current_uid，即本请求注入的 RequestContext 用户）+ 审计。
-     * 预检已内置于函数（p_force=false），Service 层不再重复调查询，避免与 db 侧口径漂移，
+     * 预检内置于函数（p_force=false），Service 层不重复查询，避免与 db 侧口径漂移，
      * RAISE 消息含"结账/凭证"关键词则统一映射 40900。
      */
     @Override
@@ -794,7 +793,7 @@ public class GlServiceImpl implements GlService {
     }
 
     /** 创建幂等键，规范化请求内容，与 insertLines 落库口径同源，行号缺省按序、币种缺省 CNY SHA-256 十六进制。
-     *  同 body 必同键，改任一字段即新键，有意录入同内容不同凭据时变更为新键即可，键为 64 字符，列 varchar，64。 */
+     * 同 body 必同键，改任一字段即新键，有意录入同内容不同凭据时变更为新键即可，键为 64 字符，列 varchar，64。 */
     private String idemKeyOf(VoucherCreateRequest req, LocalDate voucherDate) {
         StringBuilder sb = new StringBuilder();
         sb.append(req.companyId()).append('|')

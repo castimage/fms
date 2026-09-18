@@ -13,7 +13,8 @@ SET ROLE fms_admin;
 
 CREATE SCHEMA IF NOT EXISTS docs AUTHORIZATION fms_admin;
 
--- 1. docs.documents 附件元数据表
+--docs.documents 附件元数据表
+
 CREATE TABLE IF NOT EXISTS docs.documents (
     id            uuid         PRIMARY KEY DEFAULT uuidv7(),
     company_id    uuid         NOT NULL,                -- 冗余公司范围，rls 用，上传时由业务对象推导
@@ -39,7 +40,8 @@ COMMENT ON COLUMN docs.documents.sha256 IS '文件 SHA-256（64 位 hex，上传
 CREATE INDEX IF NOT EXISTS idx_docs_doc_biz     ON docs.documents (business_type, business_id);
 CREATE INDEX IF NOT EXISTS idx_docs_doc_company ON docs.documents (company_id, created_at);
 
--- 2. rls，公司范围，与 expense.reimbursement_lines 同族，company 经业务对象推导，客户端不可自报
+--rls，公司范围，与 expense.reimbursement_lines 同族，company 经业务对象推导，客户端不可自报
+
 ALTER TABLE docs.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE docs.documents FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS docs_documents_select ON docs.documents;
@@ -54,22 +56,23 @@ CREATE POLICY docs_documents_update ON docs.documents FOR UPDATE
     WITH CHECK (auth.can_access_org(company_id));
 -- 无 DELETE 策略，软删（deleted_at=now）为唯一删除通道，物理删除仅经管理通道，与 fa/expense 同族约定
 
--- 3. 授权（与 grants_base 中央闸同构，operator W / viewer·auditor·report R，fms_app 沙箱不授 USAGE）
+--授权（与 grants_base 中央闸同构，operator W / viewer·auditor·report R，fms_app 沙箱不授 USAGE）
+
 GRANT USAGE ON SCHEMA docs TO fms_operator, fms_viewer, fms_auditor, fms_report;
 REVOKE USAGE ON SCHEMA docs FROM fms_app;   -- 沙箱最小化（同 fa/expense/budget/wf/rpt）
 GRANT SELECT, INSERT, UPDATE ON docs.documents TO fms_operator;
 GRANT SELECT ON docs.documents TO fms_viewer, fms_auditor, fms_report;
 
--- 4. 文件末尾自查（配合 psql -v ON_ERROR_STOP=1）
+--文件末尾自查（配合 psql -v ON_ERROR_STOP=1）
+
 SELECT 'docs_base' AS file_name,
        (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = 'docs' AND c.relkind = 'r') AS docs_tbl_cnt,
        (SELECT count(*) FROM pg_policies WHERE schemaname = 'docs') AS docs_policy_cnt;
 
--- 软删门面（SECURITY DEFINER），rls UPDATE 对 deleted_at 列更新实测被拒（PG18 rls 新行
--- WITH CHECK 校验 company_id 时 deleted_at=now 触发策略异常，最小复现 INSERT 后可 INSERT
--- 但 SET deleted_at=now 报 new row violates，updated_at 正常，根因未明），按项目门面模式
--- （同 auth.fn_soft_delete / log.fn_send_access_batch 的属主绕过 + 显式校验模式）改为属主绕过 + 函数内显式公司校验，软删语义不变（deleted_at=now 唯一通道）
+-- 软删门面（SECURITY DEFINER），rls UPDATE 对 deleted_at 列更新被拒（PG18 rls 新行
+-- WITH CHECK 校验 company_id 时 deleted_at=now 触发策略异常，updated_at 正常），
+-- 按项目门面模式（同 auth.fn_soft_delete / log.fn_send_access_batch 的属主绕过 + 显式校验模式）采用属主绕过 + 函数内显式公司校验，软删语义不变（deleted_at=now 唯一通道）
 CREATE OR REPLACE FUNCTION docs.fn_soft_delete_document(p_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql

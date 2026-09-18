@@ -239,7 +239,7 @@ BEGIN
          || ' WHERE id = $1 AND deleted_at IS NULL'
         USING p_user_id;
     IF NOT FOUND THEN
-        -- 联调实测，PG18 下 EXECUTE 的 no-op UPDATE，新值==现值ROW_COUNT=0，FOUND 不可作存在性判据，
+        -- PG18 下 EXECUTE 的 no-op UPDATE，新值==现值 ROW_COUNT=0，FOUND 不可作存在性判据，
         -- 以独立 SELECT 复核行存在性，仅真不存在才 RAISE，防 set_password 后置位 must_change_pwd 误报
         PERFORM 1 FROM um.users WHERE id = p_user_id AND deleted_at IS NULL;
         IF NOT FOUND THEN
@@ -374,7 +374,7 @@ BEGIN
     SELECT value->>'v' INTO v_key FROM sec.app_secrets WHERE code = 'pgcrypto.master_key';
     -- bytea 配对解密，set_mfa 落库密文由 pgp_sym_encrypt_bytea（bytea 数据变体）产出，
     -- 对应解密用 pgp_sym_decrypt_bytea + convert_from（实测 text 变体 pgp_sym_decrypt 对
-    -- bytea 密文报 39000 'Not text data'，convert_from(text,..) 亦 42883，见修复记录）
+    -- bytea 密文报 39000 'Not text data'，convert_from(text,..) 亦 42883）
     RETURN convert_from(pgp_sym_decrypt_bytea(v_secret, v_key), 'UTF8');  -- base32 明文
 END
 $$;
@@ -596,7 +596,7 @@ GRANT EXECUTE ON FUNCTION cash.fn_create_bank_account($1)
     TO fms_operator;
 
 -- 契约 init/um_params_functions.sql，auth.recovery_lookup， 找回密码 email 一致性校验，唯一只读闸口，匿名期 rls is_self 恒拒、
--- Java 侧 selectOne 恒空集，联调实测 recovery 链路从未生效，必须经本闸口绕过行策略直读加密列，
+-- Java 侧 selectOne 恒空集，recovery 链路无法经行策略读取加密列，必须经本闸口绕过行策略直读，
 -- email 不匹配/用户不存在一律返回 NULL，防枚举语义与 verify_login 一致，防枚举票据由调用方构造
 CREATE OR REPLACE FUNCTION auth.recovery_lookup(p_login_name text, p_email text)
 RETURNS uuid
@@ -703,7 +703,8 @@ END $$;
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
--- 3. 闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
+--闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
+
 --    update_user 白名单含 display_name
 
 -- 契约 3，auth.update_user， 用户字段补丁更新
@@ -1050,9 +1051,9 @@ SET ROLE fms_admin;
 
 GRANT EXECUTE ON FUNCTION auth.set_password(uuid, text) TO fms_report, fms_viewer, fms_auditor;
 GRANT EXECUTE ON FUNCTION auth.update_user(uuid, jsonb) TO fms_report, fms_viewer, fms_auditor;
--- 注，auth.record_login 的 EXECUTE 补发（同 patch 原逻辑）已由 init/fill_missing.sql
--- 内联授权（REVOKE PUBLIC + GRANT fms_app/fms_operator/fms_viewer/fms_auditor/fms_report），
--- 且本文件执行时该函数尚未创建（fill_missing 在其后），故不并入
+-- 注，auth.record_login 的 EXECUTE 授权由 init/fill_missing.sql 内联完成
+-- （REVOKE PUBLIC + GRANT fms_app/fms_operator/fms_viewer/fms_auditor/fms_report），
+-- 本文件不并入（执行时该函数尚未创建）
 
 RESET ROLE;
 
@@ -1071,7 +1072,7 @@ RESET ROLE;
 
 -- pass_hash 列授权 + set_mfa EXECUTE 补发只读角色，
 -- totp setup/enable/disable 等 2fa 自服务端点经 UserMapper.selectById 读本人行
---（含 pass_hash 做 bcrypt 校验），um.users 的 pass_hash 列授权覆盖
+-- （含 pass_hash 做 bcrypt 校验），um.users 的 pass_hash 列授权覆盖
 -- viewer/auditor/report 角色（SET ROLE fms_viewer 后 selectById 不可达）。
 -- 安全语义不变，rls users_select 仅 is_self 可见本人行，非管理员，后端 selectById
 -- 恒以请求者本人 id 查询，pass_hash 仅本人自校验（与 fms_operator 的授权同构，无新增泄露面）。

@@ -184,7 +184,7 @@ public class WeakPasswordFilter {
         this.bloom = next;
     }
 
-    // ---------------- 内部实现 ----------------
+    // 内部实现
 
     /** 归一化（trim + 小写 Locale.ROOT，防 "Password"/"PASSWORD " 变体绕过） */
     private static String normalize(String password) {

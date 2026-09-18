@@ -1,8 +1,8 @@
 package net.castimage.fms_backend.Utils;
 
 /**
- * 沙箱角色提示（ThreadLocal）：匿名请求按端点语义注入最小职责角色，替代 fms_app 空壳
- * 直调——fms_app 仅保留 CONNECT 与认证函数（沙箱原则，用户 2026-08-19 明确）。
+ * 沙箱角色提示（ThreadLocal）：匿名请求按端点语义注入最小职责角色，避免以 fms_app
+ * 空壳角色直调——fms_app 仅保留 CONNECT 与认证函数（沙箱原则）。
  *
  * PUBLIC_READ：公开读口（/api/public/**）则 SET ROLE fms_public（仅 EXECUTE
  * fn_get_param_value / fn_public_document_meta，无任何表权限）；INTERNAL_OPERATOR：

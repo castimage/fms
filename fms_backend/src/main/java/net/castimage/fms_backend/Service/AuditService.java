@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /** 审计模块业务接口（audit）：审计日志只读查询/分页、哈希链完整性校验（调 audit.audit_log_chain_check PG 函数）、CSV 导出；
- *  RLS 仅 fms_auditor 可读（其他角色 42501 映射 40300），全部读路径 readOnly 事务 */
+ * RLS 仅 fms_auditor 可读（其他角色 42501 映射 40300），全部读路径 readOnly 事务 */
 public interface AuditService {
 
     /**
@@ -20,7 +20,7 @@ public interface AuditService {
 
     /**
      * 哈希链完整性校验：调 PG 函数 audit.audit_log_chain_check()（与触发器同式重算），
-     * prevOk=false 时返回首断链点与详情 JSONB（修复建议：从断点行起全链重算）。
+     * prevOk=false 时返回首断链点与详情 JSONB（从断点行起全链重算）。
      */
     ChainCheckView chainCheck();
 

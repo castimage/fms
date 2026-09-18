@@ -18,7 +18,7 @@ import java.util.UUID;
 public interface BankAccountMapper extends BaseMapper<BankAccount> {
 
     /**
-     * 新建银行账户（03c 扩展闸口）：密文/盲索引在函数内原子落库，uk_bank_account_hash 冲突 23505 映射 40900；
+     * 新建银行账户（SECURITY DEFINER 闸口）：密文/盲索引在函数内原子落库，uk_bank_account_hash 冲突 23505 映射 40900；
      * company_id 由函数从当前用户上下文推导（无法确定公司则 RAISE 42501 映射 40300）。
      *
      * @param bankName    开户行名称

@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** totp 工具，RFC 6238 动态码生成/校验委托 otp-java，Base32 编解码用 commons-codec，
- *  另含 otpauth uri 与一次性备用码，安全算法不复刻自实现 */
+ * 另含 otpauth uri 与一次性备用码，安全算法不复刻自实现 */
 public final class TotpUtils {
 
     /** totp 步长，秒 */
@@ -67,8 +67,6 @@ public final class TotpUtils {
             return false;
         }
 
-        // 仅做输入合法性闸口，非法 base32 一律返回 false，不抛异常，
-        // otp-java Builder 期望 base32 编码文本且内部会再解码，故生成器必须用 secret 文本构建
         byte[] key;
         try {
             key = BASE32.decode(secretBase32);
@@ -79,6 +77,8 @@ public final class TotpUtils {
             return false;
         }
 
+        // otp-java Builder 期望 base32 编码文本且内部会再解码，上方解码仅作输入合法性闸口，
+        // 生成器必须用 secret 文本构建，传已解码字节会二次解码致产物非标准
         TOTPGenerator generator = new TOTPGenerator.Builder(secretBase32)
                 .withHOTPGenerator(h -> h.withAlgorithm(HMACAlgorithm.SHA1).withPasswordLength(DIGITS))
                 .withPeriod(Duration.ofSeconds(STEP_SECONDS))

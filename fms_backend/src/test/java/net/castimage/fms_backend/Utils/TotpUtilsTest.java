@@ -81,9 +81,8 @@ class TotpUtilsTest {
 
     @Test
     void verifyInteropsWithStandardTotp() {
-        // 独立参考实现（RFC 6238 动态截断）算码，验证 otp-java 委托产物与主流实现互认，
-        // 防"重复 base32 解码致产物非标准"类回归
-        String secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"; // ASCII "12345678901234567890" 的 base32
+        // 独立参考实现算码，校验委托产物与独立参考实现一致
+        String secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
         long now = System.currentTimeMillis() / 1000L;
         String ref = referenceTotp(secret, now);
         assertTrue(TotpUtils.verify(secret, ref, 1), "窗口 ±1 内参考码应通过");
@@ -91,7 +90,6 @@ class TotpUtilsTest {
         assertFalse(TotpUtils.verify("A!B!C!D!E!F!G!H!I!J!", ref, 1), "非法 base32 应返回 false");
     }
 
-    /** RFC 6238 独立参考码，base32 密钥解码后 hmac-sha1 + 动态截断 */
     private static String referenceTotp(String secretBase32, long epochSec) {
         byte[] key = new org.apache.commons.codec.binary.Base32().decode(secretBase32);
         long counter = epochSec / 30L;

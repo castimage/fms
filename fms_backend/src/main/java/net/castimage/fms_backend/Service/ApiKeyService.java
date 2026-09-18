@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/** API 密钥业务（um.api_keys）：校验（X6-2 过滤器收敛点）/列表/签发/吊销，全部经 SECURITY DEFINER 函数闸口 */
+/** API 密钥业务（um.api_keys）：校验（过滤器收敛点）/列表/签发/吊销，全部经 SECURITY DEFINER 函数闸口 */
 public interface ApiKeyService {
 
     /**

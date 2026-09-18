@@ -697,7 +697,7 @@ public class CashServiceImpl implements CashService {
         return rows;
     }
 
-    /** 单行按 Commons CSV 切分，引号包裹的逗号/换行不再错断，非法格式返回空列由调用方行校验兜底 */
+    /** 单行按 Commons CSV 切分，引号包裹的逗号/换行避免错断，非法格式返回空列由调用方行校验兜底 */
     private String[] splitCsvRow(String line, CSVFormat csvFormat) {
         List<CSVRecord> records;
         try (CSVParser parser = CSVParser.parse(line, csvFormat)) {
@@ -758,7 +758,7 @@ public class CashServiceImpl implements CashService {
     }
 
     /** 流水创建幂等键，规范化请求内容 SHA-256 十六进制，同 body 必同键，改任一字段即新键。
-     *  键为 64 字符，列 varchar，64，uk_trx_idem 部分唯一索引防同 body 重复提交。 */
+     * 键为 64 字符，列 varchar，64，uk_trx_idem 部分唯一索引防同 body 重复提交。 */
     private static String trxIdemKey(UUID companyId, UUID bankAccountId, String direction,
                                      BigDecimal amount, String partner, String summary, LocalDate trxDate) {
         StringBuilder sb = new StringBuilder();
@@ -773,7 +773,7 @@ public class CashServiceImpl implements CashService {
     }
 
     /** 对账单导入幂等键，filename + 全部行内容，顺序敏感 SHA-256 十六进制。
-     *  同文件同内容必同键，不同文件同名但内容不同则新键，不冲突。 */
+     * 同文件同内容必同键，不同文件同名但内容不同则新键，不冲突。 */
     private static String stmtIdemKey(String filename, List<StatementLinePreview> rows) {
         StringBuilder sb = new StringBuilder();
         sb.append(filename).append('|');

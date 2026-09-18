@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * uuid 参数映射回归测试，注解式 Mapper 语句（{@code #{id}::uuid}）的参数映射解析路径
+ * uuid 参数映射测试，注解式 Mapper 语句（{@code #{id}::uuid}）的参数映射解析路径
  * （SqlSourceBuilder 到 ParameterMapping），注册 UuidTypeHandler 后 uuid 参数
  * 映射必须可解析，未注册时 ParameterMapping.validate 抛 IllegalStateException。
  */

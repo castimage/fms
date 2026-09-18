@@ -41,7 +41,8 @@ async fn ws_http_unauth_forward_and_json_sqli() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    // 1) 非升级http请求打/api/nt/ws，无任何jwt 则 401，不再匿名转发上游
+    //非升级http请求打/api/nt/ws，无任何jwt 则 401，不匿名转发上游
+
     {
         let raw = b"GET /api/nt/ws HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
         let (status, _) = raw_http(port, raw).await;
@@ -56,7 +57,8 @@ async fn ws_http_unauth_forward_and_json_sqli() {
         );
         assert_eq!(hits.len(), 0, "F4：未认证 HTTP 请求不得到达上游");
     }
-    // 2) json body携带sql注入载荷则 400(，json body同样扫描，Content-Type切换不再绕过)
+    //json body携带sql注入载荷则 400(，json body同样扫描，Content-Type切换不可绕过)
+
     {
         let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
         let payload = r#"{"query":"admin'; drop table users;--"}"#;
@@ -76,7 +78,8 @@ async fn ws_http_unauth_forward_and_json_sqli() {
         );
         assert_eq!(hits.len(), 0, "F6：JSON 注入载荷不得到达上游");
     }
-    // 3) 4层编码穿越则静态路径 400，深层编码解码后仍构成 .. 段
+    //4层编码穿越则静态路径 400，深层编码解码后仍构成 .. 段
+
     {
         let raw = b"GET /assets/%2525252e%2525252e%2525252findex.html HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
         let (status, body) = raw_http(port, raw).await;

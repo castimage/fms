@@ -6,11 +6,13 @@
 -- 职责，审计哈希链（ip/request_id 纳入公式 + occurred_at 时区无关化）+ 链校验/修复 + audit.record 最小授权
 
 -- 并发安全设计，fn_audit_log_hash 取前驱哈希的并发竞态已根治，
--- ① 写路径加事务级咨询锁 pg_advisory_xact_lock，后到事务获锁后的 SELECT 在新快照下必然
+--写路径加事务级咨询锁 pg_advisory_xact_lock，后到事务获锁后的 SELECT 在新快照下必然
+
 -- 看到先到事务已提交的行，提交序=链序=id 序，② 触发器内强制 NEW.id 严格大于末行 id，
 -- 不足则重生成 uuidv7，期望 ~2 次迭代，时钟回拨由循环内 pg_sleep 兜底，100 次仍失败
 -- WARN 留痕，③ 哈希公式收敛为单一实现 audit.fn_audit_row_hash，触发器/校验/修复三处同源，
--- ④ audit.audit_log_chain_repair，从首断链点起重算重挂，带 NOTICE 留痕，init 幂等调用。
+--audit.audit_log_chain_repair，从首断链点起重算重挂，带 NOTICE 留痕，init 幂等调用。
+
 
 SET ROLE fms_admin;
 
@@ -288,7 +290,7 @@ REVOKE EXECUTE ON FUNCTION audit.record(text, text, uuid, jsonb, jsonb, text, te
 GRANT EXECUTE ON FUNCTION audit.record(text, text, uuid, jsonb, jsonb, text, text)
     TO fms_admin;
 
--- 审计哈希链 v2（ip/request_id 纳入公式）+ 存量链重算，覆盖上方同名函数，最终生效定义
+-- 审计哈希链（ip/request_id 纳入公式）+ 存量链重算，覆盖上方同名函数，最终生效定义
 CREATE OR REPLACE FUNCTION audit.fn_audit_log_hash()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -422,8 +424,9 @@ AS $$
 $$;
 
 -- 链修复，幂等，链完好则 no-op，断链则从首断链点起逐行重算重挂，断链点之前的行校验完好保持
--- 原样。覆盖两类断链，① 并发 INSERT 竞态，fn_audit_log_hash 链锁根治前的断链在此修复，
--- ② 绕过触发器写入，session_replication_role=replica 直插 audit_log 产生的 NULL 哈希行。
+-- 原样。覆盖两类断链，① 并发 INSERT 竞态，fn_audit_log_hash 链锁外的断链在此修复，
+--绕过触发器写入，session_replication_role=replica 直插 audit_log 产生的 NULL 哈希行。
+
 
 -- 修复动作与断链点 RAISE NOTICE 留痕，部署/修复日志可审计，与写入触发器共用同一把咨询锁，
 -- 修复期间并发写入串行化，不会在修复窗口内插入新的断链行。返回修复后链校验结果。
@@ -485,7 +488,8 @@ GRANT EXECUTE ON FUNCTION audit.audit_log_chain_repair() TO fms_admin;
 -- 存量链修复，幂等，先校验，仅当断链时从首断链点起重算重挂。
 
 -- 断链根因两类，① 并发 INSERT 竞态，见 fn_audit_log_hash 注释，已加链锁根治，
--- ② 哈希公式差异/绕过触发器写入（replica 直插），修复动作与断链点均 RAISE NOTICE 留痕。
+--哈希公式差异/绕过触发器写入（replica 直插），修复动作与断链点均 RAISE NOTICE 留痕。
+
 
 -- 链完好时零写入，不产生 WAL/掩蔽风险，重复执行结果不变。
 DO $$

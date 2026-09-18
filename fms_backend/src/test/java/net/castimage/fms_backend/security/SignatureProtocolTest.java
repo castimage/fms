@@ -18,11 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 网关签名协议单元测试，
  *
- *   hmac-sha256 基元对 RFC 4231 已知向量，证明 javax.crypto 用法正确，
- *   空 body 哈希常量 = SHA-256("")（与 fms_rgw compute_body_hash 一致），
- *   反射调用生产类 GatewaySignatureFilter 的私有 computeSignature，验证
- *       {@code method|path|body_hash|t|nonce|uid|role} 输入串与 '|'=0x7C 无转义、null 身份段落空串，
- *   parseSignature 对 t=&nonce=&sig= 三字段的接受/拒绝行为。
+ * hmac-sha256 基元对 RFC 4231 已知向量，证明 javax.crypto 用法正确，
+ * 空 body 哈希常量 = SHA-256("")（与 fms_rgw compute_body_hash 一致），
+ * 反射调用生产类 GatewaySignatureFilter 的私有 computeSignature，验证
+ * {@code method|path|body_hash|t|nonce|uid|role} 输入串与 '|'=0x7C 无转义、null 身份段落空串，
+ * parseSignature 对 t=&nonce=&sig= 三字段的接受/拒绝行为。
  */
 class SignatureProtocolTest {
 
@@ -39,7 +39,7 @@ class SignatureProtocolTest {
     /** 签名密钥（≥32 字符，满足过滤器 fail-fast 校验） */
     private static final String SECRET = "unit-test-sign-secret-0123456789abcdef-42";
 
-    // ---------------- hmac-sha256 基元 vs RFC 4231 ----------------
+    // hmac-sha256 基元 vs RFC 4231
 
     @Test
     void hmacSha256MatchesRfc4231KnownVector() throws Exception {
@@ -54,7 +54,7 @@ class SignatureProtocolTest {
         assertEquals(EMPTY_BODY_HASH, actual);
     }
 
-    // ---------------- 生产类签名计算，反射 ----------------
+    // 生产类签名计算，反射
 
     @Test
     void computeSignatureMatchesSpecInputComposition() throws Exception {
@@ -94,7 +94,7 @@ class SignatureProtocolTest {
         assertEquals(hmacSha256Hex(SECRET, "GET|/api/x|" + EMPTY_BODY_HASH + "|100|n1||"), actual);
     }
 
-    // ---------------- X-FMS-Signature 头解析 ----------------
+    // X-FMS-Signature 头解析
 
     @Test
     void parseSignatureAcceptsValidHeader() throws Exception {
@@ -127,7 +127,7 @@ class SignatureProtocolTest {
         parse.invoke(null, header);
     }
 
-    // ---------------- 独立 hmac-sha256，测试内同构实现 ----------------
+    // 独立 hmac-sha256，测试内同构实现
 
     private static String hmacSha256Hex(String secret, String input) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");

@@ -119,7 +119,7 @@ public class UserPrefController {
         return ApiResponse.ok(cleaned);
     }
 
-    // ---------------- 私有辅助 ----------------
+    // 私有辅助
 
     /** 无行默认配置对象 */
     private JSONObject parseDefault() {

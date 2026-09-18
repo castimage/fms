@@ -20,8 +20,8 @@ public interface WsNotifyBroadcaster {
      * 全量广播（系统公告/公司级预警）：redis 实现 publish 且 uid 置 null（订阅端据此
      * 走本地全量推送）；no-op 缺省实现——单实例（in-memory）或未装配广播器时，
      * NotifyWebSocketEndpoint.broadcast 的本地全量已覆盖全部在线会话，无需转发。
-     * 本批业务路径（NotifyWebSocketEndpoint.broadcast）调用；非抽象以兼容既有
-     * lambda 装配（noop/redis 旧实现仅需实现 broadcast）。
+     * 本批业务路径（NotifyWebSocketEndpoint.broadcast）调用；非抽象以兼容
+     * lambda 装配（实现类仅需实现 broadcast）。
      */
     default void broadcastAll(String payload) {
         // 缺省空操作：未启用跨实例广播时本地全量推送已足够

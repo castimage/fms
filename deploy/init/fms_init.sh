@@ -88,7 +88,7 @@ for f in $INIT_SCRIPTS; do
             ABORT=1
         fi
     elif [ "$f" = "seed_data.sql" ]; then
-        echo "[fms-init] SKIP: FMS_MASTER_KEY 为空，master_key 使用 init/seed_data.sql 内建值（仅联调占位）"
+        echo "[fms-init] SKIP: FMS_MASTER_KEY 为空，master_key 使用 init/seed_data.sql 内建值（仅非生产占位）"
     fi
 
     echo "[fms-init] 执行: $f（库: $DBNAME）"
@@ -125,7 +125,7 @@ else
     echo "[fms-init] WARN: 环境变量 FMS_DB_PASSWORD 为空，跳过 ALTER ROLE fms_app（.env 未配置？）"
 fi
 
-# 以 .env 的 FMS_JWT_SECRET 对齐 pg 侧 jwt.secret，init/seed_data.sql 内建值仅联调占位，
+# 以 .env 的 FMS_JWT_SECRET 对齐 pg 侧 jwt.secret，init/seed_data.sql 内建值仅非生产占位，
 # pg auth.jwt_sign 签发、后端校验、网关验签三者必须同值，.env 为唯一密钥源
 if [ -n "${FMS_JWT_SECRET:-}" ]; then
     JWT_ESCAPED=$(printf '%s' "${FMS_JWT_SECRET}" | sed "s/'/''/g")
