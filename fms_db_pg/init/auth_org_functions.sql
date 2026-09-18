@@ -703,6 +703,44 @@ END $$;
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
+-- 2.5 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL。返回 NULL 而非抛错的原因，本函数
+-- 会被用户列表逐行调用，越权行抛错会使整表查询失败；返回 NULL 既不泄露存在性，也不阻断列表。
+-- 邮箱以 pgp_sym_encrypt(aes256) 加密存储、等值查询走 email_hash 盲索引，明文只经本出口返回
+CREATE OR REPLACE FUNCTION auth.get_user_email(p_user_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = auth, um, sec, pg_catalog, public
+AS $$
+DECLARE
+    v_key  text;
+    v_enc  bytea;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+    IF NOT (auth.is_self(p_user_id) OR auth.is_admin()) THEN
+        RETURN NULL;
+    END IF;
+    SELECT email_encrypted INTO v_enc FROM um.users
+     WHERE id = p_user_id AND deleted_at IS NULL;
+    IF v_enc IS NULL THEN
+        RETURN NULL;
+    END IF;
+    SELECT value->>'v' INTO v_key FROM sec.app_secrets
+     WHERE code = 'pgcrypto.master_key';
+    IF v_key IS NULL THEN
+        RAISE EXCEPTION 'get_user_email: pgcrypto.master_key 未配置（sec.app_secrets）';
+    END IF;
+    RETURN pgp_sym_decrypt(v_enc, v_key, 'cipher-algo=aes256');
+END $$;
+COMMENT ON FUNCTION auth.get_user_email(uuid)
+    IS '用户邮箱读取：本人或系统管理员可读，其余返回 NULL（不泄露存在性、不阻断列表查询）；密文经 pgp_sym_encrypt(aes256) 存储，明文仅经本出口返回';
+REVOKE EXECUTE ON FUNCTION auth.get_user_email(uuid) FROM PUBLIC, fms_app;
+GRANT EXECUTE ON FUNCTION auth.get_user_email(uuid)
+    TO fms_operator, fms_viewer, fms_auditor, fms_report;
+
 --闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
 
 --    update_user 白名单含 display_name

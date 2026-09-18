@@ -305,7 +305,7 @@ public class OrgServiceImpl implements OrgService {
             // 创建后免回读，users_select 仅 is_self 可见，operator 无他人行可见性，scope 授权亦不生效，
             // 回读必空集，直接以请求数据构造视图返回，避免 40400 回滚丢写
             return new UserView(userId, req.loginName(), req.loginName(), "ACTIVE", false,
-                    mustChangePwd, null, req.companyId(), List.of());
+                    mustChangePwd, null, req.companyId(), req.email(), List.of());
         }
         log.info("用户创建成功 userId={} operator={}", userId, operatorId);
         return toUserView(user);
@@ -641,8 +641,11 @@ public class OrgServiceImpl implements OrgService {
     private UserView toUserView(User u) {
         List<String> roles = roleMapper.selectRolesByUserId(u.getId()).stream()
                 .map(Role::getCode).toList();
+        // 邮箱逐行走解密出口，闸口内判定管理员或本人，无权与未设邮箱同为 null，不抛错以免整表查询失败
+        String email = authFunctionMapper.getUserEmail(u.getId());
         return new UserView(u.getId(), u.getLoginName(), u.getDisplayName(), u.getStatus(),
-                u.getMfaEnabled(), u.getMustChangePwd(), u.getLastLoginAt(), u.getCompanyId(), roles);
+                u.getMfaEnabled(), u.getMustChangePwd(), u.getLastLoginAt(), u.getCompanyId(),
+                email, roles);
     }
 
     private PermissionView toPermissionView(Permission p) {

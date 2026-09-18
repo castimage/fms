@@ -223,7 +223,9 @@ BEGIN
            AND d.path <@ g.path);                 -- 目标部门是授予部门的子树节点
 END $$;
 
--- 2.4 本人数据判定（uid 缺失则 false）
+-- 2.4 本人数据判定，只返回 true/false，绝不返回 NULL
+-- current_uid() 缺失时若直接比较将得到 NULL（未知），而调用方普遍写作 IF NOT (auth.is_self(x) OR ...) THEN 拒绝，
+-- IF NULL 不成立等于放行，守卫被穿透（fail-open）。故此处显式判空后落在 false，缺失即"非本人"，全部调用点随之 fail-closed
 CREATE OR REPLACE FUNCTION auth.is_self(p_owner_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -235,7 +237,10 @@ BEGIN
     IF session_user = 'fms_admin' THEN
         RETURN true;
     END IF;
-    RETURN p_owner_id IS NOT NULL AND p_owner_id = auth.current_uid();
+    IF p_owner_id IS NULL OR auth.current_uid() IS NULL THEN
+        RETURN false;
+    END IF;
+    RETURN p_owner_id = auth.current_uid();
 END $$;
 
 -- 2.5 角色判定（audit 等表的 SELECT 策略使用），普通函数（非 DEFINER）+ current_user + 'MEMBER'，沙箱模型下 INHERIT FALSE 使 'USAGE' 恒为 false，而 SET ROLE fms_auditor 后 current_user=fms_auditor 则 MEMBER 命中放行，未 SET ROLE 的 fms_app 直连由表级权限拦截，职责隔离精确

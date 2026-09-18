@@ -25,7 +25,11 @@ export interface DepartmentView {
   createdAt: string
 }
 
-/** 用户视图，roles 为 jwt role 短名列表 */
+/**
+ * 用户视图，roles 为 jwt role 短名列表。
+ * email 由后端经 auth.get_user_email 闸口解出，管理员得全部、其余人仅得本人，
+ * 无权与未设邮箱同为 null，前端一律按"未展示"处理，不区分两者
+ */
 export interface UserView {
   id: string
   loginName: string
@@ -35,6 +39,7 @@ export interface UserView {
   mustChangePwd: boolean
   lastLoginAt: string | null
   companyId: string | null
+  email: string | null
   roles: string[]
 }
 

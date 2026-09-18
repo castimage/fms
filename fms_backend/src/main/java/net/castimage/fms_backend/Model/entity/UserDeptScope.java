@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * 用户-部门数据范围实体（um.user_dept_scope；auth.set_session 预载数据源）：include_subtree 指示是否含子树（can_access_dept 子树可见性）；本批默认不写，Mapper 预留 dept_id 集合查询供 admin 全量/切换场景。
+ * 用户-部门数据范围实体（um.user_dept_scope）：auth.set_session 的数据范围预载源，
+ * include_subtree 指示可见范围是否含子树（can_access_dept 据此判断）；管理员的数据范围读写
+ * 走 auth.list_user_scopes / auth.set_user_dept_scope 闸口，不经本实体。
  */
 @TableName(schema = "um", value = "user_dept_scope")
 @Data

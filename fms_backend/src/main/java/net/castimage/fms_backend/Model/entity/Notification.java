@@ -35,10 +35,10 @@ public class Notification {
     /** 类型（BUDGET_WARNING/APPROVAL/SYSTEM 等） */
     private String type;
 
-    /** 关联业务类型（预留：reimbursement/wf_task 等） */
+    /** 关联业务类型（系统公告固定 ANNOUNCEMENT，预算预警 budget_warning），与 ref_id 及 title 共同构成广播幂等键 */
     private String refType;
 
-    /** 关联业务 id（预留） */
+    /** 关联业务 id（预算预警取 company_id，公司级幂等；公告为 NULL） */
     private UUID refId;
 
     /** 是否已读 */

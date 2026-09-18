@@ -120,6 +120,16 @@ public interface AuthFunctionMapper {
             """)
     String getMfaSecret(@Param("userId") UUID userId);
 
+    /**
+     * 用户邮箱解密出口，SECURITY DEFINER 函数 auth.get_user_email，pgp_sym_decrypt(aes256) 解出明文，
+     * 函数内判定系统管理员或本人，其余返 null。返回 null 而非抛错，因用户列表逐行调用本出口，
+     * 越权行抛错会使整表查询失败；故 null 同时表示无权与未设邮箱，两者不可区分亦不泄露存在性
+     */
+    @Select("""
+            SELECT auth.get_user_email(#{userId}::uuid)
+            """)
+    String getUserEmail(@Param("userId") UUID userId);
+
     /** 分配角色，INSERT um.user_role（uk 冲突 23505 映射 40900） */
     @Select("""
             SELECT auth.assign_role(#{userId}::uuid, #{roleCode})

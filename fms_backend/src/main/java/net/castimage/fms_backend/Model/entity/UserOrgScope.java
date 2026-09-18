@@ -9,7 +9,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * 用户-公司数据范围实体（um.user_org_scope；auth.set_session 预载数据源）：本批默认不写（登录注入 orgIds=null 则由 PG 预载），Mapper 预留 org_id 集合查询供 admin 全量/切换数据范围场景。
+ * 用户-公司数据范围实体（um.user_org_scope）：auth.set_session 的数据范围预载源，
+ * 登录注入 orgIds=null 时由 PG 直接读本表；管理员的数据范围读写走 auth.list_user_scopes /
+ * auth.set_user_org_scope 闸口，不经本实体。
  */
 @TableName(schema = "um", value = "user_org_scope")
 @Data

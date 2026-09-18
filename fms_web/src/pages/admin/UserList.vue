@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 用户管理，关键词/状态筛选 + 服务端分页，新建，初始密码，companyId 取顶栏当前公司、
- * 禁用/启用，status 白名单 ACTIVE/LOCKED/DISABLED、重置密码、分配角色，按 roleId 幂等。
+ * 禁用/启用，status 白名单 ACTIVE/LOCKED/DISABLED、重置密码、分配角色，按 roleId 幂等、
+ * 数据范围全量替换；邮箱列由后端按身份下发，管理员见全部、其余账号仅见本人。
  */
 import { computed, h, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
@@ -268,6 +269,14 @@ function renderStatus(s: UserStatus) {
 const columns: FmsColumn<UserView>[] = [
   { key: 'loginName', title: '登录名', width: 120 },
   { key: 'displayName', title: '显示名', width: 120, render: (r) => r.displayName || '—' },
+  {
+    // 邮箱由后端闸口按身份下发，管理员可见全部、其余账号仅可见本人，空值与越权同为 '—'
+    key: 'email',
+    title: '邮箱',
+    width: 200,
+    hideBelow: 'md',
+    render: (r) => r.email || '—',
+  },
   { key: 'status', title: '状态', width: 90, render: (r) => renderStatus(r.status as UserStatus) },
   {
     key: 'mfaEnabled',
@@ -348,7 +357,7 @@ onMounted(async () => {
       :data="rows"
       :loading="loading"
       :total="total"
-      :scroll-x="1000"
+      :scroll-x="1200"
     >
       <template #empty>
         <span>暂无用户数据</span>
