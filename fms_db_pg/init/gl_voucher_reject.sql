@@ -312,8 +312,11 @@ UPDATE um.permissions p
  WHERE p.identifier IN ('gl.voucher.reject','gl.voucher.revert')
    AND p.deleted_at IS NULL AND p.required_permissions = '{}';
 
---函数授权（沙箱模型，fms_operator 经 SET ROLE 注入后执行闸口）
+-- 函数授权，沙箱模型下 fms_operator 经 SET ROLE 注入后执行闸口
+-- PUBLIC 须显式收回，CREATE FUNCTION 默认带 PUBLIC EXECUTE
 
+REVOKE EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION gl.fn_revert_voucher(uuid)       FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION gl.fn_revert_voucher(uuid)         TO fms_operator;
 

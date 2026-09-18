@@ -136,8 +136,11 @@ END $$;
 COMMENT ON FUNCTION rpt.fn_dashboard_alerts(uuid)
     IS '看板异常告警：预算执行率超 budget.warn.ratio 阈值（同 fn_cron_budget_warning 语义）+ 银行账户余额低于 cash.bank.safety.line 安全线（jsonb 数组；越权公司返回空集）';
 
---执行授权，4 只读/写职责角色，grants_base 已 REVOKE rpt schema PUBLIC，显式授权即权限边界
+-- 执行授权，4 个读写职责角色
+-- PUBLIC 须显式收回，CREATE FUNCTION 默认带 PUBLIC EXECUTE，rpt schema 的 USAGE 收回只挡住
+-- 跨 schema 调用，函数 ACL 自身仍是 PUBLIC 可执行
 
+REVOKE EXECUTE ON FUNCTION rpt.fn_dashboard_alerts(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION rpt.fn_dashboard_alerts(uuid)
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 

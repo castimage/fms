@@ -185,21 +185,8 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, r.id,
  WHERE u.login_name = 'admin'
 ON CONFLICT (user_id, role_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
--- admin 数据范围，须显式落库。rls 策略经 auth.can_access_org 与会话变量 fms.org_ids 判定，
--- 该变量由后端 set_session 从 um.user_org_scope/um.user_dept_scope 预载，范围表无记录时
--- fms.org_ids 为空串，策略恒判假，管理员的写入同样被拒。故按所属公司授予全部公司与部门范围，
--- 部门范围含子树，与演示用户的授权口径一致
-INSERT INTO um.user_org_scope (company_id, user_id, org_id)
-SELECT u.company_id, u.id, c.id
-  FROM um.users u CROSS JOIN org.companies c
- WHERE u.login_name = 'admin' AND c.deleted_at IS NULL
-ON CONFLICT (user_id, org_id) DO NOTHING;
-
-INSERT INTO um.user_dept_scope (company_id, user_id, dept_id)
-SELECT u.company_id, u.id, d.id
-  FROM um.users u CROSS JOIN org.departments d
- WHERE u.login_name = 'admin' AND d.company_id = u.company_id AND d.deleted_at IS NULL
-ON CONFLICT (user_id, dept_id) DO NOTHING;
+-- admin 数据范围不在此处落库，范围种子须 CROSS JOIN org.companies/org.departments，
+-- 两张表随公司与部门行在数据段创建，种子与它们并置，避免在空表上 CROSS JOIN 空转
 
 -- admin 联系方式加密写入（pgp_sym_encrypt aes256 + hmac 盲索引）
 DO $$

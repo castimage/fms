@@ -149,6 +149,24 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, d.id
    AND d.company_id = '00000000-0000-7000-0000-000000000010' AND d.deleted_at IS NULL
 ON CONFLICT (user_id, dept_id) DO NOTHING;
 
+-- admin 数据范围，rls 策略经 auth.can_access_org 与 auth.can_access_dept 读会话变量
+-- fms.org_ids 与 fms.dept_ids 判定，变量由后端 set_session 从范围表预载，范围表无记录
+-- 即策略恒判假，管理员读写一并被拒
+
+-- 范围种子依赖公司与部门行，故随它们同段落库，按 admin 所属公司授予全部公司范围与该公司的
+-- 全部部门范围，include_subtree 列默认 true 使子树可见，ON CONFLICT DO UPDATE 使软删行复活
+INSERT INTO um.user_org_scope (company_id, user_id, org_id)
+SELECT u.company_id, u.id, c.id
+  FROM um.users u CROSS JOIN org.companies c
+ WHERE u.login_name = 'admin' AND c.deleted_at IS NULL
+ON CONFLICT (user_id, org_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
+
+INSERT INTO um.user_dept_scope (company_id, user_id, dept_id)
+SELECT u.company_id, u.id, d.id
+  FROM um.users u CROSS JOIN org.departments d
+ WHERE u.login_name = 'admin' AND d.company_id = u.company_id AND d.deleted_at IS NULL
+ON CONFLICT (user_id, dept_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
+
 -- gl.periods 会计期间（2026-07/2026-08 均 OPEN）
 INSERT INTO gl.periods (company_id, period, status, closed_by, closed_at)
 VALUES ('00000000-0000-7000-0000-000000000010', '2026-07', 'OPEN',    NULL, NULL),
