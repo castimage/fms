@@ -20,15 +20,15 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.List;
 
 /**
- * 通知 WebSocket 端点，/ws/notify，JSR-356 @ServerEndpoint，由 WebSocketConfig 注册到
+ * 通知 WebSocket 端点，路径 /api/nt/ws，JSR-356 @ServerEndpoint，由 WebSocketConfig 注册到
  * 内嵌 Tomcat ServerContainer，连接时按查询参数 uid 注册会话并按 NotifyService 推送
  * 当前未读数（{"type":"unread_count","count":N}），已读动作后经
- * NotifyService 经 sendToUser 做增量推送。身份说明，/api/* 由网关签名校验拦截，本端点为
- * 网关 WebSocket 代理直通路径，uid 为网关注入的 canonical uuid（与 RequestContext 同源），
- * 会话表以 uid 为键、CopyOnWriteArraySet 支持同用户多端并发连接，断线（OnClose/OnError）
- * 自动注销防会话泄漏。
+ * NotifyService 经 sendToUser 做增量推送。路径与网关的 WebSocket 判定一致：网关按
+ * /api/nt/ws 精确匹配升级请求并原样携带路径转发，本端点即该路径的最终处理者；uid 为
+ * 网关注入的 canonical uuid（与 RequestContext 同源），会话表以 uid 为键、
+ * CopyOnWriteArraySet 支持同用户多端并发连接，断线（OnClose/OnError）自动注销防会话泄漏。
  */
-@ServerEndpoint("/ws/notify")
+@ServerEndpoint("/api/nt/ws")
 public class NotifyWebSocketEndpoint {
 
     private static final Logger log = LoggerFactory.getLogger(NotifyWebSocketEndpoint.class);

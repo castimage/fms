@@ -28,12 +28,10 @@ export default defineConfig({
   server: {
     proxy: {
       // 开发走 Rust 网关同源代理(网关承载前端与 API，后端服务 8081)，
+      // ws 放行 /api/nt/ws 的通知实时通道升级请求
       '/api': {
         target: 'http://localhost:8081',
         changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://localhost:8081',
         ws: true,
       },
     },

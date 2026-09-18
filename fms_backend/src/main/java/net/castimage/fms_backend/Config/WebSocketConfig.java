@@ -21,7 +21,8 @@ public class WebSocketConfig {
     /**
      * 注册通知 WebSocket 端点：从 ServletContext 属性取 ServerContainer（属性名
      * ServerContainer.class.getName()，Tomcat 启动时注入），addEndpoint 注册
-     * {@code /ws/notify}；容器缺失（非 Tomcat 环境）时静默跳过，不阻断启动。
+     * {@code /api/nt/ws}（与网关的升级判定路径一致）；容器缺失（非 Tomcat 环境）时静默跳过，
+     * 不阻断启动。
      */
     @Bean
     public ServletContextInitializer notifyWebSocketRegistration(NotifyService notifyService) {

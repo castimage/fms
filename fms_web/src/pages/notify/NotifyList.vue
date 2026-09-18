@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
  * 站内通知，本人通知列表 + 未读数角标，isRead 三态筛选，已读动作走 REST。
- * WebSocket 实时推送本批不接入，连接方式见 api/notify.ts 的 NOTIFY_WS_URL。
+ * 实时通道经 NOTIFY_WS_URL 连接（网关按 /api/nt/ws 直通），收到未读数推送即刷新角标与列表，
+ * 断线按指数退避重连，离开页面关闭连接。
  */
-import { h, onMounted, ref, watch } from 'vue'
+import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NButton, NTag, useMessage } from 'naive-ui'
 import { NOTIFY_WS_URL, notifyApi } from '@/api/notify'
 import FormGrid from '@/components/common/FormGrid.vue'
@@ -12,8 +13,10 @@ import type { FmsColumn } from '@/components/common/DataTable.vue'
 import type { NotificationView } from '@/types/notify'
 import { formatDateTime } from '@/utils/format'
 import { useCanWrite } from '@/utils/perm'
+import { useAuthStore } from '@/stores/auth'
 
 const message = useMessage()
+const auth = useAuthStore()
 
 /** 写操作权限，admin/operator 可见写按钮，viewer/auditor/report 只读 */
 const canWrite = useCanWrite()
@@ -110,10 +113,65 @@ const columns: FmsColumn<NotificationView>[] = [
   },
 ]
 
+// 实时通道，服务端连接即回推 {"type":"unread_count","count":N}，断线按指数退避重连
+let ws: WebSocket | null = null
+let retry = 0
+let retryTimer: number | undefined
+let closedByUs = false
+
+function scheduleReconnect() {
+  retry = Math.min(retry + 1, 5)
+  const delay = Math.min(1000 * 2 ** (retry - 1), 30000)
+  retryTimer = window.setTimeout(connectWs, delay)
+}
+
+function connectWs() {
+  const uid = auth.user?.id
+  if (!uid) return
+  try {
+    ws = new WebSocket(`${NOTIFY_WS_URL}?uid=${encodeURIComponent(uid)}`)
+  } catch {
+    scheduleReconnect()
+    return
+  }
+  ws.onopen = () => {
+    retry = 0
+  }
+  ws.onmessage = (ev) => {
+    let msg: { type?: string; count?: unknown }
+    try {
+      msg = JSON.parse(String(ev.data))
+    } catch {
+      return
+    }
+    if (msg.type === 'unread_count' && typeof msg.count === 'number') {
+      unread.value = msg.count
+      // 未读列表与全部列表受推送影响，已读筛选不受影响
+      if (readFilter.value !== 'read') void load()
+    }
+  }
+  ws.onerror = () => {
+    ws?.close()
+  }
+  ws.onclose = () => {
+    if (!closedByUs) scheduleReconnect()
+  }
+}
+
+function closeWs() {
+  closedByUs = true
+  if (retryTimer) window.clearTimeout(retryTimer)
+  ws?.close()
+  ws = null
+}
+
 onMounted(() => {
   void load()
   void refreshUnread()
+  connectWs()
 })
+
+onBeforeUnmount(closeWs)
 </script>
 
 <template>

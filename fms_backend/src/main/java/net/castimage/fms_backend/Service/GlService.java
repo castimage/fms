@@ -9,6 +9,7 @@ import net.castimage.fms_backend.Model.dto.VoucherCreateRequest;
 import net.castimage.fms_backend.Model.dto.VoucherUpdateRequest;
 import net.castimage.fms_backend.Model.vo.AccountView;
 import net.castimage.fms_backend.Model.vo.LedgerView;
+import net.castimage.fms_backend.Model.vo.PeriodView;
 import net.castimage.fms_backend.Model.vo.TrialBalanceView;
 import net.castimage.fms_backend.Model.vo.VoucherDetailView;
 import net.castimage.fms_backend.Model.vo.VoucherGapView;
@@ -132,6 +133,12 @@ public interface GlService {
     List<VoucherGapView> listVoucherGaps(UUID companyId, String period);
 
     // 期间开关 / 期末调汇
+
+    /**
+     * 期间状态清单（按公司返回已存在的期间行与其 OPEN/CLOSED 状态，供期间管理页回显；
+     * 行级安全按公司范围收敛，越权空集）。
+     */
+    List<PeriodView> listPeriods(UUID companyId);
 
     /**
      * 期间结账（OPEN 转 CLOSED）：调 gl.fn_close_period 原子完成——完整性预检（期间内未完成

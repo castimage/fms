@@ -26,6 +26,7 @@ import net.castimage.fms_backend.Model.entity.Voucher;
 import net.castimage.fms_backend.Model.entity.VoucherLine;
 import net.castimage.fms_backend.Model.vo.AccountView;
 import net.castimage.fms_backend.Model.vo.LedgerView;
+import net.castimage.fms_backend.Model.vo.PeriodView;
 import net.castimage.fms_backend.Model.vo.TrialBalanceRow;
 import net.castimage.fms_backend.Model.vo.TrialBalanceView;
 import net.castimage.fms_backend.Model.vo.VoucherDetailView;
@@ -705,6 +706,21 @@ public class GlServiceImpl implements GlService {
      * 预检内置于函数（p_force=false），Service 层不重复查询，避免与 db 侧口径漂移，
      * RAISE 消息含"结账/凭证"关键词则统一映射 40900。
      */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PeriodView> listPeriods(UUID companyId) {
+        if (companyId == null) {
+            throw new BadRequestException("公司必填");
+        }
+        return periodMapper.selectList(new LambdaQueryWrapper<Period>()
+                        .eq(Period::getCompanyId, companyId)
+                        .orderByAsc(Period::getPeriod))
+                .stream()
+                .map(p -> new PeriodView(p.getPeriod(), p.getStatus(),
+                        p.getClosedBy(), p.getClosedAt()))
+                .toList();
+    }
+
     @Override
     @Transactional
     public void closePeriod(UUID companyId, String period) {

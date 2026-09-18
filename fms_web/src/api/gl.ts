@@ -11,6 +11,7 @@ import type {
   FxRateRequest,
   FxRateView,
   LedgerView,
+  PeriodView,
   TrialBalanceView,
   VoucherCreateRequest,
   VoucherDetailView,
@@ -145,6 +146,15 @@ export const glApi = {
       url: '/gl/voucher-gaps',
       method: 'get',
       params: { companyId, period },
+    })
+  },
+
+  /** 期间状态清单，按公司返回已存在的期间行与 OPEN/CLOSED 状态，供期间管理页回显 */
+  listPeriods(companyId: string): Promise<PeriodView[]> {
+    return request<PeriodView[]>({
+      url: '/gl/periods',
+      method: 'get',
+      params: { companyId },
     })
   },
 

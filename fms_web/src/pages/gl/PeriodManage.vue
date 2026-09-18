@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 期间管理，结账/反结账操作页。后端仅有 close/reopen 两个动作端点，无期间状态查询端点，
- * 故期间列表按所选年 12 个月生成、状态由本页本地维护，结账/反结账成功后翻转，页面重载后重置。
+ * 期间管理，结账/反结账操作页。期间列表按所选年补齐 12 个月，各行状态以 gl.periods 实际
+ * 落库行为准（打开页面与切换公司时经 listPeriods 拉取覆盖），结账/反结账成功后同步刷新。
  *
  * 完整性预检，未完成凭证/断号由后端 fn_close_period 把关，反结账须原因 + fms.force_reopen 开关。
  * 期间行被结账后，trg_period_guard/trg_period_voucher_guard 会联动锁定新凭证写入。
@@ -30,13 +30,29 @@ const companyId = ref<string | null>(appStore.companyId)
 const year = ref(new Date(appStore.period + '-01').getFullYear())
 const yearOptions = computed(() => [year.value - 1, year.value, year.value + 1].map((y) => ({ label: `${y}年`, value: y })))
 
-/** 期间行，本地生成 12 个月，后端无列表端点，状态本地维护 */
+/** 期间行，本地补齐 12 个月，状态取自 gl.periods 实际落库行 */
 interface PeriodRow {
   period: string
   status: PeriodStatus
 }
 
 const statusMap = ref<Record<string, PeriodStatus>>({})
+
+/** 拉取已存在的期间行覆盖状态，未创建的月份保持 OPEN，RLS 按公司范围收敛 */
+async function loadPeriods() {
+  if (!companyId.value) {
+    statusMap.value = {}
+    return
+  }
+  try {
+    const rows = await glApi.listPeriods(companyId.value)
+    const next: Record<string, PeriodStatus> = {}
+    for (const r of rows) next[r.period] = r.status
+    statusMap.value = next
+  } catch (e) {
+    if (e instanceof Error) message.error(e.message)
+  }
+}
 
 const periods = computed<PeriodRow[]>(() =>
   Array.from({ length: 12 }, (_, i) => {
@@ -49,6 +65,7 @@ const periods = computed<PeriodRow[]>(() =>
 watch(companyId, (v) => {
   const opt = companyOptions.value.find((o) => o.value === v)
   appStore.setCompany(v, opt?.label ?? '')
+  void loadPeriods()
 })
 
 // 结账 / 反结账，确认弹窗 + 原因输入，结账无需原因，反结账必填审计留痕
@@ -74,8 +91,8 @@ async function confirmOp() {
   try {
     if (action === 'close') await glApi.closePeriod(companyId.value, period)
     else await glApi.reopenPeriod(companyId.value, period, reason.value.trim())
-    // 后端动作成功即翻转本地状态，无查询端点，本地为准
-    statusMap.value[period] = action === 'close' ? 'CLOSED' : 'OPEN'
+    // 动作成功后回读实际状态，与后端落库行保持一致
+    await loadPeriods()
     message.success(`${period} 已${action === 'close' ? '结账' : '反结账'}`)
     opModal.value = false
   } catch {
@@ -85,7 +102,7 @@ async function confirmOp() {
   }
 }
 
-/** 当前全局期间的本地状态标签，期间选择器旁显示 OPEN/CLOSED */
+/** 当前全局期间的状态标签，期间选择器旁显示 OPEN/CLOSED，取值来自后端回显 */
 const currentStatus = computed<PeriodStatus | null>(() => statusMap.value[appStore.period] ?? null)
 
 function renderStatusTag(status: PeriodStatus) {
@@ -121,6 +138,7 @@ onMounted(async () => {
     const res = await pageCompanies({ page: 1, size: 100 })
     companyOptions.value = res.items.map((c) => ({ label: c.name, value: c.id }))
     if (!companyId.value && res.items.length > 0) companyId.value = res.items[0].id
+    await loadPeriods()
   } catch {
     // 失败全局已提示，选择器保持空态
   }
@@ -140,13 +158,13 @@ onMounted(async () => {
         <n-tag v-if="currentStatus" :type="currentStatus === 'OPEN' ? 'success' : 'error'" :bordered="false">
           {{ appStore.period }} {{ currentStatus }}
         </n-tag>
-        <span v-else class="status-unknown">OPEN（本地状态，尚未操作过）</span>
+        <span v-else class="status-unknown">OPEN（未见落库期间行）</span>
       </n-form-item>
     </FormGrid>
 
     <div class="toolbar">
       <span class="toolbar-title">期间列表（{{ year }} 年）</span>
-      <span class="toolbar-hint">状态为本页本地维护；后端暂未提供期间状态查询端点，刷新后重置为 OPEN</span>
+      <span class="toolbar-hint">状态取自 gl.periods 实际落库行；未创建的月份显示为 OPEN</span>
     </div>
 
     <DataTable :columns="columns" :data="periods" :scroll-x="520" local-pagination :bordered="true">
