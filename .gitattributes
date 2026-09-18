@@ -1,0 +1,7 @@
+# 行尾策略，shell 脚本与 Maven wrapper 由 Linux 侧直接执行，须以 LF 检出
+# 仓库跨平台开发，Windows 工作区 core.autocrlf=true 检出即带 CRLF，shebang 随之变成
+# "#!/bin/sh\r"，解释器路径不存在，脚本执行失败，数据库初始化入口被静默跳过
+# eol 属性优先于 core.autocrlf，不受检出平台影响
+
+*.sh text eol=lf
+mvnw text eol=lf
