@@ -592,7 +592,7 @@ END
 $$;
 COMMENT ON FUNCTION cash.fn_create_bank_account(text,text,text,text,text,boolean)
     IS '新建银行账户（列加密写入口：pgp_sym_encrypt 密文 + sha256 盲索引；uk_bank_account_hash 防重；需注入用户上下文确定公司）';
-GRANT EXECUTE ON FUNCTION cash.fn_create_bank_account($1)
+GRANT EXECUTE ON FUNCTION cash.fn_create_bank_account(text,text,text,text,text,boolean)
     TO fms_operator;
 
 -- 契约 init/um_params_functions.sql，auth.recovery_lookup， 找回密码 email 一致性校验，唯一只读闸口，匿名期 rls is_self 恒拒、

@@ -155,4 +155,11 @@ SELECT 'log_access_batch' AS file_name,
        has_function_privilege('fms_app', 'log.fn_send_access_batch(jsonb)', 'EXECUTE') AS app_has_execute,
        has_function_privilege('public', 'log.fn_send_access_batch(jsonb)', 'EXECUTE') AS public_has_execute;
 
+-- 分区授权兜底，log 四张日志表的分区由 init/fill_missing.sql 预建、后续再由 partman-maintenance
+-- cron 滚动创建，均晚于 grants_base.sql 的父表授权，而父表 GRANT 不传播到分区，导致新建分区
+-- 对职责角色不可读；此处对 log 全表（含全部现存分区）重授一次 SELECT，并以默认权限覆盖
+-- 之后由 fms_admin 创建的新分区
+GRANT SELECT ON ALL TABLES IN SCHEMA log TO fms_auditor, fms_operator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA log GRANT SELECT ON TABLES TO fms_auditor, fms_operator;
+
 RESET ROLE;
