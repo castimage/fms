@@ -293,7 +293,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
  WHERE r.code IN ('fms_admin_role','accountant')
    AND p.identifier IN ('gl.voucher.reject','gl.voucher.revert')
    AND p.deleted_at IS NULL AND p.is_enabled
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.user_direct_permissions (company_id, user_id, permission_id, granted_by, granted_at, reason, valid_until)
 SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
@@ -303,7 +303,7 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
   FROM um.users u CROSS JOIN um.permissions p
  WHERE u.login_name = 'admin'
    AND p.identifier IN ('gl.voucher.reject','gl.voucher.revert')
-ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until;
+ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until, deleted_at = NULL, updated_at = now();
 
 -- 依赖，与 approve/post/reverse 同族，驳回/退回依赖查看
 UPDATE um.permissions p

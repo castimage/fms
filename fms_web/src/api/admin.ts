@@ -103,6 +103,10 @@ export const adminApi = {
   deleteRole(id: string): Promise<void> {
     return request<void>({ url: `/org/roles/${id}`, method: 'delete' })
   },
+  /** 角色已绑定权限编码集合，供授权界面回显与差量解绑，管理员 */
+  rolePermissions(id: string): Promise<string[]> {
+    return request<string[]>({ url: `/org/roles/${id}/permissions`, method: 'get' })
+  },
   grantRolePermission(id: string, permCode: string): Promise<void> {
     return request<void>({ url: `/org/roles/${id}/permissions`, method: 'post', data: { permCode } })
   },

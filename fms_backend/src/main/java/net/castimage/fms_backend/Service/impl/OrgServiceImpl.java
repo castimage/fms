@@ -502,6 +502,16 @@ public class OrgServiceImpl implements OrgService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<String> rolePermissions(UUID roleId) {
+        RequestContext.requireAdminRole();
+        if (roleMapper.selectById(roleId) == null) {
+            throw new NotFoundException("角色不存在");
+        }
+        return permissionMapper.selectCodesByRole(roleId);
+    }
+
+    @Override
     @Transactional
     public void grantRolePermission(UUID roleId, RolePermRequest req) {
         RequestContext.requireAdminRole();

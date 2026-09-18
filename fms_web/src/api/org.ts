@@ -127,6 +127,11 @@ export function deleteRole(id: string): Promise<void> {
   return request<void>({ url: `/org/roles/${id}`, method: 'delete' })
 }
 
+/** 角色已绑定权限编码集合，管理员 */
+export function rolePermissions(id: string): Promise<string[]> {
+  return request<string[]>({ url: `/org/roles/${id}/permissions`, method: 'get' })
+}
+
 /** 角色授予权限 */
 export function grantRolePermission(id: string, permCode: string): Promise<void> {
   return request<void>({ url: `/org/roles/${id}/permissions`, method: 'post', data: { permCode } })

@@ -134,7 +134,7 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, r.id,
     OR (u.login_name = 'viewer01'   AND r.code = 'viewer')
     OR (u.login_name = 'auditor01'  AND r.code = 'auditor')
     OR (u.login_name = 'report01'   AND r.code = 'report_viewer')
-ON CONFLICT (user_id, role_id) DO NOTHING;
+ON CONFLICT (user_id, role_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.user_org_scope (company_id, user_id, org_id)
 SELECT '00000000-0000-7000-0000-000000000010', u.id,

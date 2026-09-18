@@ -121,7 +121,7 @@ INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r CROSS JOIN um.permissions p
  WHERE r.code = 'fms_admin_role'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
@@ -129,42 +129,42 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
     ON p.code IN ('voucher:create:company','voucher:post:dept','voucher:reverse:company',
                   'ar:manage:company','ap:manage:company','budget:view:company')
  WHERE r.code = 'accountant'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('budget:approve:company','expense:approve:dept')
  WHERE r.code = 'approver'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('cash:reconcile:company','fa:depreciate:company')
  WHERE r.code = 'cashier'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('audit:read:all')
  WHERE r.code = 'auditor'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('report:view:company','budget:view:company')
  WHERE r.code = 'report_viewer'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('report:view:company','budget:view:company')
  WHERE r.code = 'viewer'
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 -- admin 用户（系统管理员，初始密码 Fms@ca5T1ma93，must_change_pwd=true）
 INSERT INTO um.users
@@ -183,7 +183,7 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, r.id,
        '00000000-0000-7000-0000-000000000001', now()
   FROM um.users u JOIN um.roles r ON r.code = 'fms_admin_role'
  WHERE u.login_name = 'admin'
-ON CONFLICT (user_id, role_id) DO NOTHING;
+ON CONFLICT (user_id, role_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 -- admin 数据范围，须显式落库。rls 策略经 auth.can_access_org 与会话变量 fms.org_ids 判定，
 -- 该变量由后端 set_session 从 um.user_org_scope/um.user_dept_scope 预载，范围表无记录时

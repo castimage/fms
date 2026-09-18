@@ -155,6 +155,11 @@ public interface OrgService {
     void deleteRole(UUID id);
 
     /**
+     * 角色已绑定的权限编码集合，供授权界面回显与差量解绑，仅管理员。
+     */
+    List<String> rolePermissions(UUID roleId);
+
+    /**
      * 角色-权限绑定（auth.grant_role_permission）。
      */
     void grantRolePermission(UUID roleId, RolePermRequest req);

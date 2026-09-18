@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 角色与权限，角色列表 + 新建/编辑/删除，is_system 禁改禁删，40300 由后端兜底，
- * 授权弹窗逐条 grantRolePermission，后端无角色已授权查询端点，仅增量授予。
+ * 授权弹窗先拉取角色已绑定权限回显，保存时按差量逐条 grantRolePermission 与 revokeRolePermission。
  */
 import { h, onMounted, ref, useTemplateRef } from 'vue'
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
@@ -84,6 +84,8 @@ const permRole = ref<RoleView | null>(null)
 const treeData = ref<TreeOption[]>([])
 const checkedKeys = ref<string[]>([])
 const grantLoading = ref(false)
+/** 打开弹窗时角色已绑定的权限编码，保存时用于差量比对 */
+const originalCodes = ref<Set<string>>(new Set())
 
 /** 模块树转 n-tree 数据，权限挂为叶子节点，key 前缀 p: 与模块节点区分 */
 function toTreeOptions(nodes: ModuleNode[]): TreeOption[] {
@@ -99,19 +101,24 @@ function toTreeOptions(nodes: ModuleNode[]): TreeOption[] {
 
 async function openPerms(r: RoleView) {
   permRole.value = r
-  checkedKeys.value = []
   treeData.value = toTreeOptions(await adminApi.permTree())
+  const granted = await adminApi.rolePermissions(r.id)
+  originalCodes.value = new Set(granted)
+  checkedKeys.value = granted.map((c) => `p:${c}`)
   showPerms.value = true
 }
 
 async function submitPerms() {
   if (!permRole.value) return
-  // 仅增量授予，取消勾选不回收，后端无已授权查询无法安全 diff
   const codes = checkedKeys.value.filter((k) => k.startsWith('p:')).map((k) => k.slice(2))
+  const next = new Set(codes)
+  const toGrant = codes.filter((c) => !originalCodes.value.has(c))
+  const toRevoke = [...originalCodes.value].filter((c) => !next.has(c))
   grantLoading.value = true
   try {
-    for (const code of codes) await adminApi.grantRolePermission(permRole.value.id, code)
-    message.success(`已授予 ${codes.length} 个权限`)
+    for (const code of toGrant) await adminApi.grantRolePermission(permRole.value.id, code)
+    for (const code of toRevoke) await adminApi.revokeRolePermission(permRole.value.id, code)
+    message.success(`授权已更新：新增 ${toGrant.length} 项，回收 ${toRevoke.length} 项`)
     showPerms.value = false
     await loadRoles()
   } catch (e) {
@@ -199,7 +206,7 @@ onMounted(() => void loadRoles())
     <!-- 授权 -->
     <n-modal v-model:show="showPerms" preset="card" :title="`授权 - ${permRole?.name ?? ''}`" style="width: min(520px, calc(100vw - 32px))" :bordered="false">
       <n-alert type="info" :bordered="false" class="perm-hint">
-        勾选即授予；取消勾选不回收（后端未提供角色已授权查询端点）。
+        已绑定权限在打开时已勾选；勾选即授予，取消勾选即回收，保存时按差量提交。
       </n-alert>
       <n-tree :data="treeData" checkable cascade default-expand-all v-model:checked-keys="checkedKeys" />
       <template #action>

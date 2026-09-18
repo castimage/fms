@@ -211,7 +211,7 @@ BEGIN
     END IF;
     INSERT INTO um.user_role (company_id, user_id, role_id, granted_by)
     VALUES (v_user_comp, p_user_id, v_role_id, auth.current_uid())
-    ON CONFLICT (user_id, role_id) DO NOTHING;       -- 幂等重授（uk_user_role 兜底）
+    ON CONFLICT (user_id, role_id) DO UPDATE SET deleted_at = NULL, updated_at = now();       -- 幂等重授（uk_user_role 兜底）
 END
 $$;
 COMMENT ON FUNCTION auth.assign_role(uuid,text)

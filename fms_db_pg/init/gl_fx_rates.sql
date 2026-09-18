@@ -121,7 +121,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
   FROM um.roles r JOIN um.permissions p
     ON p.code IN ('gl.period.close','gl.period.reopen','gl.period.fx_adjustment')
  WHERE r.code IN ('fms_admin_role','accountant')
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 --gl.fn_fx_adjustment 期末调汇实现
 

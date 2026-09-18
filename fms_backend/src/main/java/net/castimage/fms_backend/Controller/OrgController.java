@@ -305,6 +305,14 @@ public class OrgController {
     }
 
     /**
+     * 角色已绑定的权限编码集合，供授权界面回显与差量解绑，管理员专属。
+     */
+    @GetMapping("/roles/{id}/permissions")
+    public ApiResponse<List<String>> rolePermissions(@PathVariable UUID id) {
+        return ApiResponse.ok(orgService.rolePermissions(id));
+    }
+
+    /**
      * 权限树（um.modules 树 + 挂载 permissions）。
      */
     @GetMapping("/perm-tree")

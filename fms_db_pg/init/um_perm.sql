@@ -355,7 +355,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
        (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()
   FROM um.roles r CROSS JOIN um.permissions p
  WHERE r.code = 'fms_admin_role' AND p.deleted_at IS NULL AND p.is_enabled
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 -- 职责角色标识（accountant=会计，记账，voucher:create/post/reverse 矩阵 + 种子演示 operator01 审核），
 -- voucher:post:dept 等码不参与 require_permission 判定，须补授新标识，否则 fn_post_voucher/fn_reverse_voucher 闸口拒绝
@@ -367,28 +367,28 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
                         'gl.voucher.delete','gl.voucher.approve','gl.voucher.post',
                         'gl.voucher.reverse','gl.voucher.reject')
  WHERE r.code = 'accountant' AND p.deleted_at IS NULL AND p.is_enabled
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.user_direct_permissions (company_id, user_id, permission_id, granted_by, granted_at, reason, valid_until)
 SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
        '00000000-0000-7000-0000-000000000001', now(), '超级管理员特批：可执行凭证冲销', NULL
   FROM um.users u CROSS JOIN um.permissions p
  WHERE u.login_name = 'admin' AND p.identifier = 'gl.voucher.reverse'
-ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until;
+ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until, deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.user_direct_permissions (company_id, user_id, permission_id, granted_by, granted_at, reason, valid_until)
 SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
        '00000000-0000-7000-0000-000000000001', now(), '超级管理员特批：可执行凭证驳回', NULL
   FROM um.users u CROSS JOIN um.permissions p
  WHERE u.login_name = 'admin' AND p.identifier = 'gl.voucher.reject'
-ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until;
+ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until, deleted_at = NULL, updated_at = now();
 
 INSERT INTO um.user_direct_permissions (company_id, user_id, permission_id, granted_by, granted_at, reason, valid_until)
 SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
        '00000000-0000-7000-0000-000000000001', now(), '代理审批临时授权（示例，7 天有效）', now() + interval '7 days'
   FROM um.users u CROSS JOIN um.permissions p
  WHERE u.login_name = 'admin' AND p.identifier = 'expense.reimbursement.approve'
-ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until;
+ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until, deleted_at = NULL, updated_at = now();
 
 -- auth.* 权限判定函数族（SECURITY DEFINER，读 guc fms.user_id，fail-closed），不依赖 current_user，DEFINER 内恒为属主，未注入上下文则空集/false/异常，fms_admin（NOLOGIN）与 postgres，引导连接用户，维护直通
 -- 8.1 合并权限集，角色权限（含 user_role/role_perm 有效期过滤）+ 用户直接权限（valid_until 过滤）+ 权限/模块启用状态过滤，返回权限明细与依赖缺口
@@ -537,7 +537,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
                         'wf.definition.view')
  WHERE r.code IN ('accountant','approver','cashier')
    AND p.deleted_at IS NULL AND p.is_enabled
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 --闸口收敛（sql 侧纵深防御）
 
@@ -569,7 +569,7 @@ BEGIN
     END IF;
     INSERT INTO um.user_role (company_id, user_id, role_id, granted_by)
     VALUES (v_user_comp, p_user_id, v_role_id, auth.current_uid())
-    ON CONFLICT (user_id, role_id) DO NOTHING;       -- 幂等重授（uk_user_role 兜底）
+    ON CONFLICT (user_id, role_id) DO UPDATE SET deleted_at = NULL, updated_at = now();       -- 幂等重授（uk_user_role 兜底）
 END
 $$;
 
@@ -646,7 +646,7 @@ BEGIN
     END IF;
     INSERT INTO um.role_perm (company_id, role_id, perm_id)
     VALUES (v_role_comp, p_role_id, v_perm_id)
-    ON CONFLICT (role_id, perm_id) DO NOTHING;       -- 幂等（uk_role_perm 兜底）
+    ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();       -- 幂等（uk_role_perm 兜底）
 END
 $$;
 
@@ -742,7 +742,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
  WHERE r.code IN ('fms_admin_role', 'sys_admin')
    AND p.identifier = 'admin.user.scope'
    AND p.deleted_at IS NULL AND p.is_enabled
-ON CONFLICT (role_id, perm_id) DO NOTHING;
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
 -- 数据范围读取，返回 {orgIds:[...], depts:[{deptId, includeSubtree}]}，供配置界面回显
 CREATE OR REPLACE FUNCTION auth.list_user_scopes(p_user_id uuid)
