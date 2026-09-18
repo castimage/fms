@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 期间管理，结账/反结账操作页。期间列表按所选年补齐 12 个月，各行状态以 gl.periods 实际
- * 落库行为准（打开页面与切换公司时经 listPeriods 拉取覆盖），结账/反结账成功后同步刷新。
+ * 期间管理，结账与反结账操作页。期间列表按所选年补齐 12 个月，各行状态以 gl.periods 实际落库行为准，
+ * 打开页面与切换公司时经 listPeriods 拉取覆盖，结账与反结账成功后同步刷新。
  *
  * 完整性预检，未完成凭证/断号由后端 fn_close_period 把关，反结账须原因 + fms.force_reopen 开关。
  * 期间行被结账后，trg_period_guard/trg_period_voucher_guard 会联动锁定新凭证写入。
@@ -38,7 +38,7 @@ interface PeriodRow {
 
 const statusMap = ref<Record<string, PeriodStatus>>({})
 
-/** 拉取已存在的期间行覆盖状态，未创建的月份保持 OPEN，RLS 按公司范围收敛 */
+/** 拉取已存在的期间行覆盖状态，未创建的月份保持 OPEN，rls 按公司范围收敛 */
 async function loadPeriods() {
   if (!companyId.value) {
     statusMap.value = {}

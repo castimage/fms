@@ -703,9 +703,9 @@ END $$;
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
--- 2.5 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL。返回 NULL 而非抛错的原因，本函数
--- 会被用户列表逐行调用，越权行抛错会使整表查询失败；返回 NULL 既不泄露存在性，也不阻断列表。
--- 邮箱以 pgp_sym_encrypt(aes256) 加密存储、等值查询走 email_hash 盲索引，明文只经本出口返回
+-- 2.5 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL
+-- 返回 NULL 不抛错，因本出口被用户列表逐行调用，越权行抛错会使整表查询失败，且 NULL 不泄露存在性
+-- 邮箱以 pgp_sym_encrypt(aes256) 加密存储，等值查询走 email_hash 盲索引，明文只经本出口返回
 CREATE OR REPLACE FUNCTION auth.get_user_email(p_user_id uuid)
 RETURNS text
 LANGUAGE plpgsql

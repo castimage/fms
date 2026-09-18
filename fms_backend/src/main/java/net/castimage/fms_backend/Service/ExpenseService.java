@@ -67,12 +67,12 @@ public interface ExpenseService {
     ReimbursementDetailView payReimbursement(UUID id);
 
     /**
-     * 生成过账凭证（仅 PAID）：生成 DRAFT 凭证（借 费用科目 / 贷 应付账款，科目经 um.params
-     * 映射）、回填 voucher_id，并同事务推进状态 PAID 转 POSTED。幂等——voucher_id 非空直接
-     * 返回既有凭证 id，重复点击不产生第二张凭证；科目映射缺失、期间已结账、预算阻断等异常
-     * 向调用方传播，不静默降级。POSTED 转 REVERSED 由反向凭证路径负责，本接口不涉及。
+     * 生成过账凭证，仅 PAID 状态可调用，生成 DRAFT 凭证并回填 voucher_id，同事务推进状态 PAID 转 POSTED
      *
-     * @return 联动凭证 id（新建或幂等命中的既有凭证）
+     * 凭证借费用科目、贷应付账款，科目映射读 um.params，voucher_id 非空即直接返回既有凭证，
+     * 重复调用不产生第二张凭证，科目映射缺失、期间已结账、预算阻断等异常向调用方传播，不静默降级
+     *
+     * @return 联动凭证 id，新建或幂等命中的既有凭证
      */
     UUID linkReimbursementVoucher(UUID id);
 

@@ -26,9 +26,10 @@ export interface DepartmentView {
 }
 
 /**
- * 用户视图，roles 为 jwt role 短名列表。
- * email 由后端经 auth.get_user_email 闸口解出，管理员得全部、其余人仅得本人，
- * 无权与未设邮箱同为 null，前端一律按"未展示"处理，不区分两者
+ * 用户视图，roles 为 jwt role 短名列表
+ *
+ * email 由后端经 auth.get_user_email 闸口解出，管理员得全部，其余人仅得本人，
+ * 无权与未设邮箱同为 null，前端一律按未展示处理，不区分两者
  */
 export interface UserView {
   id: string
@@ -78,7 +79,7 @@ export interface SodResult {
   pairs: { permA: string; permB: string }[]
 }
 
-/** 用户数据范围视图（auth.list_user_scopes 返回，部门范围含子树开关，本接口对全部部门统一设置） */
+/** 用户数据范围视图，auth.list_user_scopes 返回，部门范围含子树开关对全部部门统一设置 */
 export interface UserScopeView {
   orgIds: string[]
   deptIds: string[]

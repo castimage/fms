@@ -4,8 +4,8 @@
  * 新建/编辑，头部字段 + 明细行表格，行合计=头金额，与后端 Service 强制一致，保存草稿/保存并提交。
  *
  * 详情，只读头部 + 明细，按状态给操作，本人草稿/被驳回可编辑提交删除，SUBMITTED 可审批/驳回，
- * APPROVED 可付款，PAID 可生成过账凭证（幂等，后端同事务回填 voucher_id 并推进 POSTED），
- * 已生成凭证时可跳转凭证详情；权限由后端 rls 兜底，越权 40900 全局提示。
+ * APPROVED 可付款，PAID 可生成过账凭证，动作幂等，后端同事务回填 voucher_id 并推进 POSTED，
+ * 已生成凭证时可跳转凭证详情，权限由后端 rls 兜底，越权 40900 全局提示。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -236,7 +236,7 @@ function onActionReject() {
 function onActionPay() {
   return runAction(() => expenseApi.payReimbursement(reimbursementId.value), '已付款')
 }
-/** 生成过账凭证（幂等），成功即已过账，凭证详情入口 goVoucher 在刷新后出现 */
+/** 生成过账凭证，幂等，成功即已过账，凭证详情入口在刷新后出现 */
 function onActionLinkVoucher() {
   return runAction(() => expenseApi.linkVoucher(reimbursementId.value), '已生成凭证并过账')
 }

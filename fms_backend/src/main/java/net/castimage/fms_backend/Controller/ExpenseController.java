@@ -126,9 +126,9 @@ public class ExpenseController {
     }
 
     /**
-     * 生成过账凭证（仅 PAID，幂等）：生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED，
-     * 与 ar/ap 的补生成端点同形（POST /api/ar/invoices/{id}/link-voucher）。
-     * 返回联动凭证 id，供前端跳转凭证详情。
+     * 生成过账凭证，仅 PAID 状态可调用，幂等，生成 DRAFT 凭证并回填 voucher_id，同事务推进 POSTED
+     *
+     * 返回联动凭证 id，供前端跳转凭证详情
      */
     @PostMapping("/reimbursements/{id}/link-voucher")
     public ApiResponse<UUID> linkVoucher(@PathVariable UUID id) {

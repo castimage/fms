@@ -31,10 +31,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 报销单过账凭证动作测试，mock Mapper 不连库：显式动作 linkReimbursementVoucher 的状态守卫
- * （仅 PAID 可生成）、幂等（voucher_id 非空直接返回既有凭证，不再触碰凭证与状态）、
- * 状态推进 CAS 影响 0 行即 40900（同事务回滚，不留孤立凭证），
- * 以及审批路径不再自动生成凭证、付款路径不触碰凭证列。
+ * 报销单过账凭证动作测试，mock Mapper 不连库
+ *
+ * 覆盖显式动作 linkReimbursementVoucher 的状态守卫，仅 PAID 可生成，voucher_id 非空即幂等返回
+ * 既有凭证且不再触碰凭证与状态，状态推进 CAS 影响 0 行即 40900 并回滚不留孤立凭证，
+ * 另覆盖审批路径不生成凭证、付款路径不触碰凭证列
  */
 class ExpenseServiceImplTest {
 

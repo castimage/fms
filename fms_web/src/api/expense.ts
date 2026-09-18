@@ -47,8 +47,9 @@ export const expenseApi = {
     return request<ReimbursementDetailView>({ url: `/exp/reimbursements/${id}/pay`, method: 'post' })
   },
   /**
-   * 生成过账凭证（仅 PAID，幂等）：后端生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED，
-   * 返回联动凭证 id 供跳转凭证详情；重复调用返回既有凭证。
+   * 生成过账凭证，仅 PAID 状态可调用，幂等，后端生成 DRAFT 凭证并回填 voucher_id，同事务推进 POSTED
+   *
+   * 返回联动凭证 id 供跳转凭证详情，重复调用返回既有凭证
    */
   linkVoucher(id: string): Promise<string> {
     return request<string>({ url: `/exp/reimbursements/${id}/link-voucher`, method: 'post' })

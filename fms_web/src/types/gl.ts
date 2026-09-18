@@ -189,7 +189,7 @@ export interface AccountRequest {
   status?: AccountStatus
 }
 
-/** 会计期间视图（后端 PeriodView 逐字段一致），仅已存在的期间行，前端按所选年补齐 12 个月后以其状态覆盖 */
+/** 会计期间视图，与后端 PeriodView 逐字段一致，仅已存在的期间行，前端按所选年补齐 12 个月后以其状态覆盖 */
 export interface PeriodView {
   period: string
   status: 'OPEN' | 'CLOSED'

@@ -86,7 +86,7 @@ export const adminApi = {
   listRoles(): Promise<RoleView[]> {
     return request<RoleView[]>({ url: '/org/roles', method: 'get' })
   },
-  /** 读取用户数据范围（公司 + 部门 + 含子树开关），管理员 */
+  /** 读取用户数据范围，含公司、部门与子树开关，管理员专属 */
   getUserScopes(id: string): Promise<UserScopeView> {
     return request<UserScopeView>({ url: `/org/users/${id}/scopes`, method: 'get' })
   },

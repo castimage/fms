@@ -286,9 +286,8 @@ public class ExpenseServiceImpl implements ExpenseService {
         }
         // 同步 wf 实例状态 RUNNING 转 APPROVED（记录型；实例不可见/已终态 0 行仅 WARN）
         syncWfStatus(id, "APPROVED");
-        // 审批通过不生成凭证：费用入账在付款后由显式动作 POST /reimbursements/{id}/link-voucher
-        // 触发（生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED），审批期不占位，
-        // 使"过账由凭证回填触发"的状态语义与 voucher_id 的实际写入时机一致。
+        // 审批通过不生成凭证，费用入账在付款后由显式生成凭证动作触发，
+        // 审批期不占位，凭证回填与状态过账同步完成，两者时机一致
         return buildDetail(id);
     }
 
@@ -313,9 +312,10 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     /**
-     * 出纳付款（状态机 APPROVED 转 PAID）：Java 预检状态前置 + DB 触发器终审；付款后单据
-     * 冻结，仅可沿 PAID 转 POSTED 推进，该推进由显式生成凭证动作一并完成（见
-     * linkReimbursementVoucher），付款动作本身只落状态、不触碰凭证。
+     * 出纳付款，状态机 APPROVED 转 PAID，Java 预检状态前置，DB 触发器终审
+     *
+     * 付款后单据冻结，仅可沿 PAID 转 POSTED 推进，该推进由显式生成凭证动作一并完成，
+     * 本动作只落状态，不触碰凭证
      */
     /** {@inheritDoc} */
     @Override
@@ -341,16 +341,16 @@ public class ExpenseServiceImpl implements ExpenseService {
     public UUID linkReimbursementVoucher(UUID id) {
         RequestContext.requireWriteRole();
         Reimbursement r = requireReimbursement(id);
-        // 幂等：凭证已生成则直接返回既有凭证 id（重复点击/重试不产生第二张凭证）
+        // 幂等，凭证已生成则直接返回既有凭证 id，重复点击或重试不产生第二张凭证
         if (r.getVoucherId() != null) {
             return r.getVoucherId();
         }
         if (!"PAID".equals(r.getStatus())) {
-            throw new ConflictException("仅 PAID 状态报销单可生成过账凭证（当前 " + r.getStatus()
-                    + "）；已过账单据直接返回既有凭证");
+            throw new ConflictException("仅 PAID 状态报销单可生成过账凭证，当前 " + r.getStatus()
+                    + "，已过账单据直接返回既有凭证");
         }
-        // 科目映射缺失、期间已结账、预算阻断等异常一律向调用方传播，不做静默降级——
-        // 显式动作由人触发，失败原因须可见，与 ar/ap 补生成端点同策略
+        // 科目映射缺失、期间已结账、预算阻断等异常一律向调用方传播，不做静默降级，
+        // 显式动作由人触发，失败原因须对调用方可见
         UUID voucherId = voucherLinkService.linkExpense(id);
         // 凭证回填成功后再推进状态，CAS 守住 PAID，并发双击仅一方成功，无凭证则 DB 触发器拒绝过账
         if (reimbursementMapper.update(null, new LambdaUpdateWrapper<Reimbursement>()

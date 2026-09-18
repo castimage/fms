@@ -223,9 +223,9 @@ BEGIN
            AND d.path <@ g.path);                 -- 目标部门是授予部门的子树节点
 END $$;
 
--- 2.4 本人数据判定，只返回 true/false，绝不返回 NULL
--- current_uid() 缺失时若直接比较将得到 NULL（未知），而调用方普遍写作 IF NOT (auth.is_self(x) OR ...) THEN 拒绝，
--- IF NULL 不成立等于放行，守卫被穿透（fail-open）。故此处显式判空后落在 false，缺失即"非本人"，全部调用点随之 fail-closed
+-- 2.4 本人数据判定，恒返回 true 或 false，不产生 NULL
+-- 会话标识缺失时直接比较将得到 NULL，而调用方普遍写作取反后拒绝，NULL 使该条件不成立即放行，
+-- 守卫被穿透，故此处显式判空并落在 false，缺失即判非本人，调用点随之收敛为拒绝
 CREATE OR REPLACE FUNCTION auth.is_self(p_owner_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql

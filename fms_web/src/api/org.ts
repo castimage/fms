@@ -99,7 +99,7 @@ export function userPermissions(id: string): Promise<string[]> {
   return request<string[]>({ url: `/org/users/${id}/permissions`, method: 'get' })
 }
 
-/** 读取用户数据范围（公司 + 部门 + 含子树开关），管理员 */
+/** 读取用户数据范围，含公司、部门与子树开关，管理员专属 */
 export function getUserScopes(id: string): Promise<UserScopeView> {
   return request<UserScopeView>({ url: `/org/users/${id}/scopes`, method: 'get' })
 }

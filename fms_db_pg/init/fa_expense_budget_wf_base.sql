@@ -1180,7 +1180,7 @@ BEGIN
 END
 $$;
 
--- 6.8 expense.fn_reimburse_status_check 报销单状态机触发器函数，仅允许正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），POSTED/REVERSED 后禁改，含非状态字段；过账另要求 voucher_id 非空，凭证须先于状态落定
+-- 6.8 expense.fn_reimburse_status_check 报销单状态机触发器函数，仅允许正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），POSTED/REVERSED 后禁改，含非状态字段，过账另要求 voucher_id 非空，凭证先于状态落定
 CREATE OR REPLACE FUNCTION expense.fn_reimburse_status_check()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1205,7 +1205,7 @@ BEGIN
         RAISE EXCEPTION '非法的报销状态流转：% -> %', OLD.status, NEW.status
             USING ERRCODE = 'P0001';
     END IF;
-    -- POSTED 语义为"凭证已生成并回填"，无凭证即不得过账，防状态与凭证脱节后无法追溯
+    -- POSTED 语义为凭证已生成并回填，无凭证不得过账，防状态与凭证脱节
     IF NEW.status = 'POSTED' AND NEW.voucher_id IS NULL THEN
         RAISE EXCEPTION '报销单过账前须先生成凭证（voucher_id 为空，status % -> POSTED）', OLD.status
             USING ERRCODE = 'P0001';

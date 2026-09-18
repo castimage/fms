@@ -2,7 +2,7 @@
 /**
  * 用户管理，关键词/状态筛选 + 服务端分页，新建，初始密码，companyId 取顶栏当前公司、
  * 禁用/启用，status 白名单 ACTIVE/LOCKED/DISABLED、重置密码、分配角色，按 roleId 幂等、
- * 数据范围全量替换；邮箱列由后端按身份下发，管理员见全部、其余账号仅见本人。
+ * 数据范围全量替换，邮箱列由后端按身份下发，管理员见全部，其余账号仅见本人。
  */
 import { computed, h, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
