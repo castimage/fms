@@ -76,9 +76,9 @@ public interface VoucherLinkService {
     UUID linkCashTransaction(UUID trxId);
 
     /**
-     * 报销单联动凭证（审批通过时调用）：DRAFT 凭证两行——借 ap.expense_account（费用科目）、
-     * 贷 ap.payable_account（应付账款，报销未付款挂应付），金额 = 报销总额，摘要含报销标题；
-     * 回填 expense.reimbursements.voucher_id。幂等：voucher_id 已回填返回既有值。
+     * 报销单联动凭证（仅由显式生成凭证动作调用，付款后触发）：DRAFT 凭证两行——
+     * 借 ap.expense_account（费用科目）、贷 ap.payable_account（应付账款），金额 = 报销总额，
+     * 摘要含报销标题；回填 expense.reimbursements.voucher_id。幂等：voucher_id 已回填返回既有值。
      *
      * @param reimbId 报销单 id
      * @return 联动凭证 id（幂等命中返回既有凭证 id）

@@ -4,7 +4,8 @@
  * 新建/编辑，头部字段 + 明细行表格，行合计=头金额，与后端 Service 强制一致，保存草稿/保存并提交。
  *
  * 详情，只读头部 + 明细，按状态给操作，本人草稿/被驳回可编辑提交删除，SUBMITTED 可审批/驳回，
- * APPROVED 可付款，权限由后端 rls 兜底，越权 40900 全局提示。
+ * APPROVED 可付款，PAID 可生成过账凭证（幂等，后端同事务回填 voucher_id 并推进 POSTED），
+ * 已生成凭证时可跳转凭证详情；权限由后端 rls 兜底，越权 40900 全局提示。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -235,6 +236,15 @@ function onActionReject() {
 function onActionPay() {
   return runAction(() => expenseApi.payReimbursement(reimbursementId.value), '已付款')
 }
+/** 生成过账凭证（幂等），成功即已过账，凭证详情入口 goVoucher 在刷新后出现 */
+function onActionLinkVoucher() {
+  return runAction(() => expenseApi.linkVoucher(reimbursementId.value), '已生成凭证并过账')
+}
+/** 跳转联动凭证详情，凭证只读态由 gl 模块按状态渲染 */
+function goVoucher() {
+  const id = detail.value?.voucherId
+  if (id) void router.push(`/gl/vouchers/${id}`)
+}
 async function onActionDelete() {
   await expenseApi.deleteReimbursement(reimbursementId.value)
   message.success('已删除')
@@ -408,6 +418,8 @@ onMounted(async () => {
             <n-button v-if="detail?.status === 'SUBMITTED' && canWrite" type="primary" size="small" :loading="actionLoading" @click="onActionApprove">审批通过</n-button>
             <n-button v-if="detail?.status === 'SUBMITTED' && canWrite" size="small" :loading="actionLoading" @click="onActionReject">驳回</n-button>
             <n-button v-if="detail?.status === 'APPROVED' && canWrite" type="primary" size="small" :loading="actionLoading" @click="onActionPay">出纳付款</n-button>
+            <n-button v-if="detail?.status === 'PAID' && canWrite" type="primary" size="small" :loading="actionLoading" @click="onActionLinkVoucher">生成凭证</n-button>
+            <n-button v-if="detail?.voucherId" size="small" @click="goVoucher">查看凭证</n-button>
           </div>
         </div>
       </template>

@@ -1,6 +1,6 @@
 /**
- * 费用报销 api，/exp，10 端点与 ExpenseController 一一对应，报销单 CRUD + 状态机
- * 提交/审批/驳回/付款，db 触发器终审，非法流转 40900。
+ * 费用报销 api，/exp，11 端点与 ExpenseController 一一对应，报销单 CRUD + 状态机
+ * 提交/审批/驳回/付款/生成过账凭证，db 触发器终审，非法流转 40900。
  */
 import { request } from './http'
 import type { PageResult } from '@/types/api'
@@ -45,5 +45,12 @@ export const expenseApi = {
   },
   payReimbursement(id: string): Promise<ReimbursementDetailView> {
     return request<ReimbursementDetailView>({ url: `/exp/reimbursements/${id}/pay`, method: 'post' })
+  },
+  /**
+   * 生成过账凭证（仅 PAID，幂等）：后端生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED，
+   * 返回联动凭证 id 供跳转凭证详情；重复调用返回既有凭证。
+   */
+  linkVoucher(id: string): Promise<string> {
+    return request<string>({ url: `/exp/reimbursements/${id}/link-voucher`, method: 'post' })
   },
 }

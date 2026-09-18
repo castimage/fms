@@ -62,9 +62,19 @@ public interface ExpenseService {
     ReimbursementDetailView rejectReimbursement(UUID id);
 
     /**
-     * 出纳付款（APPROVED 转 PAID）：仅付款后允许过账（POSTED 由凭证回填触发，本批不生成凭证）。
+     * 出纳付款（APPROVED 转 PAID）：付款后单据冻结，仅余过账一步。
      */
     ReimbursementDetailView payReimbursement(UUID id);
+
+    /**
+     * 生成过账凭证（仅 PAID）：生成 DRAFT 凭证（借 费用科目 / 贷 应付账款，科目经 um.params
+     * 映射）、回填 voucher_id，并同事务推进状态 PAID 转 POSTED。幂等——voucher_id 非空直接
+     * 返回既有凭证 id，重复点击不产生第二张凭证；科目映射缺失、期间已结账、预算阻断等异常
+     * 向调用方传播，不静默降级。POSTED 转 REVERSED 由反向凭证路径负责，本接口不涉及。
+     *
+     * @return 联动凭证 id（新建或幂等命中的既有凭证）
+     */
+    UUID linkReimbursementVoucher(UUID id);
 
     /**
      * 回填明细行发票附件关联（invoice_file_id 写入链路）：附件须已上传至该行名下

@@ -22,8 +22,8 @@ import lombok.RequiredArgsConstructor;
 import java.util.UUID;
 
 /**
- * 费用报销模块 REST 接口（/api/exp）：报销单 CRUD（头 + 明细同事务）、提交/审批/驳回/出纳付款
- * 状态机、本人报销列表；身份由安全链路保证，RLS 决定可见集合——本人/本部门/终态可见，
+ * 费用报销模块 REST 接口（/api/exp）：报销单 CRUD（头 + 明细同事务）、提交/审批/驳回/出纳付款/
+ * 生成过账凭证状态机、本人报销列表；身份由安全链路保证，RLS 决定可见集合——本人/本部门/终态可见，
  * 详情越权返回 data:null（不泄露存在性），状态机非法流转由 DB 触发器终审（40900）。
  */
 @RestController
@@ -118,11 +118,21 @@ public class ExpenseController {
     }
 
     /**
-     * 出纳付款（APPROVED 转 PAID）：付款后单据冻结，过账由凭证回填触发（本批不生成凭证）。
+     * 出纳付款（APPROVED 转 PAID）：付款后单据冻结，仅余过账一步。
      */
     @PostMapping("/reimbursements/{id}/pay")
     public ApiResponse<ReimbursementDetailView> pay(@PathVariable UUID id) {
         return ApiResponse.ok(expenseService.payReimbursement(id));
+    }
+
+    /**
+     * 生成过账凭证（仅 PAID，幂等）：生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED，
+     * 与 ar/ap 的补生成端点同形（POST /api/ar/invoices/{id}/link-voucher）。
+     * 返回联动凭证 id，供前端跳转凭证详情。
+     */
+    @PostMapping("/reimbursements/{id}/link-voucher")
+    public ApiResponse<UUID> linkVoucher(@PathVariable UUID id) {
+        return ApiResponse.ok(expenseService.linkReimbursementVoucher(id));
     }
 
     /**

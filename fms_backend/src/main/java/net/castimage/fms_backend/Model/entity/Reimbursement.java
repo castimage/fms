@@ -13,8 +13,8 @@ import java.util.UUID;
  * 费用报销单实体（expense.reimbursements）：状态机经 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，
  * REJECTED 仅自 SUBMITTED 进入（退回可再提交 DRAFT）、POSTED/REVERSED 禁改——由
  * expense.fn_reimburse_status_check 触发器终审（RAISE P0001 映射 40900），Java 只做预检快速失败；
- * 头 amount = SUM(lines.amount)（Service 内强制一致，防头行不一致）；wf_instance_id 已挂接
- * （submit 启动审批实例并回填）、voucher_id 过账后回填——凭证生成仍后续批。
+ * 头 amount = SUM(lines.amount)（Service 内强制一致，防头行不一致）；wf_instance_id 由 submit 启动
+ * 审批实例并回填；voucher_id 由 PAID 状态的显式动作生成凭证时回填，同一步推进 POSTED。
  */
 @TableName(schema = "expense", value = "reimbursements")
 @Data
@@ -48,7 +48,7 @@ public class Reimbursement {
     /** 审批流实例 id（submit 已挂接：启动实例并回填） */
     private UUID wfInstanceId;
 
-    /** 过账凭证 id（本批预留，过账后由凭证生成流程回填） */
+    /** 过账凭证 id（PAID 状态经生成凭证动作回填，非空即视为已生成，重复触发返回既有凭证） */
     private UUID voucherId;
 
     /** 创建人（RLS is_self(created_by) 同申请人） */

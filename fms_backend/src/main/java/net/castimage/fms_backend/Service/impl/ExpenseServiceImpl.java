@@ -286,13 +286,9 @@ public class ExpenseServiceImpl implements ExpenseService {
         }
         // 同步 wf 实例状态 RUNNING 转 APPROVED（记录型；实例不可见/已终态 0 行仅 WARN）
         syncWfStatus(id, "APPROVED");
-        // 报销凭证联动（尽力生成）：科目映射缺失/生成异常仅 WARN，单据继续，
-        // voucher_id 留空可经补生成端点重试（与 ar/ap/现金联动同策略）
-        try {
-            voucherLinkService.linkExpense(id);
-        } catch (Exception e) {
-            log.warn("报销单 {} 凭证联动失败（单据继续，可补生成）: {}", id, e.getMessage());
-        }
+        // 审批通过不生成凭证：费用入账在付款后由显式动作 POST /reimbursements/{id}/link-voucher
+        // 触发（生成 DRAFT 凭证 + 回填 voucher_id + 推进 POSTED），审批期不占位，
+        // 使"过账由凭证回填触发"的状态语义与 voucher_id 的实际写入时机一致。
         return buildDetail(id);
     }
 
@@ -318,7 +314,8 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     /**
      * 出纳付款（状态机 APPROVED 转 PAID）：Java 预检状态前置 + DB 触发器终审；付款后单据
-     * 冻结（仅可沿 PAID 转 POSTED 由凭证回填流程推进，本批不自动生成凭证——voucher_id 预留）。
+     * 冻结，仅可沿 PAID 转 POSTED 推进，该推进由显式生成凭证动作一并完成（见
+     * linkReimbursementVoucher），付款动作本身只落状态、不触碰凭证。
      */
     /** {@inheritDoc} */
     @Override
@@ -336,6 +333,34 @@ public class ExpenseServiceImpl implements ExpenseService {
             throw new ConflictException("付款失败：状态已变更或不可见");
         }
         return buildDetail(id);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public UUID linkReimbursementVoucher(UUID id) {
+        RequestContext.requireWriteRole();
+        Reimbursement r = requireReimbursement(id);
+        // 幂等：凭证已生成则直接返回既有凭证 id（重复点击/重试不产生第二张凭证）
+        if (r.getVoucherId() != null) {
+            return r.getVoucherId();
+        }
+        if (!"PAID".equals(r.getStatus())) {
+            throw new ConflictException("仅 PAID 状态报销单可生成过账凭证（当前 " + r.getStatus()
+                    + "）；已过账单据直接返回既有凭证");
+        }
+        // 科目映射缺失、期间已结账、预算阻断等异常一律向调用方传播，不做静默降级——
+        // 显式动作由人触发，失败原因须可见，与 ar/ap 补生成端点同策略
+        UUID voucherId = voucherLinkService.linkExpense(id);
+        // 凭证回填成功后再推进状态，CAS 守住 PAID，并发双击仅一方成功，无凭证则 DB 触发器拒绝过账
+        if (reimbursementMapper.update(null, new LambdaUpdateWrapper<Reimbursement>()
+                .eq(Reimbursement::getId, id)
+                .eq(Reimbursement::getStatus, "PAID")
+                .set(Reimbursement::getStatus, "POSTED")) == 0) {
+            throw new ConflictException("报销单过账失败：状态已变更或不可见");
+        }
+        log.info("报销单 {} 生成过账凭证 {} 并推进 POSTED", id, voucherId);
+        return voucherId;
     }
 
     // wf 挂接（私有）
