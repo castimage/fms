@@ -1,15 +1,17 @@
-# FMS 数据库主从流复制编排，可选，独立文件，不影响现有一键部署
-# 【用途】仅编排数据库主从，fms-db，主，读写+ fms-db-replica（从，standby
-#        只读）。pgbouncer 连接池属另一部署件，本文件不含其服务。
-# 【组合方式】
-#   单独使用，仅起主从库，
-#       docker compose -f docker-compose.pg-repl.yml up -d
-#   与主编排叠加（-f 顺序后者覆盖同名服务，fms-db 段与 docker-compose.yml
-#   保持同步，仅多注入 FMS_REPL_PASSWORD），
-#       docker compose -f docker-compose.yml -f docker-compose.pg-repl.yml up -d
-# 【前置】.env 需配置 FMS_REPL_PASSWORD（replicator 复制用户密码，
-#   fms_init.sh 末段据此创建角色、对齐密码并追加 pg_hba 复制授权，
-#   均为从库 pg_basebackup 的前置条件）。
+# FMS 数据库主从流复制编排，可选文件，独立于一键部署使用
+#
+# 本文件只编排数据库主从：fms-db 为主库承担读写，fms-db-replica 为从库以 standby 只读。
+# pgbouncer 连接池属另一部署件，本文件不含其服务。
+#
+# 可单独使用，仅起主从两库：
+# docker compose -f docker-compose.pg-repl.yml up -d
+#
+# 也可与主编排叠加，-f 顺序上后者覆盖同名服务，其中 fms-db 段与 docker-compose.yml 保持
+# 同步，仅多注入 FMS_REPL_PASSWORD：
+# docker compose -f docker-compose.yml -f docker-compose.pg-repl.yml up -d
+#
+# 前置条件为 .env 新增 FMS_REPL_PASSWORD，即 replicator 复制用户密码；fms_init.sh 末段
+# 据此创建角色、对齐密码并追加 pg_hba 复制授权，二者均是从库执行 pg_basebackup 的前提。
 
 networks:
   fms-network:
@@ -59,12 +61,11 @@ services:
       retries: 10
       start_period: 30s
 
-  # fms-db-replica， 从库（standby，只读）
-  # 复用主库定制镜像 fms-postgres:18（业务扩展随 pg_basebackup 从主库带来，
-  # 免二次构建），覆盖 entrypoint 为挂载脚本 entrypoint-replica.sh（等待主库
-  # 就绪 → pg_basebackup -R -X stream → standby.signal → exec postgres）。
-  # 不发布端口，仅 fms-network 内可访问，healthcheck 仅验进程存活
-  # （pg_isready 不校验复制延迟）。
+  # fms-db-replica，从库，以 standby 只读
+  # 复用主库定制镜像 fms-postgres:18，业务扩展随 pg_basebackup 从主库带来，免二次构建。
+  # entrypoint 覆盖为挂载脚本 entrypoint-replica.sh，流程是等待主库就绪，随后执行
+  # pg_basebackup -R -X stream，写入 standby.signal，最后 exec postgres。
+  # 不发布端口，仅 fms-network 内可访问，healthcheck 仅验进程存活，pg_isready 不校验复制延迟。
   fms-db-replica:
     image: fms-postgres:18
     container_name: fms-db-replica

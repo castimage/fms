@@ -1,18 +1,23 @@
-# FMS Redis 哨兵集群叠加文件，可选增强，按需求以集群方式部署 Redis
-# 用法，与主编排合并，项目名随主编排，
-#   docker compose -f docker-compose.cluster.yml -f docker-compose.redis-cluster.yml up -d
-#   docker compose -f docker-compose.yml         -f docker-compose.redis-cluster.yml up -d
-# 拓扑，1 主 + 1 从 + 3 哨兵，quorum=2，主故障多数派自动故障转移，从库提升为
-#       新主，后端经哨兵发现新主，会话/限流/nonce 状态不因主节点切换而丢失
-# 后端切换，本文件经 compose 服务合并为 backend 注入哨兵连接，environment
-#       与主编排合并追加，SPRING_PROFILES_ACTIVE=sentinel 加载
-#       application-sentinel.yml，经哨兵自动发现当前主节点，
-#       FMS_REDIS_PASSWORD 同时作用于数据节点与哨兵，masterauth/auth-pass
-# 说明，叠加后单节点 fms-redis 停用（replicas=0），哨兵集群接管数据存储，
-#       容量监控在 Web「系统管理」页，/api/admin/system-info，后端经哨兵连接，
-#       Redis 信息采集同样经哨兵自动发现当前主节点
-# 内存说明，会话/限流/nonce 数据量小，Redis 默认无内存上限，数据量由键容量
-#       （nonce 10000 / 限流表上限）自然约束，不设 maxmemory
+# FMS Redis 哨兵集群叠加文件，可选增强，按需以集群方式部署 Redis
+#
+# 与主编排合并使用，项目名随主编排：
+# docker compose -f docker-compose.cluster.yml -f docker-compose.redis-cluster.yml up -d
+# docker compose -f docker-compose.yml         -f docker-compose.redis-cluster.yml up -d
+#
+# 拓扑为一主一从加三个哨兵，quorum=2，主节点故障时由多数派自动故障转移，从库提升为
+# 新主，后端经哨兵发现新主，会话、限流与 nonce 状态不因主节点切换而丢失。
+#
+# 后端切换方式是本文件经 compose 服务合并为 backend 注入哨兵连接，environment 与主编排
+# 合并追加，SPRING_PROFILES_ACTIVE=sentinel 加载 application-sentinel.yml，经哨兵自动
+# 发现当前主节点；FMS_REDIS_PASSWORD 同时作用于数据节点与哨兵，对应 masterauth 与
+# sentinel auth-pass。
+#
+# 叠加后单节点 fms-redis 停用（replicas=0），哨兵集群接管数据存储。容量监控在 Web 的
+# 系统管理页，接口为 /api/admin/system-info，后端经哨兵连接，Redis 信息采集同样经哨兵
+# 自动发现当前主节点。
+#
+# 内存方面，会话、限流与 nonce 数据量小，Redis 默认不设内存上限，数据量由键容量（nonce
+# 10000 与限流表上限）自然约束，故不设 maxmemory。
 
 services:
   # 叠加哨兵集群后停用单节点 fms-redis，减少容器数量与内存占用
@@ -54,15 +59,18 @@ services:
     depends_on:
       fms-redis-master:
         condition: service_healthy
-    # 不加固定 --replicaof，故障转移后哨兵 reconfig 驱动主从关系，
-    # 容器重启后为独立节点，主从关系由哨兵或人工 REPLICAOF 恢复，
-    # 避免固定 replicaof 在故障转移后指向自身导致无限重连端口风暴
+    # --replicaof 固定指向主节点服务名，容器启动即成从库、重建后主从关系自动恢复，
+    # 哨兵因此有可提升的从库（无从库时故障转移无法完成）；进入运行后主从角色由
+    # 哨兵的 REPLICAOF 指令接管，本行只在哨兵尚未介入时决定初始角色
     command:
       - redis-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD}"
       - --masterauth
       - "${FMS_REDIS_PASSWORD}"
+      - --replicaof
+      - fms-redis-master
+      - "6379"
       - --appendonly
       - "yes"
     healthcheck:

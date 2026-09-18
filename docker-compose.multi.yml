@@ -1,39 +1,37 @@
-# FMS 财务管理系统， 多机部署编排（db 独立主机 + 应用主机，双机共用本文件）
-# 【双机用法】
-#   1. db 主机（PostgreSQL 独立机）执行，
-#        docker compose -f docker-compose.multi.yml --profile db up -d
-#      仅启动 fms-db 并发布 5432:5432 供应用主机直连，必须配合防火墙白名单
-#      仅放行应用主机 IP。
-#   2. 应用主机，后端 + 连接池 + 共享存储 + 网关 + 前端构建执行，
-#        docker compose -f docker-compose.multi.yml --profile app up -d
-#      启动 fms-backend / fms-redis / fms-pgbouncer / fms-web-build / fms-rgw，
-#      应用主机 .env 必须设置 FMS_DB_HOST=<db 主机 LAN IP>（供本地 pgbouncer
-#      指向 db 主机）。
-#   3. 两主机各自创建独立的 fms-network（下方 networks 声明，互不相通），
-#      跨主机通信仅经 db 主机的 5432 宿主端口。跨主机时 compose 服务名
-#      fms-db 不可解析，故应用主机的 pgbouncer 以 FMS_DB_HOST（db 主机 LAN
-#      IP）为连接目标，后端只连本地 pgbouncer:6432，数据面收敛于应用主机，
-#      db 主机的 5432 宿主端口仅对应用主机 IP 放行，应用主机各服务必须
-#      同机、同一 fms-network。
-# 【与 docker-compose.yml 的差异】，未列出的服务定义与单机版完全一致
-#   1. 全部服务增加 profiles 隔离，fms-db → ["db"]，fms-backend /
-#      fms-redis / fms-pgbouncer / fms-web-build / fms-rgw → ["app"]，
-#      保证应用主机不启动 db、db 主机不启动应用服务。
-#   2. fms-db 增加 ports: ["5432:5432"]（仅 db 主机生效）。
-#   3. 应用主机含 fms-redis，共享会话存储与 fms-pgbouncer（transaction
-#      连接池），pgbouncer 的 DB_HOST 传 ${FMS_DB_HOST}（跨主机服务名
-#      fms-db 不可解析，直连 db 主机 LAN IP），后端数据源指向本地
-#      jdbc:postgresql://fms-pgbouncer:6432/fms（单机版为服务名 fms-pgbouncer，
-#      语义一致，仅 pgbouncer 自身指向不同）。
-#   4. fms-backend 的 depends_on fms-db 显式 required: false，compose ≥2.20
-#      默认 required: true，依赖指向 profile 未激活服务会报错拒绝启动。
-#      fms-pgbouncer 的 depends_on fms-db 同样 required: false。
-# 【安全】应用主机仍只发布 8443:8443（TLS 入口），db 主机 5432 端口依赖
-#       防火墙白名单收敛（仅应用主机 IP 可入），满足"签名校验必须前置网关"。
-# 【项目名】显式 name: fms-multi（与单机形态 fms-single、集群形态 fms 互斥）。
-#       多机形态两台主机各自独立 compose 项目（互不相通，仅经 db 主机
-#       5432 宿主端口通信），不得与 docker-compose.yml / cluster 形态混跑，
-#       否则 container_name 冲突快速失败。
+# FMS 财务管理系统，多机部署编排，db 独立主机与应用程序主机，双机共用本文件
+#
+# db 主机即 PostgreSQL 独立机，执行：
+# docker compose -f docker-compose.multi.yml --profile db up -d
+# 仅启动 fms-db 并发布 5432:5432 供应用主机直连，必须配合防火墙白名单，仅放行应用主机 IP。
+#
+# 应用程序主机执行：
+# docker compose -f docker-compose.multi.yml --profile app up -d
+# 启动 fms-backend、fms-redis、fms-pgbouncer、fms-web-build 与 fms-rgw。应用主机的 .env
+# 必须设置 FMS_DB_HOST=<db 主机 LAN IP>，供本地 pgbouncer 指向 db 主机。
+#
+# 两主机各自创建独立的 fms-network，即下方 networks 声明，互不相通，跨主机通信仅经 db
+# 主机的 5432 宿主端口。跨主机时 compose 服务名 fms-db 不可解析，故应用主机的 pgbouncer
+# 以 FMS_DB_HOST（db 主机 LAN IP）为连接目标，后端只连本地 pgbouncer:6432，数据面集中在
+# 应用主机；db 主机的 5432 宿主端口仅对应用主机 IP 放行，应用主机各服务须同机且处于同一
+# fms-network。
+#
+# 与 docker-compose.yml 的差异如下，未列出的服务定义与单机版完全一致。全部服务增加
+# profiles 隔离，fms-db 归 ["db"]，fms-backend、fms-redis、fms-pgbouncer、fms-web-build 与
+# fms-rgw 归 ["app"]，保证应用主机不启动 db、db 主机不启动应用服务。fms-db 增加
+# ports: ["5432:5432"]，仅 db 主机生效。应用主机新增 fms-redis 共享会话存储与
+# fms-pgbouncer 连接池（transaction 模式），pgbouncer 的 DB_HOST 传 ${FMS_DB_HOST}，因跨
+# 主机服务名 fms-db 不可解析而直连 db 主机 LAN IP；后端数据源取本地
+# jdbc:postgresql://fms-pgbouncer:6432/fms，单机版为服务名 fms-pgbouncer，两者语义一致，
+# 仅 pgbouncer 自身的指向不同。fms-backend 的 depends_on fms-db 显式 required: false，
+# compose 2.20 起默认 required: true，依赖指向 profile 未激活的服务会报错拒绝启动，
+# fms-pgbouncer 的 depends_on fms-db 同样取 required: false。
+#
+# 安全上，应用主机仍只发布 8443:8443 即 TLS 入口，db 主机的 5432 端口依赖防火墙白名单
+# 限定，仅应用主机 IP 可入，满足签名校验必须前置网关。
+#
+# 项目名显式指定 name: fms-multi，与单机形态 fms-single、集群形态 fms 互斥。多机形态下两
+# 台主机各自是独立的 compose 项目，互不相通，仅经 db 主机的 5432 宿主端口通信，不得与
+# docker-compose.yml 或集群形态混跑，否则 container_name 冲突快速失败。
 
 name: fms-multi
 
@@ -101,10 +99,10 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  # fms-pgbouncer， transaction 连接池（应用主机，--profile app）
-  # 与单机版差异，DB_HOST 传 ${FMS_DB_HOST}（跨主机时 compose 服务名 fms-db
-  # 不可解析，pgbouncer 直连 db 主机 LAN IP 的 5432 宿主端口，防火墙白名单
-  # 收敛），后端只连本地 pgbouncer:6432，数据面不出应用主机。
+  # fms-pgbouncer，transaction 连接池，应用主机，--profile app
+  # 与单机版的差别是 DB_HOST 取 ${FMS_DB_HOST}：跨主机时 compose 服务名 fms-db 不可解析，
+  # pgbouncer 直连 db 主机 LAN IP 的 5432 宿主端口，该端口由防火墙白名单限定；后端只连
+  # 本地 pgbouncer:6432，数据面不出应用主机。
   fms-pgbouncer:
     # 多机版，仅应用主机启动
     profiles: ["app"]
@@ -124,7 +122,7 @@ services:
       DB_HOST: ${FMS_DB_HOST:?多机模式请在 .env 设置 FMS_DB_HOST}
     depends_on:
       # 应用主机 --profile app 不启动 fms-db，required: false 必须显式声明
-      # （compose ≥2.20 默认 required: true，指向未激活服务会拒绝启动）
+      #（compose ≥2.20 默认 required: true，指向未激活服务会拒绝启动）
       fms-db:
         condition: service_healthy
         required: false
@@ -170,10 +168,10 @@ services:
       start_period: 5s
     logging: *default-logging
 
-  # fms-backend， Spring Boot 后端（8081，应用主机，--profile app）
-  # 环境/健康检查/重启策略与单机版一致，唯一差异，DB 经本地 pgbouncer 指向
-  # db 主机（单机版 pgbouncer 指向服务名 fms-db）。
-  # 注意，不发布任何宿主机端口，仅网关 fms-rgw 可达，签名校验必须前置网关。
+  # fms-backend，Spring Boot 后端，8081 端口，应用主机，--profile app
+  # 环境、健康检查与重启策略与单机版一致，唯一差别在于 DB 经本地 pgbouncer 指向 db 主机，
+  # 单机版的 pgbouncer 则指向服务名 fms-db。
+  # 不发布任何宿主机端口，仅网关 fms-rgw 可达，签名校验必须前置网关。
   fms-backend:
     # 多机版，仅应用主机启动
     profiles: ["app"]
@@ -183,9 +181,8 @@ services:
       - fms-network
     restart: unless-stopped
     environment:
-      # 多机版差异，后端只连本地 pgbouncer:6432（跨主机时 compose 服务名
-      # fms-db 不可解析的问题收敛到 pgbouncer 一层，由 DB_HOST=FMS_DB_HOST
-      # 指向 db 主机 LAN IP，FMS_DB_HOST 仅多机模式必填）
+      # 多机版只连本地 pgbouncer:6432，跨主机时 compose 服务名 fms-db 不可解析的问题集中在
+      # pgbouncer 一层，由 DB_HOST=FMS_DB_HOST 指向 db 主机 LAN IP；FMS_DB_HOST 仅多机模式必填
       # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句，
       # 禁用后客户端模拟（与单机版同配置，防 PREPARE 协议报错）
       SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
@@ -200,9 +197,9 @@ services:
       # 网关内部端点 token（/internal/log-batch 头 X-FMS-Int-Token 校验，可选，
       # 默认空 = 内部端点禁用 fail-closed，网关投递配置开启时须在 .env 设置）
       FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
-      # 共享会话存储（fms.session-store=redis），会话/防重放/黑名单收敛于
-      # 应用主机的 fms-redis，与单机/集群形态同一套会话语义，为后端扩容
-      # 多实例铺路，SPRING_DATA_REDIS_* 优先级高于 application.yaml 默认值
+      # 共享会话存储（fms.session-store=redis），会话、防重放与黑名单存放于应用主机的
+      # fms-redis，与单机、集群形态同一套会话语义，为后端扩容多实例铺路；
+      # SPRING_DATA_REDIS_* 优先级高于 application.yaml 默认值
       SPRING_DATA_REDIS_HOST: fms-redis
       SPRING_DATA_REDIS_PORT: "6379"
       SPRING_DATA_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
@@ -216,7 +213,7 @@ services:
       # 依赖条件仅对同次启动的服务生效，应用主机 --profile app 不启动 fms-db。
       # required: false 必须显式声明，compose ≥2.20 默认 required: true，
       # 依赖指向 profile 未激活服务会直接报错拒绝启动
-      # （"service fms-db is required by fms-backend, but is disabled"）
+      #（"service fms-db is required by fms-backend, but is disabled"）
       fms-db:
         condition: service_healthy
         required: false
@@ -272,7 +269,7 @@ services:
       # 网关配置覆盖镜像内模板（cors.allowed_origins 必须非空，空列表
       # 会被网关 run 校验拒绝 exit，1，该字段无环境变量覆盖点）
       - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
-      # TLS 自签证书只读挂载（缺失 → 启动失败，不依赖 HEALTHCHECK 兜底）
+      # TLS 自签证书只读挂载，缺失即启动失败，不依赖 HEALTHCHECK 兜底
       - ./deploy/certs:/app/certs:ro
       # 访问日志命名卷（/app/logs/access.log，避免 bind mount 与 uid 10001 权限问题）
       - fms-logs:/app/logs

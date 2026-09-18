@@ -1,40 +1,41 @@
-# FMS 财务管理系统， 单机集群形态编排，多后端实例 + 数据库主从
-# 【形态】与 docker-compose.yml 互斥的集群形态（项目名 name: fms，单机形态为
-#       name: fms-single，两者不同名，防止用单机文件对集群部署执行
-#       up/--force-recreate 时静默接管网关上游）。差异，
-#   1. fms-backend 拆为 fms-backend-1 / fms-backend-2 双实例（同一
-#      ./fms_backend 构建、各自 healthcheck，附件卷 fms-files 两实例挂同一
-#      命名卷，单机共享 OK，多机部署须换共享存储，见文件末「部署风险」），
-#   2. 会话/防重放/黑名单等共享状态收敛于 fms-redis（FMS_SESSION_STORE:
-#      redis），双实例会话一致性的硬依赖，不得改回 in-memory，
-#   3. 数据源统一经 fms-pgbouncer:6432（transaction 池），后端不直连主库，
-#   4. fms-db-replica 从库（pg_basebackup + 流复制，standby 只读），
-#      主库 init 以 FMS_REPL_PASSWORD 创建 replicator 角色，前置条件，
-#   5. fms-rgw 以 FMS_RGW_UPSTREAM_SERVERS 注入双上游 + mode: auto
-#      （auto = least-conn + 自动健康管理，实例故障自动摘除）。
-#   【互斥】单机形态（docker-compose.yml）与集群形态不得同机并存，两形态
-#   container_name 相同（fms-db/fms-pgbouncer/fms-redis/fms-rgw/fms-web-build），
-#   同机混跑会因容器名冲突快速失败，网关 8443 端口也只允许一个形态占用。
-#   切换形态，先 docker compose -f docker-compose.yml down（或本文件 down），
-#   再以另一形态 up。生产部署以本文件，集群形态为准。
-# 【include 取舍，显式完整定义，不采用 include: [docker-compose.yml]】
-#   include（compose ≥2.24）只能按 merge 语义叠加，无法表达集群差异，
-#   - 无法"删除"基础文件的 fms-backend 单实例服务，若保留将与
-#     fms-backend-1/2 并存，且 fms-rgw 的 depends_on 仍指向死服务，
-#   - environment 合并只能增改键，无法移除 FMS_RGW_UPSTREAM 死引用
-#     （servers 非空时虽优先，但留死引用会误导排障），
-#   - fms-backend-1/2 因新服务名本就需全量定义，include 省下的部分
-#     （db/rgw/web-build）同样要按集群差异逐处改写。
-#   故显式完整定义，一份文件自洽、无隐式合并陷阱，代价是与
-#   docker-compose.yml 同步维护（差异见上，新增/修改服务时两处都要同步，
-#   本文件是它的集群超集，除 backend 拆分/主从/网关双上游外完全一致）。
-#   版本要求，仅需 docker compose v2 常规能力，不依赖 2.24+ 的 include。
-# 【前置】同 docker-compose.yml（.env 必填 FMS_REDIS_PASSWORD 等），额外
-#   必填 FMS_REPL_PASSWORD，fms_init.sh 末段以该值创建 replicator
-#   角色、对齐密码并追加 pg_hba 复制授权，从库 basebackup 的前置条件。
-# 【项目名】显式 name: fms（与目录名默认一致，目录改名不影响既有部署的
-#   容器归属，与单机形态 name: fms-single / 多机形态 name: fms-multi 互斥，
-#   杜绝 -f 混用/--force-recreate 跨形态接管）。
+# FMS 财务管理系统，单机集群形态编排，多后端实例与数据库主从
+#
+# 本文件与 docker-compose.yml 互斥。本文件项目名取 name: fms，单机形态取
+# name: fms-single，两者不同名，以免用单机文件对集群部署执行 up 或
+# --force-recreate 时静默接管网关上游。
+#
+# 与单机形态相比有五处差异。后端拆为 fms-backend-1 与 fms-backend-2 双实例，同一
+# ./fms_backend 构建、各自 healthcheck；附件卷 fms-files 由两实例挂同一命名卷，
+# 单机共享可行，多机部署须换共享存储。会话、防重放随机数与令牌黑名单等共享状态
+# 统一存放于 fms-redis（FMS_SESSION_STORE 取 redis），这是双实例会话一致性的硬
+# 依赖，不得使用 in-memory。数据源统一经 fms-pgbouncer:6432 的 transaction 池，
+# 后端不直连主库。新增 fms-db-replica 从库，以 pg_basebackup 加流复制承载只读，
+# 主库 init 以 FMS_REPL_PASSWORD 创建 replicator 角色，是该从库的前置条件。
+# 网关以 FMS_RGW_UPSTREAM_SERVERS 注入双上游并取 mode: auto，auto 即最小连接数
+# 加自动健康管理，实例故障自动摘除。
+#
+# 两形态不得同机并存。二者 container_name 相同（fms-db、fms-pgbouncer、fms-redis、
+# fms-rgw、fms-web-build），同机混跑会因容器名冲突快速失败，网关 8443 端口也只允许
+# 一个形态占用。切换形态先对本文件或 docker-compose.yml 执行 down，再以另一形态 up。
+# 生产部署以本文件即集群形态为准。
+#
+# 本文件显式完整定义，不采用 include: [docker-compose.yml]。include 需 compose 2.24
+# 以上，且只能按 merge 语义叠加，无法表达集群差异：无法删除基础文件的 fms-backend
+# 单实例服务，若保留将与 fms-backend-1/2 并存，且 fms-rgw 的 depends_on 仍指向该
+# 服务；environment 合并只能增改键，无法移除 FMS_RGW_UPSTREAM 的死引用，该引用在
+# servers 非空时不生效，但会误导排障；fms-backend-1/2 因服务名改变本就需要全量定义，
+# include 省下的部分（db、rgw、web-build）同样要按集群差异逐处改写。因此选择显式完整
+# 定义，一份文件自洽、无隐式合并陷阱，代价是与 docker-compose.yml 同步维护，新增或
+# 修改服务时两处都要同步；本文件是它的集群超集，除后端拆分、主从与网关双上游外
+# 完全一致。版本上仅需 docker compose v2 常规能力，不依赖 2.24 以上的 include。
+#
+# 前置条件与 docker-compose.yml 相同，.env 必填 FMS_REDIS_PASSWORD 等，另需
+# FMS_REPL_PASSWORD，fms_init.sh 末段以该值创建 replicator 角色、对齐密码并追加
+# pg_hba 复制授权，是从库 basebackup 的前置条件。
+#
+# 项目名显式指定 name: fms，与目录名默认一致，目录改名不影响既有部署的容器归属；
+# 该名与单机形态的 fms-single、多机形态的 fms-multi 互斥，用以杜绝 -f 混用与
+# --force-recreate 跨形态接管。
 
 name: fms
 
@@ -52,12 +53,12 @@ x-backend-env: &backend-env
   # 双实例共享同一连接池语义（DISCARD ALL 复位），pgbouncer 把 Hikari
   # 连接数上限从 PG 后端连接数解耦
   # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句
-  # （PG JDBC 默认 prepareThreshold=5 触发 PREPARE 协议报错），禁用后客户端模拟
+  #（PG JDBC 默认 prepareThreshold=5 触发 PREPARE 协议报错），禁用后客户端模拟
   SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
   SPRING_DATASOURCE_USERNAME: fms_app
   SPRING_DATASOURCE_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
-  # 从库只读分流，readOnly=true 事务，报表等查询经 fms-pgbouncer-ro → 从库，
-  # 写事务/非事务查询走主库（RoutingDataSource 按事务只读标志路由）
+  # 从库只读分流，readOnly=true 的事务与报表等查询经 fms-pgbouncer-ro 走从库，
+  # 写事务与非事务查询走主库，由 RoutingDataSource 按事务只读标志路由
   FMS_DATASOURCE_RO_ENABLED: "true"
   FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
   # 与网关共享的 HMAC 对称密钥（FMS_JWT_SECRET/FMS_RGW_JWT_SECRET 同值）
@@ -69,7 +70,7 @@ x-backend-env: &backend-env
   # 网关内部端点 token（可选，默认空 = 内部端点禁用 fail-closed）
   FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
   # 共享会话存储，双实例 nonce/票据/黑名单/WS 广播经 redis 同步
-  # （SPRING_DATA_REDIS_* 宽松绑定环境变量，优先级高于 application.yaml）
+  #（SPRING_DATA_REDIS_* 宽松绑定环境变量，优先级高于 application.yaml）
   SPRING_DATA_REDIS_HOST: fms-redis
   SPRING_DATA_REDIS_PORT: "6379"
   SPRING_DATA_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
@@ -135,7 +136,7 @@ services:
       - fms-db-data:/var/lib/postgresql
       # PG 日志独立卷（pgaudit 审计日志随 PG 日志落盘，供外部采集/归档）
       - fms-pglog:/var/log/postgresql
-      # SQL 脚本源（只读，供 init 脚本按 00→…→08 顺序 source 执行）
+      # SQL 脚本源，只读，供 init 脚本按 00 至 08 的顺序 source 执行
       - ./fms_db_pg:/fms-init:ro
       # 唯一 init 入口，只读挂载进官方镜像初始化目录
       - ./deploy/init/fms_init.sh:/docker-entrypoint-initdb.d/fms_init.sh:ro
@@ -242,8 +243,8 @@ services:
     restart: unless-stopped
     environment: *backend-env
     volumes:
-      # 附件存储命名卷，两实例挂同一命名卷（单机共享 OK，多机需共享存储，
-      # 见文件末「部署风险」）
+      # 附件存储命名卷，两实例挂同一命名卷，单机共享可行，多机需换共享存储，
+      # 见文件末的运维约束一节
       - fms-files:/app/data/files
     depends_on:
       # 等连接池与共享存储就绪再启动（pgbouncer 已依赖主库健康）
@@ -287,16 +288,12 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  # fms-backend， 合并栈守卫占位服务（默认不启动，勿手工 up）
-  # 职责，机械化杜绝"用 -f docker-compose.yml -f docker-compose.cluster.yml
-  #       合并两文件"的误操作（合并栈把基础文件的独立 fms-backend
-  #       单实例并入项目 fms，形成 8+1 容器混跑、网关上游回落
-  #       http://fms-backend:8081 陈旧单实例的部署漂移）。Compose 合并规则，
-  #       同服务名后文件覆盖前文件，合并栈中本占位定义会替换基础文件的真实
-  #       fms-backend，且本服务带 profiles: [fms-merge-guard]，未显式
-  #       --profile fms-merge-guard 时不会启动/构建，合并栈因此只剩集群形态
-  #       的 7 个运行容器，多余单实例后端永远无法被拉起。
-  #       纯集群部署（-f 本文件）时本服务同样不启动，无任何影响。
+  # fms-backend，合并栈守卫占位服务，默认不启动，勿手工 up
+  # 作用是杜绝以 -f docker-compose.yml -f docker-compose.cluster.yml 合并两文件执行的误操作。
+  # Compose 合并规则为同服务名后文件覆盖前文件，合并栈中本占位定义会替换基础文件的真实
+  # fms-backend；本服务带 profiles: [fms-merge-guard]，未显式 --profile fms-merge-guard 时
+  # 不启动也不构建，合并栈因此只剩集群形态的 7 个运行容器，多余的单实例后端无法被拉起。
+  # 纯集群部署即只带本文件时，本服务同样不启动，无任何影响。
   fms-backend:
     image: busybox:stable
     profiles: ["fms-merge-guard"]
@@ -314,12 +311,11 @@ services:
     networks:
       - fms-network
 
-  # fms-db-replica， 从库（standby，只读）
-  # 复用主库定制镜像 fms-postgres:18（业务扩展随 pg_basebackup 从主库带来，
-  # 免二次构建），覆盖 entrypoint 为挂载脚本 entrypoint-replica.sh（等待主库
-  # 就绪 → pg_basebackup -R -X stream → standby.signal → exec postgres）。
-  # 不发布端口，仅 fms-network 内可访问，healthcheck 仅验进程存活
-  # （pg_isready 不校验复制延迟）。
+  # fms-db-replica，从库，以 standby 只读
+  # 复用主库定制镜像 fms-postgres:18，业务扩展随 pg_basebackup 从主库带来，免二次构建。
+  # entrypoint 覆盖为挂载脚本 entrypoint-replica.sh，流程是等待主库就绪，随后执行
+  # pg_basebackup -R -X stream，写入 standby.signal，最后 exec postgres。
+  # 不发布端口，仅 fms-network 内可访问，healthcheck 仅验进程存活，pg_isready 不校验复制延迟。
   fms-db-replica:
     image: fms-postgres:18
     container_name: fms-db-replica
@@ -352,9 +348,9 @@ services:
       start_period: 60s
     logging: *default-logging
 
-  # fms-rgw， Rust 网关（8443 TLS 入口，唯一对外服务）
-  # 与 docker-compose.yml 一致，仅差异为上游采用双实例 servers +
-  # mode auto，见下方环境变量，depends_on 指向双后端实例。
+  # fms-rgw，Rust 网关，8443 为 TLS 入口，唯一对外服务
+  # 与 docker-compose.yml 一致，唯一差别是上游取双实例 servers 而非单 URL，并置 mode 为
+  # auto，配置见下方环境变量；depends_on 指向两个后端实例。
   fms-rgw:
     build: ./fms_rgw
     image: fms_rgw:0.1.0
@@ -370,7 +366,7 @@ services:
       - fms-static:/app/static:ro
       # 网关配置覆盖镜像内模板（cors.allowed_origins 必须非空）
       - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
-      # TLS 自签证书只读挂载（缺失 → 启动失败，不依赖 HEALTHCHECK 兜底）
+      # TLS 自签证书只读挂载，缺失即启动失败，不依赖 HEALTHCHECK 兜底
       - ./deploy/certs:/app/certs:ro
       # 访问日志命名卷
       - fms-logs:/app/logs
@@ -402,28 +398,30 @@ services:
     # 不重复定义 healthcheck，沿用镜像内置（每 30s 探测 /healthz）
     logging: *default-logging
 
-# 【部署风险】
-#   1. 附件卷 fms-files 为单机命名卷，fms-backend-1/2 同机共享 OK，若未来
-#      拆分多机，附件须换共享存储（NFS/S3/对象存储），并同步改造
-#      FMS_FILE_STORAGE_DIR 指向。
-#   2. 会话一致性依赖 fms-redis 单点，redis 故障时双后端 fail-closed
-#      （timeout 3s 快速失败），生产集群须为 redis 加哨兵/集群。
-#   3. fms-db 与 fms-db-replica 同机竞争 IO/内存，仅作演练形态，真生产
-#      主从请参考 docker-compose.pg-repl.yml 拆独立主机。
-#   4. 部署形态互斥，本文件（name: fms）与 docker-compose.yml
-#      （name: fms-single）/ docker-compose.multi.yml（name: fms-multi）
-#      是三种互斥形态。任何人不得用 docker-compose.yml 对本集群部署执行
-#      "up -d --force-recreate"，项目名不同后该命令只会创建/作用到
-#      fms-single 项目，并因 container_name 冲突快速失败，不会
-#      把网关 fms-rgw 重建为单上游（丢失 FMS_RGW_UPSTREAM_SERVERS 导致
-#      上游漂移到陈旧单实例 fms-backend）。运维命令一律带 -f 明确形态文件，
-#         docker compose -f docker-compose.cluster.yml up -d --force-recreate fms-rgw
-#   5. 严禁用 "-f docker-compose.yml -f docker-compose.cluster.yml" 合并两
-#      文件执行 up/--force-recreate，合并栈的项目名取后文件（fms），基础
-#      文件的 fms-backend 单实例会被并入集群项目（见上方守卫占位
-#      服务说明）。合并栈虽因项目名不同不会再覆盖网关 env，但仍会多拉起
-#      一个独立 fms-backend（重复消费 pgmq/定时任务）。守卫占位服务保证
-#      该单实例永远无法启动，若仍误操作，检查 docker compose ls -a 中项目
-#      fms 的 CONFIG FILES 是否只含本文件，并删除多余容器，
-#        docker rm -f fms-backend   # 仅当 docker inspect 确认其属于误合并
-#        docker compose -f docker-compose.cluster.yml up -d   # 重录干净项目配置
+# 本文件在当前形态下的已知风险与运维约束如下。
+#
+# 附件卷 fms-files 为单机命名卷，fms-backend-1/2 同机共享可行；若拆分多机，附件须换共享
+# 存储（NFS、S3 或对象存储），并同步改造 FMS_FILE_STORAGE_DIR 的指向。
+#
+# 会话一致性依赖 fms-redis 单点，redis 故障时双后端 fail-closed，timeout 3s 快速失败，
+# 生产集群须为 redis 加哨兵或集群部署。
+#
+# fms-db 与 fms-db-replica 同机竞争 IO 与内存，仅作演练形态，真生产的主从请参考
+# docker-compose.pg-repl.yml 拆到独立主机。
+#
+# 部署形态互斥：本文件取 name: fms，docker-compose.yml 取 name: fms-single，
+# docker-compose.multi.yml 取 name: fms-multi，三者互斥。不得用 docker-compose.yml 对本
+# 集群部署执行 up -d --force-recreate，因项目名不同，该命令只会创建或作用于 fms-single
+# 项目，并因 container_name 冲突快速失败，不会把网关 fms-rgw 重建为单上游，那样会丢失
+# FMS_RGW_UPSTREAM_SERVERS，使上游漂移到陈旧的单实例 fms-backend。运维命令一律带 -f
+# 明确形态文件，例如：
+# docker compose -f docker-compose.cluster.yml up -d --force-recreate fms-rgw
+#
+# 严禁以 -f docker-compose.yml -f docker-compose.cluster.yml 合并两文件执行 up 或
+# --force-recreate。合并栈的项目名取后文件即 fms，基础文件的 fms-backend 单实例会被并入
+# 集群项目，虽因项目名不同不会再覆盖网关 env，但仍会多拉起一个独立的 fms-backend，重复
+# 消费 pgmq 与定时任务。守卫占位服务保证该单实例无法启动；若仍发生误操作，先检查
+# docker compose ls -a 中项目 fms 的 CONFIG FILES 是否只含本文件，再删除多余容器：
+# docker rm -f fms-backend
+# 该删除仅在 docker inspect 确认其属于误合并时执行，随后重录干净项目配置：
+# docker compose -f docker-compose.cluster.yml up -d

@@ -1,24 +1,31 @@
-# FMS 财务管理系统， 自定义数量形态编排，各模块副本数可调
-# 【用途】基于集群形态（docker-compose.cluster.yml）的可扩展变体，后端
-#   fms-backend 与网关 fms-rgw **不设 container_name**（compose 自动命名，
-#   --scale 才可水平扩展），副本数经 up 命令实时指定，
-#   # 后端 2 副本 + 网关 1 副本，默认，等价集群形态的负载能力
-#   docker compose -f docker-compose.custom.yml up -d
-#   # 后端 4 副本（水平扩展无状态业务层，会话/限流/nonce 经 redis 共享，
-#   #   网关 least-conn 自动分发，无需改任何代码或配置）
-#   docker compose -f docker-compose.custom.yml up -d --scale fms-backend=4
-#   # 网关 2 副本（多网关实例需各自宿主端口，-p 覆盖首实例端口，第二实例
-#   #   用 --scale 时端口映射相同会冲突，多网关场景推荐外层 LB/独立端口方案，
-#   #   或保持单网关，8443 唯一入口+ 后端多副本，负载能力瓶颈在无状态层）
-#   docker compose -f docker-compose.custom.yml up -d --scale fms-backend=3 --scale fms-rgw=1
-# 【副本数上限建议】fms-backend 无状态可任意扩展（连接数经 pgbouncer 池收敛、
-#   PG 连接上限 fms.db.connection-limit 登记），建议不超过机器核数×2，
-#   与 pgbouncer 池容量（deploy/pgbouncer/pgbouncer.ini max_client_conn）匹配。
-# 【与集群形态的关系】本文件是 cluster.yml 的"无 container_name + 可 scale"
-#   变体（name: fms-custom，与 fms/fms-single/fms-multi 互斥，不得同机混跑），
-#   其余结构（数据库主从/只读分流/共享 Redis/网关双上游自动切换）与集群一致。
-# 【环境变量】同 docker-compose.cluster.yml（.env 必填 FMS_DB_PASSWORD /
-#   FMS_REPL_PASSWORD / FMS_REDIS_PASSWORD / FMS_JWT_SECRET / FMS_SIGN_SECRET）。
+# FMS 财务管理系统，自定义数量形态编排，各模块副本数可调
+#
+# 本文件是集群形态 docker-compose.cluster.yml 的可扩展变体。后端 fms-backend 与网关
+# fms-rgw 不设 container_name，由 compose 自动命名，因此可用 --scale 水平扩展，副本数在
+# up 命令上实时指定。
+#
+# 后端 2 副本加网关 1 副本为默认，等价集群形态的负载能力：
+# docker compose -f docker-compose.custom.yml up -d
+#
+# 后端 4 副本，用于水平扩展无状态业务层，会话、限流与 nonce 经 redis 共享，网关以
+# least-conn 自动分发，无需改任何代码或配置：
+# docker compose -f docker-compose.custom.yml up -d --scale fms-backend=4
+#
+# 网关 2 副本时，多网关实例需各自占用宿主端口，用 -p 覆盖首实例端口；第二实例再用
+# --scale 会因端口映射相同而冲突，多网关场景推荐外层负载均衡或独立端口方案，或保持单
+# 网关即 8443 唯一入口加后端多副本，此时负载能力瓶颈在无状态层：
+# docker compose -f docker-compose.custom.yml up -d --scale fms-backend=3 --scale fms-rgw=1
+#
+# 副本数上限上，fms-backend 无状态可任意扩展，其连接数经 pgbouncer 池收拢、PG 连接上限由
+# fms.db.connection-limit 登记，建议不超过机器核数的两倍，并与 pgbouncer 池容量
+# （deploy/pgbouncer/pgbouncer.ini 的 max_client_conn）匹配。
+#
+# 本文件是 cluster.yml 的无 container_name 加可 scale 变体，项目名 name: fms-custom，与
+# fms、fms-single、fms-multi 互斥，不得同机混跑；其余结构即数据库主从、只读分流、共享
+# Redis 与网关双上游自动切换，均与集群形态一致。
+#
+# 环境变量同 docker-compose.cluster.yml，.env 必填 FMS_DB_PASSWORD、FMS_REPL_PASSWORD、
+# FMS_REDIS_PASSWORD、FMS_JWT_SECRET 与 FMS_SIGN_SECRET。
 
 name: fms-custom
 
@@ -194,9 +201,9 @@ services:
     networks:
       - fms-network
 
-  # fms-backend， 无状态后端（无 container_name → --scale 可水平扩展）
-  # 副本间无状态差异，会话/nonce/黑名单经 redis 共享，附件挂同一命名卷，
-  # 连接经 pgbouncer 池收敛，网关 least-conn 自动分发
+  # fms-backend，无状态后端，不设 container_name，故 --scale 可水平扩展
+  # 副本之间无状态差异，会话、nonce 与黑名单经 redis 共享，附件挂同一命名卷，
+  # 连接经 pgbouncer 池收拢，网关以 least-conn 自动分发
   fms-backend:
     build: ./fms_backend
     networks:
@@ -239,8 +246,8 @@ services:
       FMS_RGW_CONFIG: /app/config/fms_rgw.yaml
       FMS_RGW_LISTEN: 0.0.0.0:8443
       FMS_RGW_UPSTREAM_MODE: auto
-      # 后端副本地址由 compose DNS 解析（fms-backend 服务名 → 全部副本 IP，
-      # least-conn 自动健康管理，单 URL 也由 DNS 轮询覆盖多副本）
+      # 后端副本地址由 compose DNS 解析，fms-backend 服务名解析为全部副本 IP，
+      # 配合 least-conn 与自动健康管理，单 URL 也由 DNS 轮询覆盖多副本
       FMS_RGW_UPSTREAM: http://fms-backend:8081
       FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
@@ -254,5 +261,5 @@ services:
         condition: service_completed_successfully
     logging: *default-logging
 
-# 【部署风险】同 docker-compose.cluster.yml，附件卷单机共享、redis 单点、
-#   主从同机演练形态，本文件与集群/单机/多机形态互斥（name: fms-custom）。
+# 本文件的风险与 docker-compose.cluster.yml 相同：附件卷为单机共享、redis 为单点、
+# 主从同机仅作演练形态。本文件与集群、单机、多机三种形态互斥，项目名 name: fms-custom。
