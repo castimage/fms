@@ -9,12 +9,14 @@ import net.castimage.fms_backend.Model.dto.RoleRequest;
 import net.castimage.fms_backend.Model.dto.SodCheckRequest;
 import net.castimage.fms_backend.Model.dto.UserCreateRequest;
 import net.castimage.fms_backend.Model.dto.UserRoleAssignRequest;
+import net.castimage.fms_backend.Model.dto.UserScopeRequest;
 import net.castimage.fms_backend.Model.dto.UserUpdateRequest;
 import net.castimage.fms_backend.Model.vo.CompanyView;
 import net.castimage.fms_backend.Model.vo.DepartmentView;
 import net.castimage.fms_backend.Model.vo.ModuleNode;
 import net.castimage.fms_backend.Model.vo.RoleView;
 import net.castimage.fms_backend.Model.vo.SodResult;
+import net.castimage.fms_backend.Model.vo.UserScopeView;
 import net.castimage.fms_backend.Model.vo.UserView;
 
 import java.util.List;
@@ -109,6 +111,16 @@ public interface OrgService {
      * 回收角色（auth.revoke_role）。
      */
     void revokeRole(UUID id, UUID roleId);
+
+    /**
+     * 读取用户数据范围（auth.list_user_scopes），仅管理员。
+     */
+    UserScopeView getUserScopes(UUID id);
+
+    /**
+     * 配置用户数据范围（auth.set_user_org_scope + auth.set_user_dept_scope），全量替换语义，仅管理员。
+     */
+    void setUserScopes(UUID id, UserScopeRequest req);
 
     /**
      * 重置密码（auth.set_password + must_change_pwd=true）。

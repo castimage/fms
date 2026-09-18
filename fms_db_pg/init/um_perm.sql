@@ -722,6 +722,129 @@ SELECT 'um_perm' AS file_name,
          WHERE identifier IN ('admin.user.grant','admin.role.create','admin.role.grant','org.company.create')
            AND deleted_at IS NULL) AS admin_perm_cnt;
 
+-- 数据范围配置，um.user_org_scope / um.user_dept_scope 的应用层写入通道。两表的 rls 写策略
+-- 只允许数据库属主（uos_write 的 current_user = 'fms_admin'），应用连接无从直接写入，故收口为
+-- 下列闸口函数，函数体内校验权限点并留审计。
+
+-- 权限点 admin.user.scope，挂 admin.user 模块，与 admin.user.grant 同族
+INSERT INTO um.permissions (company_id, module_id, code, identifier, name,
+                            resource_type, action, permission_type, is_enabled, is_system)
+SELECT '00000000-0000-7000-0000-000000000010', m.id, 'admin.user.scope', 'admin.user.scope',
+       '用户管理：数据范围配置', 'admin', 'scope', 'ACTION', true, false
+  FROM um.modules m
+ WHERE m.identifier = 'admin.user' AND m.deleted_at IS NULL
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
+SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
+       (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()
+  FROM um.roles r CROSS JOIN um.permissions p
+ WHERE r.code IN ('fms_admin_role', 'sys_admin')
+   AND p.identifier = 'admin.user.scope'
+   AND p.deleted_at IS NULL AND p.is_enabled
+ON CONFLICT (role_id, perm_id) DO NOTHING;
+
+-- 数据范围读取，返回 {orgIds:[...], depts:[{deptId, includeSubtree}]}，供配置界面回显
+CREATE OR REPLACE FUNCTION auth.list_user_scopes(p_user_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = um, auth, public
+AS $$
+DECLARE
+    v_orgs  jsonb;
+    v_depts jsonb;
+BEGIN
+    PERFORM auth.require_permission('admin.user.scope');
+    SELECT COALESCE(jsonb_agg(s.org_id ORDER BY s.org_id), '[]'::jsonb) INTO v_orgs
+      FROM um.user_org_scope s
+     WHERE s.user_id = p_user_id AND s.deleted_at IS NULL;
+    SELECT COALESCE(jsonb_agg(jsonb_build_object('deptId', s.dept_id,
+                                                 'includeSubtree', s.include_subtree)
+                              ORDER BY s.dept_id), '[]'::jsonb) INTO v_depts
+      FROM um.user_dept_scope s
+     WHERE s.user_id = p_user_id AND s.deleted_at IS NULL;
+    RETURN jsonb_build_object('orgIds', v_orgs, 'depts', v_depts);
+END $$;
+COMMENT ON FUNCTION auth.list_user_scopes(uuid)
+    IS '数据范围读取：返回用户的公司范围与部门范围（含子树开关），供配置界面回显；仅 admin.user.scope 持有者与维护会话可调';
+REVOKE ALL ON FUNCTION auth.list_user_scopes(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION auth.list_user_scopes(uuid) TO fms_operator;
+
+-- 公司范围写入，全量替换语义：先软删不在名单内的既有行，再按名单补齐。唯一约束 uk_user_org_scope
+-- 建在 (user_id, org_id) 上且不随软删释放，故重新授予同一公司走 ON CONFLICT DO UPDATE 复活，
+-- 而不是插入新行
+CREATE OR REPLACE FUNCTION auth.set_user_org_scope(p_user_id uuid, p_org_ids uuid[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = um, auth, public
+AS $$
+DECLARE
+    v_comp uuid;
+    v_ids  uuid[] := COALESCE(p_org_ids, ARRAY[]::uuid[]);
+BEGIN
+    PERFORM auth.require_permission('admin.user.scope');
+    SELECT company_id INTO v_comp FROM um.users
+     WHERE id = p_user_id AND deleted_at IS NULL;
+    IF v_comp IS NULL THEN
+        RAISE EXCEPTION '用户不存在' USING ERRCODE = 'P0001';
+    END IF;
+    UPDATE um.user_org_scope
+       SET deleted_at = now(), updated_at = now()
+     WHERE user_id = p_user_id AND deleted_at IS NULL
+       AND NOT (org_id = ANY (v_ids));
+    INSERT INTO um.user_org_scope (company_id, user_id, org_id, scope_type)
+    SELECT v_comp, p_user_id, o, 'GRANTED'
+      FROM unnest(v_ids) AS o
+    ON CONFLICT (user_id, org_id) DO UPDATE
+       SET deleted_at = NULL, updated_at = now();
+    PERFORM audit.record('user_org_scope_set', 'um.user_org_scope', p_user_id,
+        NULL, jsonb_build_object('org_ids', to_jsonb(v_ids)), NULL, NULL);
+END $$;
+COMMENT ON FUNCTION auth.set_user_org_scope(uuid, uuid[])
+    IS '公司数据范围写入：全量替换，名单外既有行软删、名单内缺行补齐，公司 id 取目标用户所属公司；留审计';
+REVOKE ALL ON FUNCTION auth.set_user_org_scope(uuid, uuid[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION auth.set_user_org_scope(uuid, uuid[]) TO fms_operator;
+
+-- 部门范围写入，语义同公司范围，include_subtree 统一施加于名单内的全部部门
+CREATE OR REPLACE FUNCTION auth.set_user_dept_scope(p_user_id uuid, p_dept_ids uuid[],
+                                                    p_include_subtree boolean DEFAULT true)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = um, auth, public
+AS $$
+DECLARE
+    v_comp uuid;
+    v_ids  uuid[] := COALESCE(p_dept_ids, ARRAY[]::uuid[]);
+    v_sub  boolean := COALESCE(p_include_subtree, true);
+BEGIN
+    PERFORM auth.require_permission('admin.user.scope');
+    SELECT company_id INTO v_comp FROM um.users
+     WHERE id = p_user_id AND deleted_at IS NULL;
+    IF v_comp IS NULL THEN
+        RAISE EXCEPTION '用户不存在' USING ERRCODE = 'P0001';
+    END IF;
+    UPDATE um.user_dept_scope
+       SET deleted_at = now(), updated_at = now()
+     WHERE user_id = p_user_id AND deleted_at IS NULL
+       AND NOT (dept_id = ANY (v_ids));
+    INSERT INTO um.user_dept_scope (company_id, user_id, dept_id, scope_type, include_subtree)
+    SELECT v_comp, p_user_id, d, 'GRANTED', v_sub
+      FROM unnest(v_ids) AS d
+    ON CONFLICT (user_id, dept_id) DO UPDATE
+       SET deleted_at = NULL, include_subtree = v_sub, updated_at = now();
+    PERFORM audit.record('user_dept_scope_set', 'um.user_dept_scope', p_user_id,
+        NULL, jsonb_build_object('dept_ids', to_jsonb(v_ids), 'include_subtree', v_sub),
+        NULL, NULL);
+END $$;
+COMMENT ON FUNCTION auth.set_user_dept_scope(uuid, uuid[], boolean)
+    IS '部门数据范围写入：全量替换，名单外软删、名单内补齐，include_subtree 统一施加；留审计';
+REVOKE ALL ON FUNCTION auth.set_user_dept_scope(uuid, uuid[], boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION auth.set_user_dept_scope(uuid, uuid[], boolean) TO fms_operator;
+
 -- 文件末尾自查
 SELECT 'um_perm' AS file_name,
        (SELECT count(*) FROM um.modules)                    AS module_cnt,

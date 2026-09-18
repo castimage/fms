@@ -72,3 +72,17 @@ export interface SodResult {
   conflict: boolean
   pairs: { permA: string; permB: string }[]
 }
+
+/** 用户数据范围视图（auth.list_user_scopes 返回，部门范围含子树开关，本接口对全部部门统一设置） */
+export interface UserScopeView {
+  orgIds: string[]
+  deptIds: string[]
+  includeSubtree: boolean
+}
+
+/** 用户数据范围配置请求，全量替换语义，空数组表示清空该维度 */
+export interface UserScopeRequest {
+  orgIds: string[]
+  deptIds: string[]
+  includeSubtree: boolean
+}

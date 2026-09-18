@@ -26,6 +26,7 @@ import type {
   UserUpdateRequest,
   UserView,
 } from '@/types/admin'
+import type { UserScopeRequest, UserScopeView } from '@/types/org'
 
 export const adminApi = {
   // 系统参数（/api/admin/params）
@@ -84,6 +85,14 @@ export const adminApi = {
   // 角色与权限（/api/org）
   listRoles(): Promise<RoleView[]> {
     return request<RoleView[]>({ url: '/org/roles', method: 'get' })
+  },
+  /** 读取用户数据范围（公司 + 部门 + 含子树开关），管理员 */
+  getUserScopes(id: string): Promise<UserScopeView> {
+    return request<UserScopeView>({ url: `/org/users/${id}/scopes`, method: 'get' })
+  },
+  /** 配置用户数据范围，全量替换，空数组表示清空该维度，管理员 */
+  setUserScopes(id: string, req: UserScopeRequest): Promise<void> {
+    return request<void>({ url: `/org/users/${id}/scopes`, method: 'put', data: req })
   },
   createRole(req: RoleRequest): Promise<RoleView> {
     return request<RoleView>({ url: '/org/roles', method: 'post', data: req })

@@ -8,6 +8,7 @@ import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
 import type { FormInst, FormRules } from 'naive-ui'
 import { useDebounceFn } from '@vueuse/core'
 import { adminApi } from '@/api/admin'
+import { pageCompanies, pageDepartments } from '@/api/org'
 import { useAppStore } from '@/stores/app'
 import { useConfigStore } from '@/stores/config'
 import FormGrid from '@/components/common/FormGrid.vue'
@@ -204,6 +205,60 @@ async function submitAssign() {
   }
 }
 
+// 数据范围弹窗，公司范围与部门范围均全量替换，部门含子树开关统一施加
+const showScope = ref(false)
+const scopeUser = ref<UserView | null>(null)
+const scopeLoading = ref(false)
+const scopeSaving = ref(false)
+const scopeOrgIds = ref<string[]>([])
+const scopeDeptIds = ref<string[]>([])
+const scopeSubtree = ref(true)
+const companyOptions = ref<{ label: string; value: string }[]>([])
+const deptOptions = ref<{ label: string; value: string }[]>([])
+
+async function openScope(r: UserView) {
+  scopeUser.value = r
+  scopeOrgIds.value = []
+  scopeDeptIds.value = []
+  scopeSubtree.value = true
+  showScope.value = true
+  scopeLoading.value = true
+  try {
+    const [companies, depts, cur] = await Promise.all([
+      pageCompanies({ page: 1, size: 200 }),
+      pageDepartments({ page: 1, size: 500, companyId: appStore.companyId ?? undefined }),
+      adminApi.getUserScopes(r.id),
+    ])
+    companyOptions.value = companies.items.map((c) => ({ label: `${c.name}（${c.code}）`, value: c.id }))
+    deptOptions.value = depts.items.map((d) => ({ label: d.name, value: d.id }))
+    scopeOrgIds.value = cur.orgIds
+    scopeDeptIds.value = cur.deptIds
+    scopeSubtree.value = cur.includeSubtree
+  } catch (e) {
+    if (e instanceof Error) message.error(e.message)
+  } finally {
+    scopeLoading.value = false
+  }
+}
+
+async function submitScope() {
+  if (!scopeUser.value) return
+  scopeSaving.value = true
+  try {
+    await adminApi.setUserScopes(scopeUser.value.id, {
+      orgIds: scopeOrgIds.value,
+      deptIds: scopeDeptIds.value,
+      includeSubtree: scopeSubtree.value,
+    })
+    message.success('数据范围已保存')
+    showScope.value = false
+  } catch (e) {
+    if (e instanceof Error) message.error(e.message)
+  } finally {
+    scopeSaving.value = false
+  }
+}
+
 /** 用户状态标签，LOCKED 不在公共 StatusTag 映射内，本地补锁定 */
 function renderStatus(s: UserStatus) {
   if (s === 'LOCKED') return h(NTag, { type: 'warning', size: 'small', bordered: false }, { default: () => '锁定' })
@@ -242,6 +297,7 @@ const columns: FmsColumn<UserView>[] = [
         [
           h(NButton, { text: true, size: 'small', onClick: () => openResetPwd(r) }, { default: () => '重置密码' }),
           h(NButton, { text: true, size: 'small', onClick: () => openAssign(r) }, { default: () => '分配角色' }),
+          h(NButton, { text: true, size: 'small', onClick: () => openScope(r) }, { default: () => '数据范围' }),
           h(
             NPopconfirm,
             {
@@ -350,6 +406,43 @@ onMounted(async () => {
       <template #action>
         <n-button size="small" @click="showAssign = false">取消</n-button>
         <n-button size="small" type="primary" :loading="assignLoading" :disabled="!assignRoleId" @click="submitAssign">分配</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 数据范围 -->
+    <n-modal v-model:show="showScope" preset="card" :title="`数据范围 - ${scopeUser?.loginName ?? ''}`" style="width: min(520px, calc(100vw - 32px))" :bordered="false">
+      <n-form label-placement="top" size="small">
+        <n-form-item label="可见公司（可多选，含他公司即授予跨公司范围）">
+          <n-select
+            v-model:value="scopeOrgIds"
+            :options="companyOptions"
+            :loading="scopeLoading"
+            multiple
+            filterable
+            clearable
+            placeholder="选择公司"
+          />
+        </n-form-item>
+        <n-form-item label="可见部门（可多选）">
+          <n-select
+            v-model:value="scopeDeptIds"
+            :options="deptOptions"
+            multiple
+            filterable
+            clearable
+            placeholder="选择部门"
+          />
+        </n-form-item>
+        <n-form-item label="部门范围含子树">
+          <n-switch v-model:value="scopeSubtree" />
+        </n-form-item>
+        <n-alert type="info" :bordered="false" :show-icon="false" style="margin-top: 4px">
+          保存为全量替换：清单外的公司或部门将被移除；清空表示该维度无可见范围。
+        </n-alert>
+      </n-form>
+      <template #action>
+        <n-button size="small" @click="showScope = false">取消</n-button>
+        <n-button size="small" type="primary" :loading="scopeSaving" @click="submitScope">保存</n-button>
       </template>
     </n-modal>
   </div>

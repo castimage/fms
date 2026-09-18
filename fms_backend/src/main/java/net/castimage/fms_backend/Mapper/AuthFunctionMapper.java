@@ -132,6 +132,28 @@ public interface AuthFunctionMapper {
             """)
     Object revokeRole(@Param("userId") UUID userId, @Param("roleCode") String roleCode);
 
+    /** 用户数据范围读取，返回 {orgIds:[...], depts:[{deptId, includeSubtree}]}，闸口内校验 admin.user.scope */
+    @Select("""
+            SELECT auth.list_user_scopes(#{userId}::uuid)
+            """)
+    String listUserScopes(@Param("userId") UUID userId);
+
+    /** 用户公司范围写入（全量替换），空串表示清空，闸口内校验 admin.user.scope 并留审计 */
+    @Select("""
+            SELECT auth.set_user_org_scope(#{userId}::uuid,
+                                           string_to_array(NULLIF(#{orgIds}, ''), ',')::uuid[])
+            """)
+    Object setUserOrgScope(@Param("userId") UUID userId, @Param("orgIds") String orgIds);
+
+    /** 用户部门范围写入（全量替换），includeSubtree 施加于全部所选部门 */
+    @Select("""
+            SELECT auth.set_user_dept_scope(#{userId}::uuid,
+                                            string_to_array(NULLIF(#{deptIds}, ''), ',')::uuid[],
+                                            #{includeSubtree})
+            """)
+    Object setUserDeptScope(@Param("userId") UUID userId, @Param("deptIds") String deptIds,
+                            @Param("includeSubtree") boolean includeSubtree);
+
     /** 角色创建/更新，内部 ON CONFLICT(code) DO UPDATE name */
     @Select("""
             SELECT auth.upsert_role(#{code}, #{name}, #{isSystem})

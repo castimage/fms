@@ -11,12 +11,14 @@ import net.castimage.fms_backend.Model.dto.RoleRequest;
 import net.castimage.fms_backend.Model.dto.SodCheckRequest;
 import net.castimage.fms_backend.Model.dto.UserCreateRequest;
 import net.castimage.fms_backend.Model.dto.UserRoleAssignRequest;
+import net.castimage.fms_backend.Model.dto.UserScopeRequest;
 import net.castimage.fms_backend.Model.dto.UserUpdateRequest;
 import net.castimage.fms_backend.Model.vo.CompanyView;
 import net.castimage.fms_backend.Model.vo.DepartmentView;
 import net.castimage.fms_backend.Model.vo.ModuleNode;
 import net.castimage.fms_backend.Model.vo.RoleView;
 import net.castimage.fms_backend.Model.vo.SodResult;
+import net.castimage.fms_backend.Model.vo.UserScopeView;
 import net.castimage.fms_backend.Model.vo.UserView;
 import net.castimage.fms_backend.Service.OrgService;
 import net.castimage.fms_backend.Utils.RequestContext;
@@ -207,6 +209,24 @@ public class OrgController {
     @DeleteMapping("/users/{id}/roles/{roleId}")
     public ApiResponse<Void> revokeRole(@PathVariable UUID id, @PathVariable UUID roleId) {
         orgService.revokeRole(id, roleId);
+        return ApiResponse.ok(null);
+    }
+
+    /**
+     * 读取用户数据范围（auth.list_user_scopes），返回公司与部门范围，管理员专属。
+     */
+    @GetMapping("/users/{id}/scopes")
+    public ApiResponse<UserScopeView> getUserScopes(@PathVariable UUID id) {
+        return ApiResponse.ok(orgService.getUserScopes(id));
+    }
+
+    /**
+     * 配置用户数据范围（auth.set_user_org_scope + auth.set_user_dept_scope），全量替换，空数组表示清空，管理员专属。
+     */
+    @PutMapping("/users/{id}/scopes")
+    public ApiResponse<Void> setUserScopes(@PathVariable UUID id,
+                                           @RequestBody @Valid UserScopeRequest req) {
+        orgService.setUserScopes(id, req);
         return ApiResponse.ok(null);
     }
 

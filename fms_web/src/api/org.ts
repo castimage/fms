@@ -9,6 +9,8 @@ import type {
   DepartmentView,
   RoleView,
   SodResult,
+  UserScopeRequest,
+  UserScopeView,
   UserView,
 } from '@/types/org'
 
@@ -95,6 +97,16 @@ export function resetPassword(id: string, newPassword: string): Promise<void> {
 /** 用户权限码列表 */
 export function userPermissions(id: string): Promise<string[]> {
   return request<string[]>({ url: `/org/users/${id}/permissions`, method: 'get' })
+}
+
+/** 读取用户数据范围（公司 + 部门 + 含子树开关），管理员 */
+export function getUserScopes(id: string): Promise<UserScopeView> {
+  return request<UserScopeView>({ url: `/org/users/${id}/scopes`, method: 'get' })
+}
+
+/** 配置用户数据范围，全量替换，空数组表示清空该维度，管理员 */
+export function setUserScopes(id: string, req: UserScopeRequest): Promise<void> {
+  return request<void>({ url: `/org/users/${id}/scopes`, method: 'put', data: req })
 }
 
 // 角色 / 权限

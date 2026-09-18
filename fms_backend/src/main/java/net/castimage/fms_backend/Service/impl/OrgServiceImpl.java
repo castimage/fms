@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -24,6 +26,7 @@ import net.castimage.fms_backend.Model.dto.RoleRequest;
 import net.castimage.fms_backend.Model.dto.SodCheckRequest;
 import net.castimage.fms_backend.Model.dto.UserCreateRequest;
 import net.castimage.fms_backend.Model.dto.UserRoleAssignRequest;
+import net.castimage.fms_backend.Model.dto.UserScopeRequest;
 import net.castimage.fms_backend.Model.dto.UserUpdateRequest;
 import net.castimage.fms_backend.Model.entity.Company;
 import net.castimage.fms_backend.Model.entity.Department;
@@ -37,6 +40,7 @@ import net.castimage.fms_backend.Model.vo.ModuleNode;
 import net.castimage.fms_backend.Model.vo.PermissionView;
 import net.castimage.fms_backend.Model.vo.RoleView;
 import net.castimage.fms_backend.Model.vo.SodResult;
+import net.castimage.fms_backend.Model.vo.UserScopeView;
 import net.castimage.fms_backend.Model.vo.UserView;
 import net.castimage.fms_backend.Service.OrgService;
 import net.castimage.fms_backend.Utils.PasswordUtils;
@@ -352,6 +356,50 @@ public class OrgServiceImpl implements OrgService {
             throw new NotFoundException("角色不存在");
         }
         authFunctionMapper.revokeRole(id, role.getCode());
+    }
+
+    @Override
+    public UserScopeView getUserScopes(UUID id) {
+        RequestContext.requireAdminRole();
+        String raw = authFunctionMapper.listUserScopes(id);
+        JSONObject o = JSON.parseObject(raw == null ? "{}" : raw);
+        List<UUID> orgIds = new ArrayList<>();
+        JSONArray orgs = o.getJSONArray("orgIds");
+        if (orgs != null) {
+            for (int i = 0; i < orgs.size(); i++) {
+                orgIds.add(orgs.getObject(i, UUID.class));
+            }
+        }
+        List<UUID> deptIds = new ArrayList<>();
+        boolean subtree = true;
+        JSONArray depts = o.getJSONArray("depts");
+        if (depts != null) {
+            for (int i = 0; i < depts.size(); i++) {
+                JSONObject d = depts.getJSONObject(i);
+                deptIds.add(d.getObject("deptId", UUID.class));
+                if (i == 0) {
+                    subtree = !Boolean.FALSE.equals(d.getBoolean("includeSubtree"));
+                }
+            }
+        }
+        return new UserScopeView(orgIds, deptIds, subtree);
+    }
+
+    @Override
+    @Transactional
+    public void setUserScopes(UUID id, UserScopeRequest req) {
+        RequestContext.requireAdminRole();
+        boolean subtree = req.includeSubtree() == null || req.includeSubtree();
+        authFunctionMapper.setUserOrgScope(id, joinUuids(req.orgIds()));
+        authFunctionMapper.setUserDeptScope(id, joinUuids(req.deptIds()), subtree);
+    }
+
+    /** id 集合转逗号串，供闸口的 string_to_array 解析，空集合转空串表示清空该维度 */
+    private static String joinUuids(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return "";
+        }
+        return ids.stream().map(UUID::toString).collect(Collectors.joining(","));
     }
 
     /**
