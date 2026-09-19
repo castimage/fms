@@ -23,6 +23,8 @@
 
 -- 幂等，全部 CREATE OR REPLACE / IF NOT EXISTS / ON CONFLICT / DROP IF EXISTS，可重复执行
 
+SET ROLE fms_admin;
+
 --status CHECK 约束扩容（存量约束名 vouchers_status_check，init/gl_base.sql 同名重建）
 
 ALTER TABLE gl.vouchers DROP CONSTRAINT IF EXISTS vouchers_status_check;
@@ -323,6 +325,8 @@ REVOKE EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION gl.fn_revert_voucher(uuid)       FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION gl.fn_revert_voucher(uuid)         TO fms_operator;
+
+RESET ROLE;
 
 --自查，期望各 1
 

@@ -703,6 +703,8 @@ END $$;
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
+SET ROLE fms_admin;
+
 -- 2.5 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL
 -- 返回 NULL 不抛错，因本出口被用户列表逐行调用，越权行抛错会使整表查询失败，且 NULL 不泄露存在性
 -- 邮箱以 pgp_sym_encrypt(aes256) 加密存储，等值查询走 email_hash 盲索引，明文只经本出口返回
@@ -740,6 +742,8 @@ COMMENT ON FUNCTION auth.get_user_email(uuid)
 REVOKE EXECUTE ON FUNCTION auth.get_user_email(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.get_user_email(uuid)
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
+
+RESET ROLE;
 
 --闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
 

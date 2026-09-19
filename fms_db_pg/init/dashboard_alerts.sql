@@ -24,6 +24,8 @@
 
 -- 可重复执行（CREATE OR REPLACE / ON CONFLICT DO NOTHING）。
 
+SET ROLE fms_admin;
+
 --看板-异常告警聚合函数（SECURITY DEFINER，内部读 um.params 阈值 + 访问 bank_accounts 密文表）
 
 CREATE OR REPLACE FUNCTION rpt.fn_dashboard_alerts(p_company_id uuid)
@@ -149,6 +151,8 @@ GRANT EXECUTE ON FUNCTION rpt.fn_dashboard_alerts(uuid)
 INSERT INTO um.params (code, value, updated_by)
 VALUES ('cash.bank.safety.line', '0'::jsonb, '00000000-0000-7000-0000-000000000001')
 ON CONFLICT (code) DO NOTHING;
+
+RESET ROLE;
 
 -- 文件末尾自查（纯逻辑命名约定，`SELECT '<名>' AS file_name` 与文件名一致，配合 psql -v ON_ERROR_STOP=1 确认本文件执行完整）
 SELECT 'dashboard_alerts' AS file_name;

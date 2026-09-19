@@ -9,6 +9,8 @@
 
 -- 依赖，init/um_perm.sql（auth.require_permission / admin.param.view / admin.param.update 种子）。
 
+SET ROLE fms_admin;
+
 --参数分页（keyword 按 code 模糊，STABLE）
 
 CREATE OR REPLACE FUNCTION um.fn_page_params(p_keyword text DEFAULT NULL)
@@ -126,6 +128,8 @@ GRANT EXECUTE ON FUNCTION um.fn_page_params(text) TO fms_app, fms_operator, fms_
 GRANT EXECUTE ON FUNCTION um.fn_get_param(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT EXECUTE ON FUNCTION um.fn_upsert_param(text, jsonb, uuid) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT EXECUTE ON FUNCTION um.fn_get_param_value(text, jsonb) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
+
+RESET ROLE;
 
 --文件末尾自查
 

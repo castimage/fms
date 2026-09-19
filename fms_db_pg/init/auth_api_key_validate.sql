@@ -10,6 +10,8 @@
 --       （防字典攻击），故校验必须在库内完成。
 -- 幂等，全部 CREATE OR REPLACE，可重复执行。
 
+SET ROLE fms_admin;
+
 --api-key 校验 + last_used_at 回写，单次往返原子完成
 
 --    任何失败（哈希未命中/非 ACTIVE/已吊销/已过期/已软删/空串）一律返回 NULL，
@@ -90,6 +92,8 @@ COMMENT ON FUNCTION auth.revoke_api_key(uuid)
 REVOKE ALL ON FUNCTION auth.revoke_api_key(uuid) FROM PUBLIC;
 -- 同 api_key_validate，连接池会话级角色残留可能落在任意职责角色上，统一授 EXECUTE，函数内 is_self 按 guc 判定归属，SECURITY DEFINER 属主权限封闭
 GRANT EXECUTE ON FUNCTION auth.revoke_api_key(uuid) TO fms_operator, fms_viewer, fms_auditor, fms_report;
+
+RESET ROLE;
 
 -- 文件末尾自查（纯逻辑命名约定，`SELECT '<名>' AS file_name` 与文件名一致，配合 psql -v ON_ERROR_STOP=1 确认本文件执行完整）
 SELECT 'auth_api_key_validate' AS file_name;

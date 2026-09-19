@@ -186,7 +186,8 @@ CREATE SCHEMA IF NOT EXISTS audit   AUTHORIZATION fms_admin;  -- 审计哈希链
 CREATE SCHEMA IF NOT EXISTS log     AUTHORIZATION fms_admin;  -- 应用/访问/任务日志
 
 -- 属主约定，本文件自 \c fms 后即 SET ROLE fms_admin，其后全部扩展/配置/schema 属主均为 fms_admin，init/ 白名单其余各文件开头必须同样执行 SET ROLE fms_admin 保证全库对象属主一致
--- 全部 SECURITY DEFINER 函数属主 fms_admin，函数体以超级用户身份执行、绕过 rls，审计写入/过账/领单等由函数统一闸口，文件末尾不执行 RESET ROLE，psql 进程退出即恢复
+-- SECURITY DEFINER 函数属主 fms_admin，函数体以超级用户身份执行、绕过 rls，审计写入/过账/领单等由函数统一闸口，文件末尾不执行 RESET ROLE，psql 进程退出即恢复
+-- 例外，软删除出口 auth.fn_soft_delete 与 auth.fn_soft_delete_v 保持 postgres 属主，两函数体内以 current_user <> 'fms_admin' 判定调用方，而 SECURITY DEFINER 下 current_user 即属主，属主为 fms_admin 会令该判定恒假、拒绝分支永不触发
 
 -- 文件末尾自查，对象计数（配合 -v ON_ERROR_STOP=1 确认执行完整，pg_cron 受 cron.database_name 约束装在 postgres 库，fms 库扩展计数不含它，预期 9 项 + pgmq 仅探测函数）
 SELECT 'bootstrap_base' AS file_name,
