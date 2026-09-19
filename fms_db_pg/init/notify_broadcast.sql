@@ -84,6 +84,9 @@ COMMENT ON FUNCTION notify.fn_insert_notification(uuid,text,text,text,text,uuid)
 --授权，应用角色仅持 EXECUTE，函数体以 fms_admin 身份执行，不授予表级写权限，
 
 -- 与 log_access_batch 同款最小授权模式
+-- PUBLIC 须显式收回，CREATE FUNCTION 默认带 PUBLIC EXECUTE，通知域不在 grants_base 的批量清扫范围内
+REVOKE ALL ON FUNCTION notify.fn_broadcast_notification(text,text,text,uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION notify.fn_insert_notification(uuid,text,text,text,text,uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION notify.fn_broadcast_notification(text,text,text,uuid)
     TO fms_app, fms_operator;
 GRANT EXECUTE ON FUNCTION notify.fn_insert_notification(uuid,text,text,text,text,uuid)
@@ -155,6 +158,15 @@ BEGIN
 END $$;
 COMMENT ON FUNCTION notify.fn_alert_notify_admin(text, text)
     IS '安全告警站内信：发 admin（SECURITY 类型），无 admin 用户时静默跳过';
+
+--告警函数族授权，AlertService 定时以 fms_app 直连调用（无会话身份），
+-- PUBLIC 收回后按最小授权重授，与 fn_alert_replica_lag 同款
+REVOKE ALL ON FUNCTION notify.fn_alert_login_failures(int,int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION notify.fn_alert_audit_chain() FROM PUBLIC;
+REVOKE ALL ON FUNCTION notify.fn_alert_notify_admin(text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION notify.fn_alert_login_failures(int,int) TO fms_app;
+GRANT EXECUTE ON FUNCTION notify.fn_alert_audit_chain() TO fms_app;
+GRANT EXECUTE ON FUNCTION notify.fn_alert_notify_admin(text,text) TO fms_app;
 
 --主从复制延迟检测（AlertService 定时调度），pg_stat_replication 仅 superuser/
 

@@ -133,6 +133,10 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END $$;
 
+--触发器函数不授任何角色，PUBLIC 须显式收回，本文件晚于 grants_base 的批量清扫，
+-- CREATE FUNCTION 默认带 PUBLIC EXECUTE
+REVOKE ALL ON FUNCTION gl.fn_voucher_status_history() FROM PUBLIC;
+
 --驳回闸口（SUBMITTED 转 REJECTED），权限 + SoD + 原因必填 + 状态历史(remark=原因) + 审计，原子完成
 
 CREATE OR REPLACE FUNCTION gl.fn_reject_voucher(p_voucher_id uuid, p_reason text)
