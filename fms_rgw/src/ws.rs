@@ -11,12 +11,13 @@ use crate::circuit::CircuitError;
 use crate::headers::{inject_identity, inject_trace, strip_client_fms_headers};
 use crate::proxy::{build_upstream_uri, forward_client_headers, proxy_handler, strip_hop_by_hop_keep};
 use crate::ratelimit::{RateLimitError, RateTier, rate_key};
+use crate::sign::{build_signature_header, compute_body_hash};
 use crate::state::AppState;
 use crate::types::{GatewayError, LogUserSlot, error_response, extract_client_ip, trace_id_of};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::header::{AUTHORIZATION, CONNECTION, HeaderMap, HeaderValue, ORIGIN, UPGRADE};
-use axum::http::{Request, Response, StatusCode, Uri};
+use axum::http::{HeaderName, Request, Response, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,6 +35,30 @@ pub fn extract_token_from_query(uri: &Uri) -> Option<&str> {
         }
     }
     None
+}
+
+/// 重建上游握手query，剥离客户端的uid与token参数后注入令牌里的uid，
+/// 其余参数原样保留，键大小写不敏感，端点按uid注册会话，该值只认网关注入
+pub fn trusted_ws_query(query: Option<&str>, uid: &str) -> String {
+    let kept: Vec<&str> = query
+        .map(|q| {
+            q.split('&')
+                .filter(|pair| {
+                    !pair.is_empty()
+                        && !pair.split_once('=').is_some_and(|(k, _)| {
+                            k.eq_ignore_ascii_case("uid") || k.eq_ignore_ascii_case("token")
+                        })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut rebuilt = kept.join("&");
+    if !rebuilt.is_empty() {
+        rebuilt.push('&');
+    }
+    rebuilt.push_str("uid=");
+    rebuilt.push_str(uid);
+    rebuilt
 }
 
 /// 判断ws升级请求，path == `/api/nt/ws`且`Upgrade`含websocket、`Connection`含upgrade
@@ -197,8 +222,8 @@ pub async fn ws_handler(
         return error_response(GatewayError::UpstreamUnavailable, &trace_id);
     };
 
-    // 重建上游请求，同path + query，保留Connection/Upgrade/Sec-WebSocket-*，
-    //    剥离X-FMS-*后注入身份与trace
+    // 重建上游请求，同path，保留Connection/Upgrade/Sec-WebSocket-*，
+    //    剥离X-FMS-*后注入身份、签名与trace
     let (client_parts, _) = req.into_parts();
     let mut headers = client_parts.headers.clone();
     // ws场景剥离hop-by-hop，保留Connection/Upgrade，升级所需，其余共享proxy单一清单
@@ -206,6 +231,22 @@ pub async fn ws_handler(
     strip_client_fms_headers(&mut headers);
     inject_identity(&mut headers, &claims.sub, &claims.role);
     inject_trace(&mut headers, &trace_id);
+
+    let sign_secret = state.cfg.sign.sign_secret.as_bytes();
+    let ws_sign = build_signature_header(
+        sign_secret,
+        client_parts.method.as_str(),
+        client_parts.uri.path(),
+        &compute_body_hash(&[]),
+        &claims.sub.to_string(),
+        &claims.role,
+    );
+    if let Ok(hv) = HeaderValue::from_str(&ws_sign) {
+        // 静态常量头名，parse不可能失败，不变量
+        const X_FMS_SIGNATURE: HeaderName =
+            HeaderName::from_static("x-fms-signature");
+        headers.insert(X_FMS_SIGNATURE, hv);
+    }
     // Host强制重写为选中实例的authority(防Host投毒污染上游路由/缓存/日志)，
     // 原Host记入X-Forwarded-Host，若不同于上游host且未预置
     let upstream_host = target.authority.clone();
@@ -223,7 +264,7 @@ pub async fn ws_handler(
     {
         // 静态常量头名，parse不可能失败，不变量
         const X_FORWARDED_HOST: axum::http::header::HeaderName =
-            axum::http::header::HeaderName::from_static("x-forwarded-host");
+            HeaderName::from_static("x-forwarded-host");
         headers.insert(X_FORWARDED_HOST, hv);
     }
     let proto = if state.cfg.tls.cert.is_some() && state.cfg.tls.key.is_some() {
@@ -234,16 +275,15 @@ pub async fn ws_handler(
     // X-Forwarded-Proto预置，无条件覆盖客户端伪造值，与proxy路径行为一致
     if let Ok(hv) = HeaderValue::from_str(proto) {
         // 静态常量头名，parse不可能失败，不变量
-        const X_FORWARDED_PROTO: axum::http::header::HeaderName =
-            axum::http::header::HeaderName::from_static("x-forwarded-proto");
+        const X_FORWARDED_PROTO: HeaderName =
+            HeaderName::from_static("x-forwarded-proto");
         headers.insert(X_FORWARDED_PROTO, hv);
     }
     forward_client_headers(&mut headers, ip.as_deref(), proto);
-    let uri = match build_upstream_uri(
-        &target.base_url,
-        client_parts.uri.path(),
-        client_parts.uri.query(),
-    ) {
+    // 上游query重建，剥离客户端uid与token后注入令牌里的uid，端点身份取自信任头而非该参数，
+    //    此处归一为避免客户端可控值随请求流入上游与访问日志
+    let up_query = trusted_ws_query(client_parts.uri.query(), &claims.sub.to_string());
+    let uri = match build_upstream_uri(&target.base_url, client_parts.uri.path(), Some(&up_query)) {
         Ok(u) => u,
         Err(_) => {
             return error_response(
@@ -325,8 +365,8 @@ async fn pump_bidirectional(
     inject_trace(&mut server_headers, trace_id);
 
     // hyper 1的CanUpgrade实现于Request/Response(而非Parts)，需重建空体消息
-    let client_upgrade = hyper::upgrade::on(hyper::Request::from_parts(client_parts, ()));
-    let server_upgrade = hyper::upgrade::on(hyper::Response::from_parts(server_parts, ()));
+    let client_upgrade = hyper::upgrade::on(Request::from_parts(client_parts, ()));
+    let server_upgrade = hyper::upgrade::on(Response::from_parts(server_parts, ()));
     let trace_id_log = trace_id.to_string();
     let upgrade_timeout = Duration::from_secs(state.cfg.ws.upgrade_timeout_secs);
 
@@ -395,6 +435,28 @@ mod tests {
             extract_token_from_query(&uri_with_query("token=abc.def.ghi")),
             Some("abc.def.ghi")
         );
+    }
+
+    #[test]
+    fn trusted_query_replaces_client_uid_and_drops_token() {
+        assert_eq!(
+            trusted_ws_query(Some("uid=attacker&token=leak.jwt.value"), "trusted-uid"),
+            "uid=trusted-uid"
+        );
+    }
+
+    #[test]
+    fn trusted_query_keeps_other_params() {
+        assert_eq!(
+            trusted_ws_query(Some("UID=attacker&a=1&b=2&token=x"), "u"),
+            "a=1&b=2&uid=u"
+        );
+    }
+
+    #[test]
+    fn trusted_query_handles_absent_query() {
+        assert_eq!(trusted_ws_query(None, "u"), "uid=u");
+        assert_eq!(trusted_ws_query(Some(""), "u"), "uid=u");
     }
 
     #[test]

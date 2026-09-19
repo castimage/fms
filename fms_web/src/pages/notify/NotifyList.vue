@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * 站内通知，本人通知列表 + 未读数角标，isRead 三态筛选，已读动作走 REST。
- * 实时通道经 NOTIFY_WS_URL 连接（网关按 /api/nt/ws 直通），收到未读数推送即刷新角标与列表，
- * 断线按指数退避重连，离开页面关闭连接。
+ * 实时通道经 NOTIFY_WS_URL 连接，握手在 query 携带访问令牌，网关校验后按令牌主体注册会话，
+ * 收到未读数推送即刷新角标与列表，断线按指数退避重连，离开页面关闭连接。
  */
 import { h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { NButton, NTag, useMessage } from 'naive-ui'
@@ -126,10 +126,11 @@ function scheduleReconnect() {
 }
 
 function connectWs() {
-  const uid = auth.user?.id
-  if (!uid) return
+  // 浏览器 WebSocket 无法设置请求头，令牌只能走 query，uid 由网关按令牌注入
+  const token = auth.accessToken
+  if (!token) return
   try {
-    ws = new WebSocket(`${NOTIFY_WS_URL}?uid=${encodeURIComponent(uid)}`)
+    ws = new WebSocket(`${NOTIFY_WS_URL}?token=${encodeURIComponent(token)}`)
   } catch {
     scheduleReconnect()
     return
@@ -177,7 +178,7 @@ onBeforeUnmount(closeWs)
 <template>
   <div class="notify-list">
     <n-alert type="info" :bordered="false" class="ws-hint">
-      WebSocket 实时推送端点：{{ NOTIFY_WS_URL }}（连接方式见 api/notify.ts）。本页为 REST 轮询，未接入实时订阅。
+      实时推送端点 {{ NOTIFY_WS_URL }}，握手携带访问令牌，连接建立后服务端即时回推未读数，断线自动重连。
     </n-alert>
 
     <FormGrid class="filter-grid">

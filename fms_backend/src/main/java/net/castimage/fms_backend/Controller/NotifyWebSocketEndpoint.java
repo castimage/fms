@@ -7,6 +7,8 @@ import jakarta.websocket.OnOpen;
 import jakarta.websocket.Session;
 import jakarta.websocket.server.ServerEndpoint;
 import net.castimage.fms_backend.Service.NotifyService;
+import net.castimage.fms_backend.Utils.JwtRole;
+import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.WsNotifyBroadcaster;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,16 +19,22 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.List;
 
 /**
  * 通知 WebSocket 端点，路径 /api/nt/ws，JSR-356 @ServerEndpoint，由 WebSocketConfig 注册到
- * 内嵌 Tomcat ServerContainer，连接时按查询参数 uid 注册会话并按 NotifyService 推送
- * 当前未读数（{"type":"unread_count","count":N}），已读动作后经
- * NotifyService 经 sendToUser 做增量推送。路径与网关的 WebSocket 判定一致：网关按
- * /api/nt/ws 精确匹配升级请求并原样携带路径转发，本端点即该路径的最终处理者；uid 为
- * 网关注入的 canonical uuid（与 RequestContext 同源），会话表以 uid 为键、
- * CopyOnWriteArraySet 支持同用户多端并发连接，断线（OnClose/OnError）自动注销防会话泄漏。
+ * 内嵌 Tomcat ServerContainer，连接时按网关采信身份注册会话并按 NotifyService 推送
+ * 当前未读数（{"type":"unread_count","count":N}），已读动作后经 NotifyService 的 sendToUser
+ * 做增量推送。
+ *
+ * 路径与网关的 WebSocket 判定一致，网关按 /api/nt/ws 精确匹配升级请求并保路径转发，
+ * 本端点即该路径的最终处理者；身份取握手头 X-FMS-UserId 与 X-FMS-Role
+ * （NotifyEndpointConfigurator 搬入用户属性），该头由网关注入且被 X-FMS-Signature 覆盖，
+ * 端点不读查询参数，客户端改参数无法订阅他人通知。
+ *
+ * 容器线程没有 HTTP 请求上下文，建立会话时显式 set RequestContext 再查未读数，
+ * 使 rls 与会话变量与 HTTP 路径同语义，查询结束即 clear，防线程复用残留。
+ * 会话表以 uid 为键，CopyOnWriteArraySet 支持同用户多端并发连接，
+ * 断线（OnClose/OnError）自动注销防会话泄漏。
  */
 @ServerEndpoint("/api/nt/ws")
 public class NotifyWebSocketEndpoint {
@@ -53,21 +61,32 @@ public class NotifyWebSocketEndpoint {
     }
 
     /**
-     * 连接建立，按查询参数 uid 注册会话，推送当前未读数，首次握手即回执，供角标初始化。
+     * 连接建立，按网关采信身份注册会话，推送当前未读数，首次握手即回执，供角标初始化。
+     *
+     * 身份缺失或非白名单角色即关闭连接，fail-closed；未读数查询在本线程显式建立
+     * 请求上下文后执行，查询异常只记日志不中断会话，角标另有 REST 通道兜底。
      */
     @OnOpen
     public void onOpen(Session session) {
-        UUID uid = parseUid(session);
-        if (uid == null) {
-            closeQuietly(session, "uid 缺失或非法");
+        UUID uid = sessionUid(session);
+        JwtRole role = sessionRole(session);
+        if (uid == null || role == null) {
+            closeQuietly(session, "身份缺失或非法");
             return;
         }
 
         SESSIONS.computeIfAbsent(uid, k -> new CopyOnWriteArraySet<>()).add(session);
-        // 连接即推送未读数，本端点线程无 RequestContext，身份显式传连接注册 uid，NotifyService 未注入时跳过，避免空指针，正常启动序已注入
-        if (notifyService != null) {
+        if (notifyService == null) {
+            return;                              // 正常启动序已注入，缺失时不推送，避免空指针
+        }
+        RequestContext.set(new RequestContext(uid, role, null, null, null));
+        try {
             sendQuietly(session, "{\"type\":\"unread_count\",\"count\":"
                     + notifyService.unreadCount(uid) + "}");
+        } catch (RuntimeException e) {
+            log.warn("WebSocket 未读数推送失败 uid={}: {}", uid, e.getMessage());
+        } finally {
+            RequestContext.clear();
         }
     }
 
@@ -82,7 +101,7 @@ public class NotifyWebSocketEndpoint {
     /** 连接关闭，注销会话，同用户多端仅移除本会话 */
     @OnClose
     public void onClose(Session session) {
-        UUID uid = parseUid(session);
+        UUID uid = sessionUid(session);
         if (uid != null) {
             Set<Session> set = SESSIONS.get(uid);
             if (set != null) {
@@ -160,21 +179,29 @@ public class NotifyWebSocketEndpoint {
         }
     }
 
-    /** 解析查询参数 uid（非法返回 null，调用方关闭连接） */
-    private static UUID parseUid(Session session) {
+    /** 取会话 uid，握手期由 NotifyEndpointConfigurator 写入用户属性，缺失或非法返回 null */
+    private static UUID sessionUid(Session session) {
         if (session == null) {
             return null;
         }
-        String raw = session.getRequestParameterMap().getOrDefault("uid", List.of())
-                .stream().findFirst().orElse(null);
-        if (raw == null || raw.isBlank()) {
+        Object raw = session.getUserProperties().get(NotifyEndpointConfigurator.PROP_UID);
+        if (!(raw instanceof String text) || text.isBlank()) {
             return null;
         }
         try {
-            return UUID.fromString(raw.trim());
+            return UUID.fromString(text.trim());
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /** 取会话角色，握手期由 NotifyEndpointConfigurator 写入用户属性，非白名单角色返回 null */
+    private static JwtRole sessionRole(Session session) {
+        if (session == null) {
+            return null;
+        }
+        Object raw = session.getUserProperties().get(NotifyEndpointConfigurator.PROP_ROLE);
+        return raw instanceof String text ? JwtRole.from(text) : null;
     }
 
     /** 静默发送，成功返回 true，失败记日志并返回 false */
