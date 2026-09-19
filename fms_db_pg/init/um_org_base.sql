@@ -798,7 +798,7 @@ ALTER TABLE um.users ADD COLUMN IF NOT EXISTS mfa_secret_enc  bytea;
 ALTER TABLE um.users ADD COLUMN IF NOT EXISTS id_card_enc     bytea;
 ALTER TABLE um.users ADD COLUMN IF NOT EXISTS id_card_hash    char(64);
 
---auth.is_admin，当前用户（fms.user_id guc）是否挂接系统管理业务角色
+-- auth.is_admin，当前用户（fms.user_id guc）是否挂接系统管理业务角色
 
 SET ROLE fms_admin;
 
@@ -824,7 +824,7 @@ COMMENT ON FUNCTION auth.is_admin()
 REVOKE EXECUTE ON FUNCTION auth.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth.is_admin() TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
---rls 策略，管理员可见/可写全部用户/公司/部门，其余语义不变，fail-closed
+-- rls 策略，管理员可见/可写全部用户/公司/部门，其余语义不变，fail-closed
 
 
 -- um.users，管理员可查/可改他人行，预检 selectById / 列表 / 详情 / 更新回读
@@ -968,7 +968,7 @@ GRANT EXECUTE ON FUNCTION auth.fn_soft_delete_v(text, text, uuid, int) TO fms_op
 COMMENT ON FUNCTION auth.fn_soft_delete_v(text, text, uuid, int)
     IS '版本化软删除出口（SECURITY DEFINER）：核销明细撤销专用，乐观锁 version 条件后置 deleted_at=now()';
 
---auth.fn_soft_delete（保持属主 postgres，以连接用户 postgres 重建，勿 SET ROLE），
+-- auth.fn_soft_delete（保持属主 postgres，以连接用户 postgres 重建，勿 SET ROLE），
 
 --    白名单含 um.roles/um.role_perm，数据范围放宽 is_admin
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete(p_schema text, p_table text, p_id uuid)

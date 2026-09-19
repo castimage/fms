@@ -506,12 +506,12 @@ GRANT EXECUTE ON FUNCTION auth.has_permission(text) TO fms_app, fms_operator, fm
 GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
 -- operator 权限面（职责角色 accountant/approver/cashier），
---补授 wf.* 权限点，wf.fn_complete_task 的 require_permission
+-- 补授 wf.* 权限点，wf.fn_complete_task 的 require_permission
 
 --    ('wf.instance.approve'/'wf.instance.reject') 闸口放行，期望矩阵，WF 任务
 --    approve/reject/transfer = operator 业务操作
 
---闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
+-- 闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
 
 -- auth.assign_role / auth.revoke_role，admin.user.grant 闸口，防自助分配/自升
 -- auth.upsert_role，admin.role.create 闸口，角色创建/更新
@@ -525,7 +525,7 @@ GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator
 
 SET ROLE fms_admin;
 
---operator 业务角色补授 WF 权限点（fms_admin_role 已有全量，此处仅补职责角色）
+-- operator 业务角色补授 WF 权限点（fms_admin_role 已有全量，此处仅补职责角色）
 
 INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
@@ -539,7 +539,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
    AND p.deleted_at IS NULL AND p.is_enabled
 ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
---闸口收敛（sql 侧纵深防御）
+-- 闸口收敛（sql 侧纵深防御）
 
 
 -- 2.1 auth.assign_role，仅持 admin.user.grant 者可分配角色，防自助分配/自升

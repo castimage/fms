@@ -6,12 +6,12 @@
 --   仅透支告警，admin 可经系统参数页调高。
 
 -- 形态，SECURITY DEFINER 函数 rpt.fn_dashboard_alerts(p_company_id)， 函数内
---校验 auth.can_access_org，越权公司返回 '[]'，与看板"companyId 仅 ui 提示、
+-- 校验 auth.can_access_org，越权公司返回 '[]'，与看板"companyId 仅 ui 提示、
 
 --   越权返回空集"语义一致，不泄露存在性，
---读 um.params 阈值，职责角色无 um.params 表级权限，故必须经 definer 函数，
+-- 读 um.params 阈值，职责角色无 um.params 表级权限，故必须经 definer 函数，
 
---扫描 budget.budget_plans×rpt.budget_actual，执行率≥阈值，ratio 降序 topN，
+-- 扫描 budget.budget_plans×rpt.budget_actual，执行率≥阈值，ratio 降序 topN，
 
 --      与 cash.bank_accounts×cash.transactions，净额<安全线，余额升序 topN，
 --      bank_accounts 密文列不向只读角色授权，亦必须经 definer，N 读 um.params
@@ -26,7 +26,7 @@
 
 SET ROLE fms_admin;
 
---看板-异常告警聚合函数（SECURITY DEFINER，内部读 um.params 阈值 + 访问 bank_accounts 密文表）
+-- 看板-异常告警聚合函数（SECURITY DEFINER，内部读 um.params 阈值 + 访问 bank_accounts 密文表）
 
 CREATE OR REPLACE FUNCTION rpt.fn_dashboard_alerts(p_company_id uuid)
 RETURNS jsonb
@@ -146,7 +146,7 @@ REVOKE EXECUTE ON FUNCTION rpt.fn_dashboard_alerts(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION rpt.fn_dashboard_alerts(uuid)
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 
---银行账户余额安全线参数种子，幂等，0 = 仅透支告警，admin 可经系统参数调高
+-- 银行账户余额安全线参数种子，幂等，0 = 仅透支告警，admin 可经系统参数调高
 
 INSERT INTO um.params (code, value, updated_by)
 VALUES ('cash.bank.safety.line', '0'::jsonb, '00000000-0000-7000-0000-000000000001')

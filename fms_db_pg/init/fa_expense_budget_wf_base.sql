@@ -1473,7 +1473,7 @@ END $$;
 -- 重复数据，与 gl.vouchers uk_voucher_idem / cash.transactions uk_trx_idem 同族
 -- 模式）。软删行不占键位，删除后可重建同键位。
 
---调整单幂等键列 + 部分唯一索引（同 body 重复提交去重）
+-- 调整单幂等键列 + 部分唯一索引（同 body 重复提交去重）
 
 ALTER TABLE budget.budget_adjustments ADD COLUMN IF NOT EXISTS idem_key varchar(64);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_adjustment_idem ON budget.budget_adjustments
@@ -1488,10 +1488,10 @@ SELECT 'FIX_BUDGET_ADJ_IDEM' AS k,
          LIKE '%deleted_at IS NULL%' AS idem_partial;
 
 -- wf 流程实例发起链路（POST /api/wf/instances 后端支撑），
---uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
+-- uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
 
 --      （发起幂等 + 并发双保险，冲突 23505 映射 40900），
---wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
+-- wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
 
 --      首个 APPROVE 节点任务集（处理人解析与策略展开见 fn_activate_node）。
 --      SECURITY DEFINER 以属主（fms_admin，本文件 SET ROLE）身份执行，规避
@@ -1499,13 +1499,13 @@ SELECT 'FIX_BUDGET_ADJ_IDEM' AS k,
 -- 幂等，CREATE OR REPLACE FUNCTION + CREATE UNIQUE INDEX IF NOT EXISTS + GRANT
 -- 重复执行无害。
 
---同一业务单据仅允许一个未删除审批实例
+-- 同一业务单据仅允许一个未删除审批实例
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_wf_inst_business
     ON wf.instances (business_type, business_id)
     WHERE deleted_at IS NULL;
 
---流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
+-- 流程发起函数，Java 侧已完成可见性/状态/编排/重复预检，本函数为原子写入 + 首节点激活。
 
 -- 读 ACTIVE 定义 node_json，取首个 APPROVE 节点为当前节点，任务集经 fn_activate_node
 -- 依节点策略生成（单审 1 票，会签/或签多票），处理人解析见 fn_activate_node。
@@ -1567,7 +1567,7 @@ $$;
 COMMENT ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     IS '流程发起：创建 RUNNING 实例并激活首个审批节点任务集，节点策略见 fn_activate_node';
 
---授权，运行时连接角色经 SET ROLE fms_operator 调用
+-- 授权，运行时连接角色经 SET ROLE fms_operator 调用
 
 GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     TO fms_operator;

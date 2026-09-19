@@ -148,10 +148,10 @@ impl AccessLogger {
     }
 
     /// 请求路径提交入口，非阻塞，绝不阻塞/失败请求路径，
-    ///确定性采样(rate == 1全量，否则`AtomicU64`序号自增，seq % rate == 0才记录，
+    /// 确定性采样(rate == 1全量，否则`AtomicU64`序号自增，seq % rate == 0才记录，
 
     ///    非随机数，审计可复现)，
-    ///有界通道`try_send`，满则丢弃本条目并计数`dropped_logs`，WARN每秒至多一次
+    /// 有界通道`try_send`，满则丢弃本条目并计数`dropped_logs`，WARN每秒至多一次
 
     ///    防刷屏，通道已关闭，进程退出则静默丢弃。
     pub fn submit(&self, entry: AccessLogEntry) {

@@ -13,7 +13,7 @@ SET ROLE fms_admin;
 
 CREATE SCHEMA IF NOT EXISTS docs AUTHORIZATION fms_admin;
 
---docs.documents 附件元数据表
+-- docs.documents 附件元数据表
 
 CREATE TABLE IF NOT EXISTS docs.documents (
     id            uuid         PRIMARY KEY DEFAULT uuidv7(),
@@ -40,7 +40,7 @@ COMMENT ON COLUMN docs.documents.sha256 IS '文件 SHA-256（64 位 hex，上传
 CREATE INDEX IF NOT EXISTS idx_docs_doc_biz     ON docs.documents (business_type, business_id);
 CREATE INDEX IF NOT EXISTS idx_docs_doc_company ON docs.documents (company_id, created_at);
 
---rls，公司范围，与 expense.reimbursement_lines 同族，company 经业务对象推导，客户端不可自报
+-- rls，公司范围，与 expense.reimbursement_lines 同族，company 经业务对象推导，客户端不可自报
 
 ALTER TABLE docs.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE docs.documents FORCE ROW LEVEL SECURITY;
@@ -56,14 +56,14 @@ CREATE POLICY docs_documents_update ON docs.documents FOR UPDATE
     WITH CHECK (auth.can_access_org(company_id));
 -- 无 DELETE 策略，软删（deleted_at=now）为唯一删除通道，物理删除仅经管理通道，与 fa/expense 同族约定
 
---授权（与 grants_base 中央闸同构，operator W / viewer·auditor·report R，fms_app 沙箱不授 USAGE）
+-- 授权（与 grants_base 中央闸同构，operator W / viewer·auditor·report R，fms_app 沙箱不授 USAGE）
 
 GRANT USAGE ON SCHEMA docs TO fms_operator, fms_viewer, fms_auditor, fms_report;
 REVOKE USAGE ON SCHEMA docs FROM fms_app;   -- 沙箱最小化（同 fa/expense/budget/wf/rpt）
 GRANT SELECT, INSERT, UPDATE ON docs.documents TO fms_operator;
 GRANT SELECT ON docs.documents TO fms_viewer, fms_auditor, fms_report;
 
---文件末尾自查（配合 psql -v ON_ERROR_STOP=1）
+-- 文件末尾自查（配合 psql -v ON_ERROR_STOP=1）
 
 SELECT 'docs_base' AS file_name,
        (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace

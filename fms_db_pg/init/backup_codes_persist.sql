@@ -1,5 +1,5 @@
 -- FMS 2fa 备用恢复码持久化（执行库，fms），
---um.backup_codes（备用码盲索引落盘，code_hash = hmac(明文, blind_key)，库内不存明文，
+-- um.backup_codes（备用码盲索引落盘，code_hash = hmac(明文, blind_key)，库内不存明文，
 
 --    与 um.api_keys 同模式），② auth.issue_backup_codes，签发，先软删旧未用码再批量插新行，
 --    返回落库数，③ auth.consume_backup_code，核销，hmac 等值 + 条件更新 used_at 原子消费，

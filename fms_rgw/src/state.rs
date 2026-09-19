@@ -126,7 +126,7 @@ impl TokenDenyList {
     }
 
     /// 是否已注销，未过期，进程内命中即拒绝，未命中且配置共享远端则查 Redis
-    ///他实例登出的token全实例生效，过期条目顺带惰性清理
+    /// 他实例登出的token全实例生效，过期条目顺带惰性清理
     pub async fn is_revoked(&self, token: &str) -> bool {
         {
             let mut m = self.inner.lock().await;

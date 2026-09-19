@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// 限流错误，超限并给出`Retry-After`秒数，最少1s，`Backend` = 后端故障
-///redis不可达，fail-closed按500拒绝，区别于429
+/// redis不可达，fail-closed按500拒绝，区别于429
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateLimitError {
     Exceeded { retry_after_secs: u64 },
@@ -204,7 +204,7 @@ fn ceil_secs(d: Duration) -> u64 {
 }
 
 /// 限流后端抽象，memory，默认，零外部依赖，单网关实例精确计数| redis
-///多网关实例共享计数，同一key跨实例原子INCR，任一实例超限即全局限流。
+/// 多网关实例共享计数，同一key跨实例原子INCR，任一实例超限即全局限流。
 /// check为同步签名，中间件热路径，Redis后端经blocking连接(本地毫秒级，
 /// 多实例收益大于单点阻塞成本)。
 pub trait RateLimitBackend: Send + Sync {

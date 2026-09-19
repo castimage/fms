@@ -6,10 +6,10 @@
 -- 收敛，① 新角色 fms_public（NOLOGIN），公开读口（/api/public/**）匿名请求经
 --        SandboxSessionInterceptor 注入，仅 EXECUTE fn_get_param_value / fn_public_document_meta
 --        + um/docs/log schema USAGE，函数解析必需，无任何表权限，
---fms_app 撤销 4 个业务/公开类函数 EXECUTE（docs.fn_public_document_meta /
+-- fms_app 撤销 4 个业务/公开类函数 EXECUTE（docs.fn_public_document_meta /
 
 --        um.fn_get_param_value / log.fn_send_access_batch / log.fn_apply_access_log），
---内部投递（/internal/log-batch，X-FMS-Int-Token 保护）匿名请求注入 fms_operator
+-- 内部投递（/internal/log-batch，X-FMS-Int-Token 保护）匿名请求注入 fms_operator
 
 --        （log.* 投递函数 EXECUTE 授 fms_operator）。
 

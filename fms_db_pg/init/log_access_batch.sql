@@ -66,10 +66,10 @@ REVOKE ALL ON FUNCTION log.fn_apply_access_log(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log.fn_apply_access_log(jsonb) TO fms_app;
 
 -- 批量投递，双路径，p_items 为 jsonb 数组（元素 = q_log_access 约定消息体）
---pgmq 可用（pgmq.send 函数存在性探测）则逐条 pgmq.send（第三参 delay_sec=0 即时投递），
+-- pgmq 可用（pgmq.send 函数存在性探测）则逐条 pgmq.send（第三参 delay_sec=0 即时投递），
 
 --      单条失败 NOTICE 不阻断整批，由 queues_cron.sql 消费链落库，本地库形态，
---pgmq 不可用则逐条经 log.fn_apply_access_log 直落 log.access_logs 兜底，同一审计
+-- pgmq 不可用则逐条经 log.fn_apply_access_log 直落 log.access_logs 兜底，同一审计
 
 --      目标，跳过队列中转，两形态最终数据均落审计表。
 CREATE OR REPLACE FUNCTION log.fn_send_access_batch(p_items jsonb)

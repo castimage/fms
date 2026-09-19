@@ -359,13 +359,13 @@ const X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host")
 const X_REAL_IP: HeaderName = HeaderName::from_static("x-real-ip");
 
 /// 处理函数(`/api`/{*rest}，body来自extensions.`BufferedBody`)，
-///`circuit.is_ready` 不通过则 503 + `Retry-After`
+/// `circuit.is_ready` 不通过则 503 + `Retry-After`
 
-///`upstream.forward` 成功则 record 置 true，失败则 record 置 false 并 503
+/// `upstream.forward` 成功则 record 置 true，失败则 record 置 false 并 503
 
-///响应头透传，剥离hop-by-hop，响应体`Body::from_stream`流式透传，不缓冲
+/// 响应头透传，剥离hop-by-hop，响应体`Body::from_stream`流式透传，不缓冲
 
-///防御性，上游响应头声明超限则拒绝，非2xx透传原状态码
+/// 防御性，上游响应头声明超限则拒绝，非2xx透传原状态码
 
 pub async fn proxy_handler(
     State(state): State<Arc<AppState>>,

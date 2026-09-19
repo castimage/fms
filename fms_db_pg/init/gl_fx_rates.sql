@@ -1,15 +1,15 @@
 -- FMS 财务系统（gl 域补充实现，执行库，fms），
---gl.fx_rates 期末汇率表（rls 公司范围 + 职责角色授权 + updated_at 触发器 + 审计触发器挂载）
+-- gl.fx_rates 期末汇率表（rls 公司范围 + 职责角色授权 + updated_at 触发器 + 审计触发器挂载）
 
---gl.fn_fx_adjustment 期末调汇，外币科目期末余额 × 期末汇率 − 按 1:1 计价的账面本币
+-- gl.fn_fx_adjustment 期末调汇，外币科目期末余额 × 期末汇率 − 按 1:1 计价的账面本币
 
 --    （记账汇率不可得，voucher_lines 仅存 currency 无 rate，折本币差额按「原币余额 ×（期末汇率−1）」简化，设计决策见下文），生成 DRAFT 调汇凭证草稿
---gl.fn_cron_voucher_number_check，断号发现写 audit.record（voucher_gap），缺口可追溯
+-- gl.fn_cron_voucher_number_check，断号发现写 audit.record（voucher_gap），缺口可追溯
 
---fa.fn_run_depreciation，凭证生成补 created_by/company_id（NOT NULL 约束）、资产累加累计折旧、
+-- fa.fn_run_depreciation，凭证生成补 created_by/company_id（NOT NULL 约束）、资产累加累计折旧、
 
 --    批次回填 voucher_id，与 Java 侧 FaServiceImpl 同口径
---um.params 种子，fx.gain.account / fx.loss.account（存科目 code，沿用 fa.depr.*.account 约定，um.params 全局无 company_id，存 code 而非 id 才能跨公司生效），
+-- um.params 种子，fx.gain.account / fx.loss.account（存科目 code，沿用 fa.depr.*.account 约定，um.params 全局无 company_id，存 code 而非 id 才能跨公司生效），
 
 --    um.permissions 种子，gl.period.close / gl.period.reopen / gl.period.fx_adjustment（函数体内已引用，operator 会话调用须经 require_permission）
 
@@ -17,7 +17,7 @@
 
 SET ROLE fms_admin;
 
---gl.fx_rates 期末汇率表
+-- gl.fx_rates 期末汇率表
 
 
 -- 列语义，company_id 公司范围（rls can_access_org 收敛），currency CHAR，3 ISO 币种，
@@ -89,7 +89,7 @@ CREATE TRIGGER trg_fx_rates_audit
     AFTER INSERT OR UPDATE OR DELETE ON gl.fx_rates
     FOR EACH ROW EXECUTE FUNCTION audit.fn_audit_log();
 
---um.params / um.permissions 种子
+-- um.params / um.permissions 种子
 
 -- 调汇损益科目映射参数（存科目 code，um.params 全局唯一无 company_id 列，存 code 运行时按公司解析，
 -- 与 fa.depr.expense.account 同约定，缺省 6603 财务费用，种子科目无独立汇兑损益码，admin 可改）
@@ -123,7 +123,7 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
  WHERE r.code IN ('fms_admin_role','accountant')
 ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
---gl.fn_fx_adjustment 期末调汇实现
+-- gl.fn_fx_adjustment 期末调汇实现
 
 
 -- 调汇算法与账务简化设计决策，
@@ -387,7 +387,7 @@ COMMENT ON FUNCTION gl.fn_fx_adjustment(uuid, text, text)
 REVOKE ALL ON FUNCTION gl.fn_fx_adjustment(uuid, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_fx_adjustment(uuid, text, text) TO fms_operator;
 
---gl.fn_cron_voucher_number_check 断号审计告警
+-- gl.fn_cron_voucher_number_check 断号审计告警
 
 -- 断号发现写 audit.record（action='voucher_gap'，new_values = {gap_count,
 -- gaps:[{company_id, period, gap_from, gap_to, gap_count}]}），前端 gapAlert 经审计/断号
@@ -438,7 +438,7 @@ COMMENT ON FUNCTION gl.fn_cron_voucher_number_check()
 REVOKE ALL ON FUNCTION gl.fn_cron_voucher_number_check() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gl.fn_cron_voucher_number_check() TO fms_operator;
 
---折旧过账双路径统一（fa.fn_run_depreciation 重建）
+-- 折旧过账双路径统一（fa.fn_run_depreciation 重建）
 
 -- pg 与 Java（FaServiceImpl）双路径同口径，
 --   * created_by 落 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 无 guc 用户，
@@ -612,7 +612,7 @@ COMMENT ON FUNCTION fa.fn_run_depreciation(uuid,text)
 REVOKE ALL ON FUNCTION fa.fn_run_depreciation(uuid, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION fa.fn_run_depreciation(uuid, text) TO fms_operator;
 
---b gl 侧配套小函数（Java FaServiceImpl 凭证生成共用，避免 Java 直读 um.params，无表级授权
+-- b gl 侧配套小函数（Java FaServiceImpl 凭证生成共用，避免 Java 直读 um.params，无表级授权
 
 -- 与科目解析重复实现，科目映射参数单一来源仍在 pg），
 --   * gl.fn_depr_accounts(p_company_id)，按 um.params fa.depr.*.account 解析该公司折旧凭证

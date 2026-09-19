@@ -745,7 +745,7 @@ GRANT EXECUTE ON FUNCTION auth.get_user_email(uuid)
 
 RESET ROLE;
 
---闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
+-- 闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
 
 --    update_user 白名单含 display_name
 

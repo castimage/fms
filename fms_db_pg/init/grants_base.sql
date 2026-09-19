@@ -141,34 +141,34 @@ BEGIN
 END $$;
 
 -- audit/log 管理员授权与 rls（admin 会话 = fms_operator + auth.is_admin 判定），
---audit schema/表/链校验函数 GRANT 补 fms_operator，admin 会话所需
+-- audit schema/表/链校验函数 GRANT 补 fms_operator，admin 会话所需
 
---log schema USAGE + app_logs/task_runs SELECT 补 fms_operator，admin 模块专属
+-- log schema USAGE + app_logs/task_runs SELECT 补 fms_operator，admin 模块专属
 
---audit.audit_log rls 策略补 OR auth.is_admin，operator 行级仍拒则 api 层 40300
+-- audit.audit_log rls 策略补 OR auth.is_admin，operator 行级仍拒则 api 层 40300
 
---log.app_logs rls 策略收紧为 auditor/admin，仅审计/管理员可读系统应用日志
+-- log.app_logs rls 策略收紧为 auditor/admin，仅审计/管理员可读系统应用日志
 
---assign_role/revoke_role 守卫，非本人须 is_admin 放行
+-- assign_role/revoke_role 守卫，非本人须 is_admin 放行
 
 
 -- 配套后端，AuditController 三端点加 RequestContext.requireAuditRole（auditor/admin），
 -- 保证 operator 等非审计角色在 api 层即 40300。
 SET ROLE fms_admin;
 
---audit schema/表/函数授权补 fms_operator（admin 会话 = fms_operator，幂等）
+-- audit schema/表/函数授权补 fms_operator（admin 会话 = fms_operator，幂等）
 
 GRANT USAGE ON SCHEMA audit TO fms_operator;
 GRANT SELECT ON audit.audit_log TO fms_operator;             -- 分区继承（partman 已 inherit_privileges）
 GRANT EXECUTE ON FUNCTION audit.audit_log_chain_check() TO fms_operator;
 GRANT EXECUTE ON FUNCTION audit.chain_check(date) TO fms_operator;
 
---log schema USAGE + 表 SELECT 补 fms_operator（/api/admin/app-logs、/api/admin/task-runs）
+-- log schema USAGE + 表 SELECT 补 fms_operator（/api/admin/app-logs、/api/admin/task-runs）
 
 GRANT USAGE ON SCHEMA log TO fms_operator;
 GRANT SELECT ON log.app_logs, log.task_runs TO fms_operator;
 
---audit.audit_log rls，补 is_admin 分支（矩阵 audit:read:all = auditor/admin）
+-- audit.audit_log rls，补 is_admin 分支（矩阵 audit:read:all = auditor/admin）
 
 DROP POLICY IF EXISTS audit_log_select ON audit.audit_log;
 CREATE POLICY audit_log_select ON audit.audit_log
@@ -176,7 +176,7 @@ CREATE POLICY audit_log_select ON audit.audit_log
                       OR current_user = 'fms_admin'
                       OR auth.is_admin());
 
---log.app_logs rls，auditor/admin 只读
+-- log.app_logs rls，auditor/admin 只读
 
 DROP POLICY IF EXISTS log_app_logs_select ON log.app_logs;
 CREATE POLICY log_app_logs_select ON log.app_logs
@@ -184,7 +184,7 @@ CREATE POLICY log_app_logs_select ON log.app_logs
                       OR current_user = 'fms_admin'
                       OR auth.is_admin());
 
---auth.assign_role / auth.revoke_role 守卫，非本人须 is_admin 放行，匿名维护会话放行
+-- auth.assign_role / auth.revoke_role 守卫，非本人须 is_admin 放行，匿名维护会话放行
 
 CREATE OR REPLACE FUNCTION auth.assign_role(p_user_id uuid, p_role_code text)
 RETURNS void
