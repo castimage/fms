@@ -225,8 +225,9 @@ services:
     # 严禁挂载 fms_backend/config 目录！config/application.yaml 会把
     # server.port 覆盖为 8083 并注入明文 DB 密码，破坏 8081/网关约定。
     healthcheck:
-      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/internal/health"]
+      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测，
+      # 显式 UA 标识自检来源，默认 curl 版本号 UA 无法与外部探测区分
+      test: ["CMD-SHELL", "curl -fsS -A fms-backend-healthcheck http://127.0.0.1:8081/internal/health"]
       interval: 5s
       timeout: 10s
       retries: 5

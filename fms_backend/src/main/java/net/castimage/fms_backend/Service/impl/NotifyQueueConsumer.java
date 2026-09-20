@@ -5,6 +5,9 @@ import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
 import net.castimage.fms_backend.Mapper.NotificationMapper;
 import net.castimage.fms_backend.Service.NotifyService;
+import net.castimage.fms_backend.Utils.JwtRole;
+import net.castimage.fms_backend.Utils.RequestContext;
+import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.config.FmsProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,26 +64,33 @@ public class NotifyQueueConsumer {
     /** 轮询两条队列（固定延迟：上一轮完成后再等 interval，防堆叠） */
     @Scheduled(fixedDelayString = "${fms.pgmq.notify-consumer-interval-ms:30000}")
     public void consume() {
-        if (!fmsProperties.getPgmq().isNotifyConsumerEnabled()) {
-            return; // 显式硬关停（fms.pgmq.notify-consumer-enabled=false）：消息留在队列（vt 过期后仍可被重拾），零副作用
-        }
-        if (!ensurePgmqAvailable()) {
-            return; // 部署形态差异自动降级：pg_extension 无 pgmq 时整体停用（已限频 WARN 一次，周期重探测）
-        }
+        // 调度线程无会话身份也无端点标记，声明后台语义供拦截器复位连接会话态回到空壳角色，
+        // 不复位则复用连接上残留的职责角色对通知与队列函数无 EXECUTE，消费静默降级
+        SandboxRoleHint.set(SandboxRoleHint.Hint.BACKGROUND_APP);
         try {
-            consumeUserQueue();
-            consumeBudgetWarningQueue();
-        } catch (RuntimeException e) {
-            // 兜底：探测通过后仍可能瞬时失败（扩展被移除/连接异常）——
-            // 与 log_access_batch 双路径降级同策略，WARN 限频防每轮刷屏
-            // （通知消费是可恢复的尽力而为，消息留队待扩展补齐后自动重拾）
-            long now = System.currentTimeMillis();
-            if (now - lastWarnMillis >= WARN_THROTTLE_MS) {
-                log.warn("通知队列消费失败（将限频重试）: {}", e.getMessage());
-                lastWarnMillis = now;
+            if (!fmsProperties.getPgmq().isNotifyConsumerEnabled()) {
+                return; // 显式硬关停（fms.pgmq.notify-consumer-enabled=false）：消息留在队列（vt 过期后仍可被重拾），零副作用
             }
-            // 消费侧报 schema 缺失说明可用性缓存已失效，下一轮强制重探测
-            pgmqProbed = false;
+            if (!ensurePgmqAvailable()) {
+                return; // 部署形态差异自动降级：pg_extension 无 pgmq 时整体停用（已限频 WARN 一次，周期重探测）
+            }
+            try {
+                consumeUserQueue();
+                consumeBudgetWarningQueue();
+            } catch (RuntimeException e) {
+                // 兜底：探测通过后仍可能瞬时失败（扩展被移除/连接异常）——
+                // 与 log_access_batch 双路径降级同策略，WARN 限频防每轮刷屏
+                // （通知消费是可恢复的尽力而为，消息留队待扩展补齐后自动重拾）
+                long now = System.currentTimeMillis();
+                if (now - lastWarnMillis >= WARN_THROTTLE_MS) {
+                    log.warn("通知队列消费失败（将限频重试）: {}", e.getMessage());
+                    lastWarnMillis = now;
+                }
+                // 消费侧报 schema 缺失说明可用性缓存已失效，下一轮强制重探测
+                pgmqProbed = false;
+            }
+        } finally {
+            SandboxRoleHint.clear();
         }
     }
 
@@ -166,10 +176,17 @@ public class NotifyQueueConsumer {
                 notificationMapper.insertNotification(assigneeId, title, content, "SYSTEM",
                         "wf_task", taskId);
                 notificationMapper.archiveMessage("q_notify_task", msgId);
-                // 成功后 WS 推送该用户最新未读数（角标实时刷新，与已读动作同款载荷）
-                NotifyWebSocketEndpoint.sendToUser(assigneeId,
-                        "{\"type\":\"unread_count\",\"count\":"
-                                + notifyService.unreadCount(assigneeId) + "}");
+                // 成功后 WS 推送该用户最新未读数（角标实时刷新，与已读动作同款载荷），
+                // 未读数查表受 rls 自读策略约束，须以该用户身份注入会话才可计数，
+                // 故显式置身份，生命周期仅覆盖本次推送，查完即清回后台无身份语义
+                RequestContext.set(new RequestContext(assigneeId, JwtRole.VIEWER, null, null, null));
+                try {
+                    NotifyWebSocketEndpoint.sendToUser(assigneeId,
+                            "{\"type\":\"unread_count\",\"count\":"
+                                    + notifyService.unreadCount(assigneeId) + "}");
+                } finally {
+                    RequestContext.clear();
+                }
             } catch (RuntimeException e) {
                 handleFailure("q_notify_task", msgId, readCt, e);
             }

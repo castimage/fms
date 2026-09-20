@@ -10,7 +10,7 @@ import java.util.UUID;
 /** auth.* / org.* pg 函数调用 Mapper（SECURITY DEFINER 闸口统一出口，Wrapper 无函数调用能力故手写），jwt 密钥传 NULL 由库内 sec.app_secrets 权威 */
 public interface AuthFunctionMapper {
 
-    /** jwt 签发（HS256），payload 含 sub/role/exp，密钥传 NULL 走 sec.app_secrets.jwt.secret（与网关 RGW_JWT_SECRET 同源，避免配置漂移） */
+    /** jwt 签发（HS256），payload 含 sub/role/exp，密钥传 NULL 走 sec.app_secrets.jwt.secret（与网关 FMS_RGW_JWT_SECRET 同源，避免配置漂移） */
     @Select("SELECT auth.jwt_sign(#{payload}::jsonb, NULL)")
     String jwtSign(@Param("payload") String payload);
 

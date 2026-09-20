@@ -31,9 +31,10 @@ import java.util.Map;
  * 消费落 log.access_logs。
  *
  * 安全模型（fail-closed），internal-token 未配置，默认空=端点禁用或头不匹配一律 40300，
- * 请求无身份采信，db 连接保持 fms_app 空壳，投递经 log.fn_send_access_batch SECURITY
- * DEFINER 函数，属主 fms_admin 单次调用完成，函数内逐条 pgmq.send 容错，单条失败 NOTICE
- * 继续，返回成功条数，整批失败，如 db 不可达记录 WARN 后 accepted=0，不阻断网关请求路径。
+ * 请求无身份采信，投递前置 SandboxRoleHint.Hint.INTERNAL_OPERATOR，拦截器复位会话态后
+ * SET ROLE fms_operator，投递经 log.fn_send_access_batch SECURITY DEFINER 函数，属主
+ * fms_admin 单次调用完成，函数内逐条 pgmq.send 容错，单条失败 NOTICE 继续，返回成功条数，
+ * 整批失败，如 db 不可达记录 WARN 后 accepted=0，不阻断网关请求路径。
  *
  * payload 映射，网关 9 字段转 q_log_access 约定 {method,path,status,latency,ip,ts}
  * + 扩展 req_id/user/ua，消费链（fn_consume_log_queues）固定读取 user_id/trace_id 键，

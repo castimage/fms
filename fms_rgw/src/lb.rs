@@ -384,6 +384,7 @@ impl UpstreamPool {
 
     /// 主动健康探测(`circuit::health_probe_loop`调用)，遍历池内全部实例，每实例
     /// GET {`base_url`}{`health_path`}(超时 `health_timeout`，直连不经安全链)，
+    /// 请求带 UA `fms-rgw-upstream-probe`，上游日志据此区分探测与真实流量；
     /// 结果成功则置健康、失败则置不健康，故障实例持续被探测，恢复后自动重新
     /// 纳入选择集。返回探测后健康实例数(供全局熔断 `record_probe` 判断)
     pub async fn probe_all(&self, health_path: &str, timeout: Duration) -> usize {
@@ -394,6 +395,7 @@ impl UpstreamPool {
             let req = match Request::builder()
                 .method(Method::GET)
                 .uri(url.as_str())
+                .header(axum::http::header::USER_AGENT, "fms-rgw-upstream-probe")
                 .body(Body::empty())
             {
                 Ok(r) => r,

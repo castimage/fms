@@ -47,9 +47,13 @@ cors:
   # cors 白名单必须非空，空列表会被网关 run 校验拒绝 exit，1，
   # 见 lib.rs:47-68，该字段无环境变量覆盖点，只能走本配置文件。
   # 生产部署在此追加正式域名，如 https://fms.example.com。
+  # WebSocket 升级另按本白名单校验 Origin（CSWSH 防护，无 Origin 的非浏览器客户端放行），
+  # 故浏览器实际访问用的来源必须在此列全，缺一项则该来源的实时通道被 403 拒绝。
   allowed_origins:
     - "http://localhost:5173"
     - "https://fms.local"
+    - "https://192.168.1.123:8443"
+    - "https://lab1.castimage.net:18443"
 
 static:
   dir: "/app/static"          # 方案 A，fms-web-build 产物卷 fms-static 只读挂载

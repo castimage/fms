@@ -142,8 +142,9 @@ services:
     logging: *default-logging
 
   # fms-pgbouncer，PgBouncer 1.24，transaction 连接池，后端 DB 访问的唯一入口
-  # fms-backend 不直连 fms-db:5432，一律经 6432 的 transaction 池。每事务归还前执行
-  # DISCARD ALL 复位会话，使 SET ROLE、GUC 与临时表不跨事务残留；同时把 Hikari 连接数
+  # fms-backend 不直连 fms-db:5432，一律经 6432 的 transaction 池。逐事务归还前执行
+  # DISCARD ALL 复位会话，使 SET ROLE、GUC 与临时表不跨事务残留，该重置依赖
+  # server_reset_query_always=1，此值默认 0 时事务池不逐事务执行；同时把 Hikari 连接数
   # 上限与 PG 后端连接数解耦，为集群形态的双后端实例铺路。entrypoint 以 .env 密码生成
   # userlist.txt，含 fms_app 与 postgres 两用户。DB_HOST 默认取 fms-db 即单机服务名，
   # 多机版由 FMS_DB_HOST 覆盖为 db 主机 LAN IP。
@@ -196,10 +197,10 @@ services:
     # 单机版不写 ports 段，后端仅网关可达，杜绝绕过签名校验的直连
     environment:
       # 数据源经 fms-pgbouncer:6432（transaction 池）而非直连 fms-db:5432，
-      # PgBouncer 每事务 DISCARD ALL 复位会话（SET ROLE/GUC/临时表不跨事务
-      # 残留，与后端 Hikari 初始化 SQL "RESET ALL" 双重保险），并把 Hikari
-      # 连接数上限从 PG 后端连接数解耦，集群形态（backend×2）与单机共用
-      # 同一连接语义，pgbouncer 懒连接，无需等主库
+      # PgBouncer 逐事务 DISCARD ALL 复位会话（SET ROLE/GUC/临时表不跨事务
+      # 残留，与后端 Hikari 初始化 SQL "RESET ALL" 双重保险，逐事务重置依赖
+      # server_reset_query_always=1），并把 Hikari 连接数上限从 PG 后端连接数
+      # 解耦，集群形态（backend×2）与单机共用同一连接语义，pgbouncer 懒连接，无需等主库
       # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句
       #（PG JDBC 默认 prepareThreshold=5 会触发 PREPARE 协议报错），禁用后
       # 客户端侧模拟预编译，功能等价仅少一次服务端缓存（FMS 规模无感）
@@ -248,8 +249,9 @@ services:
     # 严禁挂载 fms_backend/config 目录！config/application.yaml 会把
     # server.port 覆盖为 8083 并注入明文 DB 密码，破坏 8081/网关约定。
     healthcheck:
-      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/internal/health"]
+      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测，
+      # 显式 UA 标识自检来源，默认 curl 版本号 UA 无法与外部探测区分
+      test: ["CMD-SHELL", "curl -fsS -A fms-backend-healthcheck http://127.0.0.1:8081/internal/health"]
       interval: 5s
       timeout: 10s
       retries: 5

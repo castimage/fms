@@ -19,9 +19,13 @@ public interface AlertMapper {
     @Select("SELECT notify.fn_alert_audit_chain()")
     UUID auditChainBrokenAt();
 
-    /** 安全告警站内信发 admin（SECURITY 类型） */
+    /**
+     * 安全告警站内信发 admin（SECURITY 类型），返回类型取 Object 而非 void，
+     * 函数返回名为 void 的列，声明 void 时 MyBatis 按 POJO 构造该类型并报
+     * No constructor found in void matching [java.lang.String]，返回值本身不用
+     */
     @Select("SELECT notify.fn_alert_notify_admin(#{title}, #{content})")
-    void notifyAdmin(@Param("title") String title, @Param("content") String content);
+    Object notifyAdmin(@Param("title") String title, @Param("content") String content);
 
     /** 主从复制状态聚合（SECURITY DEFINER，pg_stat_replication 属主可见）：返回 {"replicas":n,"max_lag_ms":n,"degraded":bool} jsonb 文本 */
     @Select("SELECT notify.fn_alert_replica_lag()::text")

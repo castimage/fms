@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Mapper.AlertMapper;
 import net.castimage.fms_backend.Utils.CachePort;
+import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.config.FmsProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,26 +58,33 @@ public class AlertService {
     /** 周期检测，默认 5 分钟，与 cache-cleanup 同周期语义 */
     @Scheduled(fixedDelayString = "${fms.alert.interval-ms:300000}")
     public void checkAlerts() {
-        FmsProperties.Alert cfg = fmsProperties.getAlert();
+        // 调度线程无会话身份也无端点标记，声明后台语义供拦截器复位连接会话态回到空壳角色，
+        // 连接上的会话级角色与 guc 均来自前序请求，不复位则告警函数对残留职责角色无 EXECUTE
+        SandboxRoleHint.set(SandboxRoleHint.Hint.BACKGROUND_APP);
         try {
-            checkLoginFailures(cfg);
-        } catch (Exception e) {
-            log.warn("安全告警-暴力破解检测失败: {}", e.getMessage());
-        }
+            FmsProperties.Alert cfg = fmsProperties.getAlert();
+            try {
+                checkLoginFailures(cfg);
+            } catch (Exception e) {
+                log.warn("安全告警-暴力破解检测失败: {}", e.getMessage());
+            }
 
-        try {
-            checkAuditChain();
-        } catch (Exception e) {
-            log.warn("安全告警-审计链检测失败: {}", e.getMessage());
-        }
+            try {
+                checkAuditChain();
+            } catch (Exception e) {
+                log.warn("安全告警-审计链检测失败: {}", e.getMessage());
+            }
 
-        try {
-            checkReplicaLag(cfg);
-        } catch (Exception e) {
-            log.warn("安全告警-主从复制检测失败: {}", e.getMessage());
-        }
+            try {
+                checkReplicaLag(cfg);
+            } catch (Exception e) {
+                log.warn("安全告警-主从复制检测失败: {}", e.getMessage());
+            }
 
-        checkNonceWatermark(cfg);
+            checkNonceWatermark(cfg);
+        } finally {
+            SandboxRoleHint.clear();
+        }
     }
 
     /** 窗口内同 ip 登录失败聚合，超阈值则发 admin 站内信，30 分钟去重 */

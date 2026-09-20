@@ -50,8 +50,8 @@ x-logging: &default-logging
 # depends_on 不同，见 fms-backend-1/2，此处集中维护避免双份漂移）
 x-backend-env: &backend-env
   # 数据源经 fms-pgbouncer:6432（transaction 池）而非直连主库，
-  # 双实例共享同一连接池语义（DISCARD ALL 复位），pgbouncer 把 Hikari
-  # 连接数上限从 PG 后端连接数解耦
+  # 双实例共享同一连接池语义，逐事务 DISCARD ALL 复位会话，重置依赖
+  # server_reset_query_always=1，pgbouncer 把 Hikari 连接数上限从 PG 后端连接数解耦
   # prepareThreshold=0，PgBouncer transaction 池不支持服务端预编译语句
   #（PG JDBC 默认 prepareThreshold=5 触发 PREPARE 协议报错），禁用后客户端模拟
   SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
@@ -256,8 +256,9 @@ services:
         condition: service_healthy
     # 严禁挂载 fms_backend/config 目录（同 docker-compose.yml 说明）
     healthcheck:
-      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/internal/health"]
+      # /internal/health 经 GatewaySignatureFilter 免签名，可被 compose 探测，
+      # 显式 UA 标识自检来源，默认 curl 版本号 UA 无法与外部探测区分
+      test: ["CMD-SHELL", "curl -fsS -A fms-backend-healthcheck http://127.0.0.1:8081/internal/health"]
       interval: 5s
       timeout: 10s
       retries: 5
