@@ -22,7 +22,11 @@ import java.util.Optional;
  * 与容量推导用，非精确计数）。
  *
  * key 命名空间（redis 键与内存键一一对应，防跨实现漂移）：
- * fms:nonce:、fms:ticket:、fms:recovery:、fms:pending:、fms:totpfail:、fms:blacklist:
+ * fms:nonce:、fms:ticket:、fms:recovery:、fms:pending:、fms:totpfail:、fms:blacklist:、
+ * fms:alert:（安全告警去重标记，同 ip 登录失败/审计链断链/主从复制异常三类，抢占式写入）
+ *
+ * 安全告警去重标记也用 setIfAbsent 抢占：多实例同跑定时告警，抢到标记的实例才发站内信，
+ * 恢复时 delete 标记，故标记须与其他键同样具备原子写入与 TTL 语义。
  *
  * 故障语义（fail-closed，安全系统不降级）：redis 实现任一命令执行失败抛
  * RuntimeException，由调用方按 500 拒绝请求——nonce 去重宁可拒不可放，票据宁可

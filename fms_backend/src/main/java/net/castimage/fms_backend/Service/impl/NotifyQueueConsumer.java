@@ -24,9 +24,11 @@ import java.util.UUID;
  * 通知表数据由此闭环生成。
  *
  * 消费语义（pgmq 消费约定）：pgmq.read 按 vt 可见性超时 + SKIP
- * LOCKED 并发领取（多实例各读各的，互不抢同一条）；成功即 archive（确认消费，不再回投）；
- * 失败不确认——vt 过期自动回投，read_ct 递增，达到 retry-threshold 后放弃（archive +
- * WARN，防死信堆积）。周期 fms.pgmq.notify-consumer-interval-ms（默认 30s）独立于
+ * LOCKED 并发领取（多实例各读各的，互不抢同一条）；持久效果落库后即 archive 确认消费，
+ * 消息不再回投——落库与归档是整条消息的效果，WS 推送属尽力而为，其失败只记 WARN
+ * 不参与消费判定，因为通知插入无幂等键，推送失败即回投会重复落库；落库或归档自身失败
+ * 才不确认——vt 过期自动回投，read_ct 递增，达到 retry-threshold 后放弃（archive + WARN，
+ * 防死信堆积）。周期 fms.pgmq.notify-consumer-interval-ms（默认 30s）独立于
  * cache-cleanup；总开关 fms.pgmq.notify-consumer-enabled（默认开，关停时消息留队可重拾）。
  *
  * 消息体结构（与投递侧逐字对齐）：
@@ -176,17 +178,7 @@ public class NotifyQueueConsumer {
                 notificationMapper.insertNotification(assigneeId, title, content, "SYSTEM",
                         "wf_task", taskId);
                 notificationMapper.archiveMessage("q_notify_task", msgId);
-                // 成功后 WS 推送该用户最新未读数（角标实时刷新，与已读动作同款载荷），
-                // 未读数查表受 rls 自读策略约束，须以该用户身份注入会话才可计数，
-                // 故显式置身份，生命周期仅覆盖本次推送，查完即清回后台无身份语义
-                RequestContext.set(new RequestContext(assigneeId, JwtRole.VIEWER, null, null, null));
-                try {
-                    NotifyWebSocketEndpoint.sendToUser(assigneeId,
-                            "{\"type\":\"unread_count\",\"count\":"
-                                    + notifyService.unreadCount(assigneeId) + "}");
-                } finally {
-                    RequestContext.clear();
-                }
+                pushUnreadCount(assigneeId);
             } catch (RuntimeException e) {
                 handleFailure("q_notify_task", msgId, readCt, e);
             }
@@ -212,12 +204,41 @@ public class NotifyQueueConsumer {
                 UUID companyId = UUID.fromString(payload.getString("company_id"));
                 notificationMapper.broadcastNotification(title, content, "budget_warning", companyId);
                 notificationMapper.archiveMessage("q_budget_warning", msgId);
-                // 全量 WS 推送（本地 + 跨实例），载荷带标题供前端刷新角标/列表
-                NotifyWebSocketEndpoint.broadcast(JSONObject.of(
-                        "type", "budget_warning", "title", title).toJSONString());
+                pushBroadcast(title);
             } catch (RuntimeException e) {
                 handleFailure("q_budget_warning", msgId, readCt, e);
             }
+        }
+    }
+
+    /**
+     * 推送该用户最新未读数（角标实时刷新，与已读动作同款载荷），尽力而为，失败只记 WARN：
+     * 通知已落库并归档，推送异常不足以判定整条消息消费失败，若向上抛会触发回投，而通知
+     * 插入无幂等键，回投即重复落库；角标由下次连接建立或列表刷新自愈。
+     *
+     * 未读数查表受 rls 自读策略约束，空壳角色无表权限也无身份，故推送期间显式以该用户
+     * 身份注入会话，查完即清回后台无身份语义。
+     */
+    private void pushUnreadCount(UUID assigneeId) {
+        RequestContext.set(new RequestContext(assigneeId, JwtRole.VIEWER, null, null, null));
+        try {
+            NotifyWebSocketEndpoint.sendToUser(assigneeId,
+                    "{\"type\":\"unread_count\",\"count\":"
+                            + notifyService.unreadCount(assigneeId) + "}");
+        } catch (RuntimeException e) {
+            log.warn("未读数推送失败（角标待下次连接自愈）: {}", e.getMessage());
+        } finally {
+            RequestContext.clear();
+        }
+    }
+
+    /** 全量广播预算预警（本地与跨实例，载荷带标题供前端刷新角标与列表），尽力而为，理由同未读数推送 */
+    private void pushBroadcast(String title) {
+        try {
+            NotifyWebSocketEndpoint.broadcast(JSONObject.of(
+                    "type", "budget_warning", "title", title).toJSONString());
+        } catch (RuntimeException e) {
+            log.warn("预算预警广播推送失败（角标待下次连接自愈）: {}", e.getMessage());
         }
     }
 
