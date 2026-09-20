@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS notify.notifications (
 );
 CREATE INDEX IF NOT EXISTS ix_notify_user ON notify.notifications (user_id, created_at DESC);
 
+-- 幂等键唯一索引，通知生成的去重依据，两个插入闸口函数据此 ON CONFLICT DO NOTHING，
+-- 消息重投与并发插入不会重复落库；部分索引排除软删行，软删后同键可再次通知；
+-- ref_id 或 ref_type 为 NULL 的行不受约束，PG 视 NULL 互不相等，无业务引用的通知可重复插入
+CREATE UNIQUE INDEX IF NOT EXISTS uk_notify_user_ref
+    ON notify.notifications (user_id, ref_type, ref_id)
+    WHERE deleted_at IS NULL;
+
 COMMENT ON TABLE notify.notifications IS
 '站内通知（按收件人 user_id 归属；RLS 按 auth.current_uid() = user_id 收敛，Java 侧恒加 user_id 过滤双保险）';
 

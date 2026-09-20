@@ -41,7 +41,7 @@ AS $$
 $$;
 COMMENT ON FUNCTION um.fn_page_param_meta() IS '系统参数元数据全量读口（SECURITY DEFINER；admin 管理页经 /api/admin/params/meta 调用）';
 
--- 20 个既有参数元数据种子（幂等，ON CONFLICT DO NOTHING）
+-- 21 个既有参数元数据种子（幂等，ON CONFLICT DO NOTHING）
 INSERT INTO um.param_meta
     (code, grp, label, control_type, unit, min_val, max_val, step, options, hint, sort_no, sensitive)
 VALUES
@@ -64,7 +64,8 @@ VALUES
     ('fa.depr.asset.account',        'fa',     '累计折旧科目编码',    'text',   NULL, NULL, NULL, NULL, NULL, '折旧凭证累计折旧行科目 code', 20, false),
     ('rpt.dashboard.alert.topn',     'rpt',    '看板告警展示上限',    'number', NULL, 1,   20,   1,   NULL, '首页预算/银行余额告警每类展示条数', 10, false),
     ('web.refdata.page.size',        'web',    '参考数据拉取上限',    'number', NULL, 10,  1000, 10,  NULL, '下拉列表（公司/供应商/客户等）一次性拉取上限', 10, false),
-    ('ui.login.background',          'ui',     '登录页背景',          'json',   NULL, NULL, NULL, NULL, NULL, '登录页全局背景配置（{"v":{enabled,fit,blur,darken,opacity,...}}）', 10, false)
+    ('ui.login.background',          'ui',     '登录页背景',          'json',   NULL, NULL, NULL, NULL, NULL, '登录页全局背景配置（{"v":{enabled,fit,blur,darken,opacity,...}}）', 10, false),
+    ('notify.broadcast_lock_timeout_ms', 'other', '通知广播等锁上限', 'number', 'ms', 0, 60000, 1000, NULL, '同键并发广播的等锁上限，超时该次广播报错（公告可重试，预算预警消息留队回投）', 10, false)
 ON CONFLICT (code) DO NOTHING;
 
 -- 授权收口，表零职责角色授权，读走 SECURITY DEFINER 函数，同 um.params 最小授权原则
