@@ -159,7 +159,10 @@ SET ROLE fms_admin;
 -- audit schema/表/函数授权补 fms_operator（admin 会话 = fms_operator，幂等）
 
 GRANT USAGE ON SCHEMA audit TO fms_operator;
-GRANT SELECT ON audit.audit_log TO fms_operator;             -- 分区继承（partman 已 inherit_privileges）
+GRANT SELECT ON audit.audit_log TO fms_operator;
+-- 分区级补授，与 log schema 同口径：按父表扫描的查询只需父表授权（子分区继承父表的权限
+-- 需求），分区自身 relacl 仅在直接访问分区时生效，此处补齐既有分区供运维直查分区与逐分区核对
+GRANT SELECT ON ALL TABLES IN SCHEMA audit TO fms_operator;
 GRANT EXECUTE ON FUNCTION audit.audit_log_chain_check() TO fms_operator;
 GRANT EXECUTE ON FUNCTION audit.chain_check(date) TO fms_operator;
 

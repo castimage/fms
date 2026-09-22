@@ -257,9 +257,14 @@ END $$;
 -- audit_log rls，FORCE，超级用户以外无任何 INSERT/UPDATE/DELETE 能力，verify/system_verify.sql 场景 2.6，fms_operator 直插被拒
 ALTER TABLE audit.audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit.audit_log FORCE ROW LEVEL SECURITY;
+-- 策略须含 is_admin 分支（管理员会话的库侧身份是 fms_operator，缺此支则查得空集）；
+-- 本策略在 init 中共三处定义（本文件、grants_base.sql、fill_missing.sql），三处必须同文，
+-- 否则单独重放任一文件都会把策略改回自己那一版
 DROP POLICY IF EXISTS audit_log_select ON audit.audit_log;
 CREATE POLICY audit_log_select ON audit.audit_log
-    FOR SELECT USING (auth.has_role('fms_auditor') OR current_user = 'fms_admin');
+    FOR SELECT USING (auth.has_role('fms_auditor')
+                      OR current_user = 'fms_admin'
+                      OR auth.is_admin());
 -- 无 INSERT/UPDATE/DELETE 策略 + 无表级授权则仅审计函数（SECURITY DEFINER）可写
 
 -- 审计捕获触发器挂载（um/org 表，um_org_base.sql 已建）

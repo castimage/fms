@@ -232,9 +232,13 @@ CREATE INDEX IF NOT EXISTS idx_task_runs_job ON log.task_runs (job_name, started
 -- 3.3 log 表 rls，FORCE rls + 仅 SELECT 策略，写入封闭
 ALTER TABLE log.app_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE log.app_logs FORCE ROW LEVEL SECURITY;
+-- 应用日志含请求上下文，读取面收敛到审计与管理员（与 init/grants_base.sql 同名策略一致，
+-- 该文件另有断言核对本策略含 is_admin 分支，三处定义须同文，否则后执行者覆盖先执行者）
 DROP POLICY IF EXISTS log_app_logs_select ON log.app_logs;
 CREATE POLICY log_app_logs_select ON log.app_logs
-    FOR SELECT USING (auth.current_uid() IS NOT NULL);
+    FOR SELECT USING (auth.has_role('fms_auditor')
+                      OR current_user = 'fms_admin'
+                      OR auth.is_admin());
 
 ALTER TABLE log.task_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE log.task_runs FORCE ROW LEVEL SECURITY;

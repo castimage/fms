@@ -57,6 +57,9 @@ GRANT EXECUTE ON FUNCTION auth.record_login(uuid, text, inet, text, boolean, tex
     TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
 -- rls，本人看自己，fms_auditor（SET ROLE 后）全读，写无策略，应用无 INSERT 权限 + FORCE rls 双封闭
+-- 本处为基底版；init/um_login_log_query.sql 晚于本文件执行，按同一策略名再建一版，增补
+-- has_permission('audit:read:all') 分支（登录审计全量读取，admin 经 rbac 矩阵持有该权限点），
+-- 生效版本以该文件为准；两处的先后顺序是有意为之，调整初始化顺序会使该分支失效
 ALTER TABLE um.login_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE um.login_log FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS login_log_select ON um.login_log;
@@ -417,11 +420,21 @@ BEGIN
             FOR EACH ROW EXECUTE FUNCTION audit.fn_audit_log_hash();
         ALTER TABLE audit.audit_log ENABLE ROW LEVEL SECURITY;
         ALTER TABLE audit.audit_log FORCE ROW LEVEL SECURITY;
+        -- 策略与 init/grants_base.sql 的同名策略保持一致，含 is_admin 分支（矩阵 audit:read:all =
+        -- auditor/admin，admin 会话的库侧身份是 fms_operator，缺该分支则管理员查得空集）；
+        -- 本文件晚于 grants_base 执行，此处若少写一支即覆盖掉后者补的分支
         DROP POLICY IF EXISTS audit_log_select ON audit.audit_log;
         CREATE POLICY audit_log_select ON audit.audit_log
-            FOR SELECT USING (auth.has_role('fms_auditor') OR current_user = 'fms_admin');
-        -- 授权/注释恢复（DROP 表丢失 GRANT 与 COMMENT）
-        GRANT SELECT ON audit.audit_log TO fms_auditor;
+            FOR SELECT USING (auth.has_role('fms_auditor')
+                              OR current_user = 'fms_admin'
+                              OR auth.is_admin());
+        -- 授权/注释恢复（DROP 表丢失 GRANT 与 COMMENT），grants_base 早于本文件执行，
+        -- 其 GRANT SELECT ON audit.audit_log TO fms_operator 已被上方 DROP TABLE 抹除，须一并补回
+        GRANT SELECT ON audit.audit_log TO fms_auditor, fms_operator;
+        -- 分区级授权一并补齐，与下方 log 段同口径：按父表扫描的查询只需父表授权（子分区继承
+        -- 父表的权限需求，PG 不逐分区另查 ACL），分区自身的 relacl 只在直接访问该分区时生效；
+        -- 此处统一补授，是为直接访问分区的运维查询与逐分区核对留出通路，幂等可重跑
+        GRANT SELECT ON ALL TABLES IN SCHEMA audit TO fms_auditor, fms_operator;
         COMMENT ON TABLE audit.audit_log IS
         '审计日志（仅追加，按年分区）：prev_hash/row_hash 构成哈希链，篡改任何一行即断链';
         COMMENT ON COLUMN audit.audit_log.row_hash IS
@@ -478,9 +491,14 @@ BEGIN
         CREATE INDEX idx_app_logs_occurred ON log.app_logs (occurred_at);
         ALTER TABLE log.app_logs ENABLE ROW LEVEL SECURITY;
         ALTER TABLE log.app_logs FORCE ROW LEVEL SECURITY;
+        -- 策略与 init/grants_base.sql 的同名策略保持一致（auditor/admin 只读，含 is_admin 分支）；
+        -- 本文件晚于 grants_base 执行，此处若写成更宽的 current_uid() IS NOT NULL，
+        -- 会把后者收紧的策略覆盖回去，使非管理员的普通会话也能读应用日志
         DROP POLICY IF EXISTS log_app_logs_select ON log.app_logs;
         CREATE POLICY log_app_logs_select ON log.app_logs
-            FOR SELECT USING (auth.current_uid() IS NOT NULL);
+            FOR SELECT USING (auth.has_role('fms_auditor')
+                              OR current_user = 'fms_admin'
+                              OR auth.is_admin());
         COMMENT ON TABLE log.app_logs IS
         '应用日志（结构化，仅追加，按天分区）。写入仅经 SECURITY DEFINER 消费函数/超级用户，FORCE RLS 仅 SELECT 策略';
         -- 授权恢复（DROP 表丢失 GRANT 与 COMMENT，与 9.1 audit_log 同模式），
@@ -488,9 +506,9 @@ BEGIN
         -- DROP TABLE log.app_logs 抹除（relacl 归 NULL），此处必须补回，否则
         -- verify/grants_check.sql 'grants_base-log.* auditor 只读' 判 FAIL
         GRANT SELECT ON log.app_logs TO fms_auditor, fms_operator;   -- fms_operator，admin 的 pg 职责角色，安全中心 app-logs 读
-        -- 分区级授权补齐，本块 WHILE 循环内 CREATE TABLE ... PARTITION OF 创建的分区
-        -- 不继承父表 GRANT（relacl 全 NULL），且 pg 对分区父表的 GRANT 不向下传播到
-        -- 已存在分区，对 log schema 内全部表，含全部既有分区统一补授，幂等可重跑
+        -- 分区级授权补齐：按父表扫描的查询只需父表授权（子分区继承父表的权限需求，PG 不逐分区
+        -- 另查 ACL），分区自身 relacl 只在直接访问该分区时生效；此处对 log schema 内全部表
+        -- 含全部既有分区统一补授，为直接访问分区的运维查询与逐分区核对留通路，幂等可重跑
         GRANT SELECT ON ALL TABLES IN SCHEMA log TO fms_auditor, fms_operator;   -- fms_operator，admin 的 pg 职责角色
     END IF;
     END IF;
@@ -617,9 +635,10 @@ END $$;
 -- retention 保留策略（幂等 UPDATE），part_config.retention 为最大保留期，retention_keep_table=false 时到期分区自动 DROP，run_maintenance_proc 只预建不删历史，无限增长分区将撑爆 catalog/磁盘，log 两表 90 天、login_log 1 年、audit_log 按审计合规期 7 年，由 partman-maintenance cron 每日清理
 -- 保留期统一读 um.params（log.retention.days 缺省 90 天 / loginlog.retention.years 缺省 1 年 / audit.retention.years 缺省 7 年，
 -- 本文件先于 init/grants_base.sql种子执行，参数缺失时回落缺省与现状等价，admin 调参后重跑本段即可同步 part_config）
--- inherit_privileges=true，partman 将父表（log.app_logs/log.access_logs）的 ACL 复制到模板表，
--- 后续 run_maintenance 新建分区自动继承 fms_auditor SELECT 授权（否则新分区 relacl 为 NULL，
--- grants_check 'log.* auditor 只读' 及审计链读取会因分区级缺权而失败）
+-- inherit_privileges=true，partman 把父表的 ACL 复制到模板表，新建分区的 relacl 与父表一致；
+-- 按父表扫描的查询本就继承父表权限、不依赖分区 ACL，该开关是给直接访问分区留通路
+-- 四张分区父表一律打开：log 两表由 fms_auditor/fms_operator 读，um.login_log 与 audit.audit_log
+-- 由职责角色读
 UPDATE partman.part_config
    SET retention = make_interval(days => COALESCE(
                        (SELECT COALESCE(value #>> '{}', value->>'v')::int
@@ -631,13 +650,15 @@ UPDATE partman.part_config
    SET retention = make_interval(years => COALESCE(
                        (SELECT COALESCE(value #>> '{}', value->>'v')::int
                           FROM um.params WHERE code = 'loginlog.retention.years' AND deleted_at IS NULL), 1)),
-       retention_keep_table = false, retention_keep_index = false
+       retention_keep_table = false, retention_keep_index = false,
+       inherit_privileges = true
  WHERE parent_table = 'um.login_log';
 UPDATE partman.part_config
    SET retention = make_interval(years => COALESCE(
                        (SELECT COALESCE(value #>> '{}', value->>'v')::int
                           FROM um.params WHERE code = 'audit.retention.years' AND deleted_at IS NULL), 7)),
-       retention_keep_table = false, retention_keep_index = false
+       retention_keep_table = false, retention_keep_index = false,
+       inherit_privileges = true
  WHERE parent_table = 'audit.audit_log';
 
 -- B.9 um.users 敏感列补齐（MFA / 身份证），init/um_org_base.sql文件建表已含，此处幂等补列，兼容 init/um_perm.sql先行/存量库原地升级
