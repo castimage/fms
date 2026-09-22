@@ -285,6 +285,17 @@ public class VoucherLinkServiceImpl implements VoucherLinkService {
         return voucherId;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public String voucherStatus(UUID voucherId) {
+        if (voucherId == null) {
+            return null;
+        }
+        Voucher v = voucherMapper.selectById(voucherId);
+        return v == null ? null : v.getStatus();
+    }
+
     // 私有方法
 
     /**

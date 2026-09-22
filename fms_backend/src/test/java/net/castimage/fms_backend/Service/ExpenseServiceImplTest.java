@@ -132,6 +132,52 @@ class ExpenseServiceImplTest {
         verify(voucherLinkService, never()).linkExpense(any());
     }
 
+    /** 冲销前置满足：单据已过账且其凭证已冲销，置为已冲销 */
+    @Test
+    void reverse_setsReversed_whenPostedAndVoucherReversed() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("POSTED", VOUCHER_ID));
+        when(voucherLinkService.voucherStatus(VOUCHER_ID)).thenReturn("REVERSED");
+        when(reimbursementMapper.update(isNull(), any())).thenReturn(1);
+
+        service.reverseReimbursement(REIMB_ID, "重复报销，冲回");
+
+        verify(reimbursementMapper).update(isNull(), any());
+    }
+
+    /** 账先冲、单后标：凭证已可见且未冲销即拒绝，且不触碰状态 */
+    @Test
+    void reverse_rejects_whenVoucherNotReversed() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("POSTED", VOUCHER_ID));
+        when(voucherLinkService.voucherStatus(VOUCHER_ID)).thenReturn("POSTED");
+
+        assertThrows(ConflictException.class,
+                () -> service.reverseReimbursement(REIMB_ID, "重复报销，冲回"));
+        verify(reimbursementMapper, never()).update(any(), any());
+    }
+
+    /** 凭证查询受行级策略约束可能返回空：此时不预判，交由数据库状态机的权威前置终审 */
+    @Test
+    void reverse_defersToDatabase_whenVoucherInvisible() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("POSTED", VOUCHER_ID));
+        when(voucherLinkService.voucherStatus(VOUCHER_ID)).thenReturn(null);
+        when(reimbursementMapper.update(isNull(), any())).thenReturn(0);   // 触发器拒绝则更新 0 行
+
+        assertThrows(ConflictException.class,
+                () -> service.reverseReimbursement(REIMB_ID, "重复报销，冲回"));
+        verify(reimbursementMapper).update(isNull(), any());
+    }
+
+    /** 仅已过账可冲销：其余状态（含已冲销终态）一律 40900，且不查询凭证 */
+    @Test
+    void reverse_rejects_whenNotPosted() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("PAID", VOUCHER_ID));
+
+        assertThrows(ConflictException.class,
+                () -> service.reverseReimbursement(REIMB_ID, "重复报销，冲回"));
+        verify(voucherLinkService, never()).voucherStatus(any());
+        verify(reimbursementMapper, never()).update(any(), any());
+    }
+
     /** 审批路径不再自动生成凭证，voucher_id 的写入时机收敛到显式过账动作 */
     @Test
     void approve_doesNotGenerateVoucher() {

@@ -363,6 +363,35 @@ public class ExpenseServiceImpl implements ExpenseService {
         return voucherId;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void reverseReimbursement(UUID id, String reason) {
+        RequestContext.requireWriteRole();
+        Reimbursement r = requireReimbursement(id);
+        if (!"POSTED".equals(r.getStatus())) {
+            throw new ConflictException("仅已过账状态报销单可冲销（当前 " + r.getStatus()
+                    + "，已冲销为终态不可重复冲销）");
+        }
+        // 账先冲、单后标：凭证已可见且未冲销时提前给出可读原因；凭证查询受行级策略约束
+        // （如凭证仍为草稿且非本人创建、或凭证归属超出本会话数据范围时会返回空），
+        // 此时不预判，直接落到数据库状态机的权威前置上终审——触发器以属主身份执行，
+        // 不受行级策略限制，判定比应用侧所见更完整，避免误拒本可冲销的单据
+        String voucherStatus = voucherLinkService.voucherStatus(r.getVoucherId());
+        if (voucherStatus != null && !"REVERSED".equals(voucherStatus)) {
+            throw new ConflictException("请先在总账冲销该报销单的凭证后再冲销报销单（凭证当前状态："
+                    + voucherStatus + "）");
+        }
+        if (reimbursementMapper.update(null, new LambdaUpdateWrapper<Reimbursement>()
+                .eq(Reimbursement::getId, id)
+                .eq(Reimbursement::getStatus, "POSTED")
+                .set(Reimbursement::getStatus, "REVERSED")) == 0) {
+            throw new ConflictException("报销单冲销失败：状态已变更或不可见");
+        }
+        log.info("报销单 {} 冲销（凭证 {} 已冲销）{}", id, r.getVoucherId(),
+                reason == null || reason.isBlank() ? "" : "，原因：" + reason);
+    }
+
     // wf 挂接（私有）
 
     /**

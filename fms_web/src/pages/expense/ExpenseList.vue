@@ -31,6 +31,7 @@ const STATUS_OPTIONS = [
   { label: '已驳回', value: 'REJECTED' },
   { label: '已付款', value: 'PAID' },
   { label: '已过账', value: 'POSTED' },
+  { label: '已冲销', value: 'REVERSED' },
 ]
 
 const status = ref<ReimbursementStatus | ''>('')

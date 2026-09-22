@@ -340,14 +340,15 @@ DROP POLICY IF EXISTS expense_reimbursements_select ON expense.reimbursements;
 CREATE POLICY expense_reimbursements_select ON expense.reimbursements FOR SELECT
     USING (auth.can_access_org(company_id) AND deleted_at IS NULL
            AND (auth.is_self(applicant_id) OR auth.can_access_dept(dept_id)
-                OR status IN ('APPROVED','PAID','POSTED')));
+                OR status IN ('APPROVED','PAID','POSTED','REVERSED')));
 DROP POLICY IF EXISTS expense_reimbursements_insert ON expense.reimbursements;
 CREATE POLICY expense_reimbursements_insert ON expense.reimbursements FOR INSERT
     WITH CHECK (auth.can_access_org(company_id) AND auth.is_self(applicant_id));
 DROP POLICY IF EXISTS expense_reimbursements_update ON expense.reimbursements;
 CREATE POLICY expense_reimbursements_update ON expense.reimbursements FOR UPDATE
     USING (auth.can_access_org(company_id)
-           AND status IN ('DRAFT','SUBMITTED','APPROVED','PAID','REJECTED') AND deleted_at IS NULL)
+           AND status IN ('DRAFT','SUBMITTED','APPROVED','PAID','POSTED','REJECTED')
+           AND deleted_at IS NULL)
     WITH CHECK (auth.can_access_org(company_id)
                 AND status IN ('DRAFT','SUBMITTED','APPROVED','REJECTED',
                                'PAID','POSTED','REVERSED')
@@ -1180,7 +1181,7 @@ BEGIN
 END
 $$;
 
--- 6.8 expense.fn_reimburse_status_check 报销单状态机触发器函数，仅允许正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），POSTED/REVERSED 后禁改，含非状态字段，过账另要求 voucher_id 非空，凭证先于状态落定
+-- 6.8 expense.fn_reimburse_status_check 报销单状态机触发器函数，正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），另有受控冲销 POSTED 转 REVERSED（前置为其凭证已冲销，账先冲单后标），POSTED/REVERSED 后禁改含非状态字段，唯一例外是该受控冲销，过账另要求 voucher_id 非空，凭证先于状态落定
 CREATE OR REPLACE FUNCTION expense.fn_reimburse_status_check()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1188,9 +1189,19 @@ SECURITY DEFINER
 SET search_path = expense, pg_catalog
 AS $$
 BEGIN
+    -- 已过账后连带非状态字段一并冻结，唯一例外是受控冲销路径（已过账转已冲销）：
+    -- 该路径只允许改状态列，其余列（含软删标记）须与旧值完全一致，防借冲销顺带改写金额、归属或删单；
+    -- 逐列列举会随加列失守，故以整行快照比对，仅排除状态与更新时间两列
     IF OLD.status IN ('POSTED','REVERSED') THEN
-        RAISE EXCEPTION '报销单已 %，禁止修改', OLD.status
-            USING ERRCODE = 'P0001';
+        IF NOT (OLD.status = 'POSTED' AND NEW.status = 'REVERSED') THEN
+            RAISE EXCEPTION '报销单已 %，禁止修改（仅允许已过账转已冲销）', OLD.status
+                USING ERRCODE = 'P0001';
+        END IF;
+        IF (to_jsonb(NEW) - 'status' - 'updated_at')
+           IS DISTINCT FROM (to_jsonb(OLD) - 'status' - 'updated_at') THEN
+            RAISE EXCEPTION '报销单冲销只允许变更状态列，本次一并改动了其它字段，拒绝'
+                USING ERRCODE = 'P0001';
+        END IF;
     END IF;
     IF NEW.status = OLD.status THEN
         RETURN NEW;                              -- 非状态字段修改放行，状态机之外
@@ -1201,6 +1212,7 @@ BEGIN
          OR (OLD.status = 'APPROVED'  AND NEW.status = 'PAID')
          OR (OLD.status = 'PAID'      AND NEW.status = 'POSTED')
          OR (OLD.status = 'REJECTED'  AND NEW.status = 'DRAFT')
+         OR (OLD.status = 'POSTED'    AND NEW.status = 'REVERSED')
     ) THEN
         RAISE EXCEPTION '非法的报销状态流转：% -> %', OLD.status, NEW.status
             USING ERRCODE = 'P0001';
@@ -1208,6 +1220,17 @@ BEGIN
     -- POSTED 语义为凭证已生成并回填，无凭证不得过账，防状态与凭证脱节
     IF NEW.status = 'POSTED' AND NEW.voucher_id IS NULL THEN
         RAISE EXCEPTION '报销单过账前须先生成凭证（voucher_id 为空，status % -> POSTED）', OLD.status
+            USING ERRCODE = 'P0001';
+    END IF;
+    -- 冲销前置，账先冲、单后标，本单据的凭证须已处于已冲销，否则拒绝，
+    -- 避免出现凭证仍有效而单据声称已冲销的状态背离
+    IF NEW.status = 'REVERSED'
+       AND NOT EXISTS (SELECT 1 FROM gl.vouchers v
+                        WHERE v.id = NEW.voucher_id
+                          AND v.status = 'REVERSED'
+                          AND v.deleted_at IS NULL) THEN
+        RAISE EXCEPTION '报销单冲销前须先在总账冲销其凭证（voucher_id=%）',
+            COALESCE(NEW.voucher_id::text, '<NULL>')
             USING ERRCODE = 'P0001';
     END IF;
     RETURN NEW;
@@ -1245,7 +1268,7 @@ CREATE TRIGGER trg_asset_immutable
     BEFORE UPDATE OR DELETE ON fa.assets
     FOR EACH ROW EXECUTE FUNCTION fa.fn_asset_immutable();
 
--- 7.1.2 expense.reimbursements 状态机（正向推进 + POSTED 后禁改）
+-- 7.1.2 expense.reimbursements 状态机（正向推进 + POSTED 后禁改 + 受控冲销）
 DROP TRIGGER IF EXISTS trg_reimburse_status_check ON expense.reimbursements;
 CREATE TRIGGER trg_reimburse_status_check
     BEFORE UPDATE ON expense.reimbursements

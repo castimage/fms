@@ -5,8 +5,18 @@
  */
 import type { PageQuery } from './api'
 
-/** 报销状态机经 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅自 SUBMITTED，退回可改再提交 */
-export type ReimbursementStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'PAID' | 'POSTED' | 'REJECTED'
+/**
+ * 报销状态机经 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅自 SUBMITTED，退回可改再提交；
+ * 过账后可经受控冲销转 REVERSED，前置为其凭证已在总账冲销（账先冲、单后标），已冲销为终态
+ */
+export type ReimbursementStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'PAID'
+  | 'POSTED'
+  | 'REJECTED'
+  | 'REVERSED'
 
 /** 报销单列表行视图，rls 已按本人/本部门/终态收敛可见集合，越权详情则 null 不泄露存在性 */
 export interface ReimbursementView {

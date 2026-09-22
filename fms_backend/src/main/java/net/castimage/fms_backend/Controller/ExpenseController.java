@@ -5,6 +5,7 @@ import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.dto.InvoiceFileBindRequest;
 import net.castimage.fms_backend.Model.dto.ReimbursementRequest;
+import net.castimage.fms_backend.Model.dto.ReverseReimbursementRequest;
 import net.castimage.fms_backend.Model.vo.ReimbursementDetailView;
 import net.castimage.fms_backend.Model.vo.ReimbursementView;
 import net.castimage.fms_backend.Service.ExpenseService;
@@ -23,7 +24,7 @@ import java.util.UUID;
 
 /**
  * 费用报销模块 REST 接口（/api/exp）：报销单 CRUD（头 + 明细同事务）、提交/审批/驳回/出纳付款/
- * 生成过账凭证状态机、本人报销列表；身份由安全链路保证，RLS 决定可见集合——本人/本部门/终态可见，
+ * 生成过账凭证/冲销状态机、本人报销列表；身份由安全链路保证，RLS 决定可见集合——本人/本部门/终态可见，
  * 详情越权返回 data:null（不泄露存在性），状态机非法流转由 DB 触发器终审（40900）。
  */
 @RestController
@@ -133,6 +134,19 @@ public class ExpenseController {
     @PostMapping("/reimbursements/{id}/link-voucher")
     public ApiResponse<UUID> linkVoucher(@PathVariable UUID id) {
         return ApiResponse.ok(expenseService.linkReimbursementVoucher(id));
+    }
+
+    /**
+     * 冲销报销单（POSTED 转 REVERSED）：已过账单据的受控出口，冲销原因必填。
+     *
+     * 前置为账先冲、单后标——其凭证须已在总账冲销，否则 40900 并提示先冲凭证；
+     * 已冲销为终态，不可重复冲销，状态机前置不符同样 40900。
+     */
+    @PostMapping("/reimbursements/{id}/reverse")
+    public ApiResponse<Void> reverse(@PathVariable UUID id,
+                                     @RequestBody @Valid ReverseReimbursementRequest req) {
+        expenseService.reverseReimbursement(id, req.reason());
+        return ApiResponse.ok(null);
     }
 
     /**

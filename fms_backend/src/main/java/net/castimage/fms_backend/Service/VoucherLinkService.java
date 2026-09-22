@@ -86,4 +86,14 @@ public interface VoucherLinkService {
      * @throws net.castimage.fms_backend.Exception.ConflictException 科目映射参数缺失或非法，或回填冲突，40900
      */
     UUID linkExpense(UUID reimbId);
+
+    /**
+     * 查单据所联凭证的状态，供冲销前置校验用（报销单冲销要求其凭证已冲销）
+     *
+     * 只读，凭证不存在或已软删返回 null，调用方据此给出可读的拒绝原因
+     *
+     * @param voucherId 凭证 id，允许为 null（单据尚未生成凭证）
+     * @return 凭证状态（DRAFT/SUBMITTED/APPROVED/POSTED/REVERSED/REJECTED），不存在为 null
+     */
+    String voucherStatus(UUID voucherId);
 }

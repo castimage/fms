@@ -82,4 +82,16 @@ public interface ExpenseService {
      * 明细行不可见（RLS 空集）40400。
      */
     void bindInvoiceFile(UUID lineId, UUID fileId);
+
+    /**
+     * 冲销报销单（POSTED 转 REVERSED），冲销原因必填
+     *
+     * 前置为账先冲、单后标：本单据的凭证必须已在总账完成冲销，否则拒绝并提示先冲凭证，
+     * 由此避免出现凭证仍有效而单据声称已冲销的状态背离；已冲销为终态，重复冲销即状态前置不符而拒绝
+     *
+     * @param id     报销单 id（须已过账）
+     * @param reason 冲销原因（审计追溯）
+     * @throws net.castimage.fms_backend.Exception.ConflictException 非已过账状态，或其凭证尚未冲销（40900）
+     */
+    void reverseReimbursement(UUID id, String reason);
 }

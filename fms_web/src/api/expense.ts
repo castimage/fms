@@ -54,4 +54,12 @@ export const expenseApi = {
   linkVoucher(id: string): Promise<string> {
     return request<string>({ url: `/exp/reimbursements/${id}/link-voucher`, method: 'post' })
   },
+  /**
+   * 冲销报销单（POSTED 转 REVERSED），原因必填
+   *
+   * 前置为账先冲、单后标，其凭证须已在总账冲销，否则后端拒绝并返回可读原因（全局提示）
+   */
+  reverseReimbursement(id: string, reason: string): Promise<void> {
+    return request<void>({ url: `/exp/reimbursements/${id}/reverse`, method: 'post', data: { reason } })
+  },
 }

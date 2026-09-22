@@ -240,6 +240,20 @@ function onActionPay() {
 function onActionLinkVoucher() {
   return runAction(() => expenseApi.linkVoucher(reimbursementId.value), '已生成凭证并过账')
 }
+/** 冲销原因，受控冲销前收集，必填，随请求提交供后端留痕 */
+const reverseReason = ref('')
+/**
+ * 冲销报销单（POSTED 转 REVERSED），前置为账先冲、单后标——凭证未冲销时后端拒绝并给出原因
+ */
+function onActionReverse() {
+  const reason = reverseReason.value.trim()
+  return runAction(
+    () => expenseApi.reverseReimbursement(reimbursementId.value, reason),
+    '已冲销',
+  ).finally(() => {
+    reverseReason.value = ''
+  })
+}
 /** 跳转联动凭证详情，凭证只读态由 gl 模块按状态渲染 */
 function goVoucher() {
   const id = detail.value?.voucherId
@@ -420,6 +434,26 @@ onMounted(async () => {
             <n-button v-if="detail?.status === 'APPROVED' && canWrite" type="primary" size="small" :loading="actionLoading" @click="onActionPay">出纳付款</n-button>
             <n-button v-if="detail?.status === 'PAID' && canWrite" type="primary" size="small" :loading="actionLoading" @click="onActionLinkVoucher">生成凭证</n-button>
             <n-button v-if="detail?.voucherId" size="small" @click="goVoucher">查看凭证</n-button>
+            <n-popconfirm
+              v-if="detail?.status === 'POSTED' && canWrite"
+              :show-icon="false"
+              :positive-button-props="{ disabled: !reverseReason.trim(), loading: actionLoading }"
+              @positive-click="onActionReverse"
+            >
+              <template #trigger>
+                <n-button size="small" type="error" :loading="actionLoading">冲销</n-button>
+              </template>
+              <div class="reverse-panel">
+                <div class="reverse-hint">冲销前须先在总账冲销该单据的凭证</div>
+                <n-input
+                  v-model:value="reverseReason"
+                  type="textarea"
+                  :rows="2"
+                  maxlength="500"
+                  placeholder="冲销原因（必填）"
+                />
+              </div>
+            </n-popconfirm>
           </div>
         </div>
       </template>
@@ -428,6 +462,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.reverse-panel {
+  width: 260px;
+}
+.reverse-hint {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #d03050;
+}
 .lines-block {
   margin-top: 16px;
 }
