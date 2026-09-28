@@ -661,6 +661,12 @@ UPDATE partman.part_config
        inherit_privileges = true
  WHERE parent_table = 'audit.audit_log';
 
+-- audit 分区授权回填，分区登记建首批分区时继承权限开关尚未打开，该批分区不复制父表 ACL
+-- 转换段里的 schema 级授权发生在这批分区之前，覆盖不到，故在此补一次
+-- 此后的分区由分区维护按继承权限开关复制父表 ACL，另以默认权限兜住不经分区维护直接创建的旁路
+GRANT SELECT ON ALL TABLES IN SCHEMA audit TO fms_auditor, fms_operator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA audit GRANT SELECT ON TABLES TO fms_auditor, fms_operator;
+
 -- B.9 um.users 敏感列补齐（MFA / 身份证），init/um_org_base.sql文件建表已含，此处幂等补列，兼容 init/um_perm.sql先行/存量库原地升级
 DO $$
 BEGIN

@@ -10,9 +10,11 @@
 #     不执行
 # verify/，部署后冒烟校验，只读
 # 执行顺序由 INIT_SCRIPTS 显式数组裁决，不依赖文件名排序。
+# 演示种子的 API Key 调用方凭据依赖 um.api_keys 建表，故 seed_demo 排在 fill_missing 之后，
+# 全新库首轮即有该凭据，不必初始化后再补跑一次。
 
 # 显式顺序数组，白名单
-INIT_SCRIPTS="bootstrap_base.sql um_org_base.sql audit_base.sql gl_base.sql gl_core_functions.sql auth_org_functions.sql ar_ap_cash_base.sql fa_expense_budget_wf_base.sql rpt_log_base.sql queues_cron.sql seed_system.sql seed_demo.sql notify_base.sql grants_base.sql um_perm.sql fill_missing.sql um_params_functions.sql um_param_meta.sql auth_api_key_validate.sql backup_codes_persist.sql dashboard_alerts.sql rpt_ap_aging.sql docs_base.sql um_login_log_query.sql gl_voucher_reject.sql um_user_preferences.sql log_access_batch.sql role_fms_public.sql notify_broadcast.sql gl_fx_rates.sql gl_voucher_link.sql"
+INIT_SCRIPTS="bootstrap_base.sql um_org_base.sql audit_base.sql gl_base.sql gl_core_functions.sql auth_org_functions.sql ar_ap_cash_base.sql fa_expense_budget_wf_base.sql rpt_log_base.sql queues_cron.sql seed_system.sql notify_base.sql grants_base.sql um_perm.sql fill_missing.sql seed_demo.sql um_params_functions.sql um_param_meta.sql auth_api_key_validate.sql backup_codes_persist.sql dashboard_alerts.sql rpt_ap_aging.sql docs_base.sql um_login_log_query.sql gl_voucher_reject.sql um_user_preferences.sql log_access_batch.sql role_fms_public.sql notify_broadcast.sql gl_fx_rates.sql gl_voucher_link.sql"
 
 OK_COUNT=0
 FAIL_COUNT=0
