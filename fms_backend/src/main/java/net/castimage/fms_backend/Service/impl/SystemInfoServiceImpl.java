@@ -248,7 +248,8 @@ public class SystemInfoServiceImpl implements SystemInfoService {
      * Redis 集群节点列表，哨兵模式经 Lettuce 哨兵连接查询主/从节点
      * （RedisSentinelConnection 封装 RESP 协议与连接管理，主从由哨兵发现），
      * 哨兵节点取配置列表逐个 TCP 探测可达性（仅 connect 不解析协议），
-     * 单节点模式仅返回当前节点，聚合失败返回空列表，fail-open 于展示
+     * 单节点模式仅返回当前节点，未配置 Redis 或哨兵无主节点返回空列表，
+     * 聚合失败回落单节点信息，fail-open 于展示
      */
     private List<SystemInfoView.RedisNodeInfo> redisNodes() {
         if (redisTemplate == null) {
