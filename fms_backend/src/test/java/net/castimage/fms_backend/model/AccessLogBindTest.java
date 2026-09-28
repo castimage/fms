@@ -27,7 +27,7 @@ class AccessLogBindTest {
     void snakeCaseKeysBindToCamelCaseComponents() {
         List<AccessLogItem> items = JSON.parseArray(RGW_PAYLOAD, AccessLogItem.class);
         assertEquals(1, items.size(), "应解析 1 条");
-        AccessLogItem it = items.get(0);
+        AccessLogItem it = items.getFirst();
         assertNotNull(it.reqId(), "req_id 应绑定 reqId");
         assertNotNull(it.latencyMs(), "latency_ms 应绑定 latencyMs");
         assertEquals("trace-123", it.reqId());

@@ -59,7 +59,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional(readOnly = true)
     public PageResult<ParamView> pageParams(long page, long size, String keyword) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         String kw = keyword == null ? null : keyword.trim();
         return PageResult.of(paramMapper.selectParamsPage(new Page<>(pageNum, sizeNum), kw));
     }
@@ -134,7 +134,7 @@ public class AdminServiceImpl implements AdminService {
     public PageResult<AppLogView> pageAppLogs(long page, long size, String level, String logger,
                                               LocalDateTime from, LocalDateTime to) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(appLogMapper.selectAppLogPage(new Page<>(pageNum, sizeNum),
                 trim(level), trim(logger), from, to));
     }
@@ -146,7 +146,7 @@ public class AdminServiceImpl implements AdminService {
                                                   LocalDateTime from, LocalDateTime to,
                                                   Boolean success, Boolean locked) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(loginLogMapper.selectLoginLogPage(new Page<>(pageNum, sizeNum),
                 trim(loginName), from, to, success, locked));
     }
@@ -156,7 +156,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional(readOnly = true)
     public PageResult<TaskRunView> pageTaskRuns(long page, long size, String jobName, String status) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(taskRunMapper.selectTaskRunPage(new Page<>(pageNum, sizeNum),
                 trim(jobName), trim(status)));
     }

@@ -34,7 +34,7 @@ public class NotifyServiceImpl implements NotifyService {
     @Transactional(readOnly = true)
     public PageResult<NotificationView> pageList(long page, long size, Boolean isRead) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(notificationMapper.selectUserPage(new Page<>(pageNum, sizeNum),
                 RequestContext.requireUserId(), isRead));
     }

@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -74,7 +75,7 @@ public class WfServiceImpl implements WfService {
     public PageResult<WfDefinitionView> pageDefinitions(long page, long size, UUID companyId,
                                                         String status, String keyword) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(definitionMapper.selectDefinitionPage(
                 new Page<>(pageNum, sizeNum), companyId, status, keyword));
     }
@@ -208,7 +209,7 @@ public class WfServiceImpl implements WfService {
     public PageResult<WfInstanceView> pageInstances(long page, long size, UUID companyId,
                                                     String status, String businessType) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(instanceMapper.selectInstancePage(
                 new Page<>(pageNum, sizeNum), companyId, status, businessType));
     }
@@ -226,7 +227,7 @@ public class WfServiceImpl implements WfService {
     @Transactional(readOnly = true)
     public PageResult<WfInstanceView> pageMyInstances(long page, long size, String status) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(instanceMapper.selectMyPage(
                 new Page<>(pageNum, sizeNum), RequestContext.requireUserId(), status));
     }
@@ -265,7 +266,7 @@ public class WfServiceImpl implements WfService {
     @Transactional(readOnly = true)
     public PageResult<WfTaskView> myTodos(long page, long size) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         // assignee=当前用户 + status IN (PENDING,CLAIMED)；RLS is_self 双路径兜底
         return PageResult.of(taskMapper.selectTodoPage(
                 new Page<>(pageNum, sizeNum), RequestContext.requireUserId()));
@@ -374,9 +375,8 @@ public class WfServiceImpl implements WfService {
         int startCnt = 0;
         int endCnt = 0;
         int approveCnt = 0;
-        java.util.Set<String> codes = new java.util.HashSet<>();
-        for (int i = 0; i < arr.size(); i++) {
-            Object el = arr.get(i);
+        Set<String> codes = new HashSet<>();
+        for (Object el : arr) {
             if (!(el instanceof JSONObject o)) {
                 throw new BadRequestException("节点须为 JSON 对象");
             }
@@ -388,7 +388,7 @@ public class WfServiceImpl implements WfService {
             if (!codes.add(code)) {
                 throw new BadRequestException("节点 node_code 重复: " + code);
             }
-            if (!java.util.Set.of("START", "APPROVE", "END").contains(type)) {
+            if (!Set.of("START", "APPROVE", "END").contains(type)) {
                 throw new BadRequestException("节点 type 非法: " + type);
             }
             if ("START".equals(type)) startCnt++;
@@ -402,21 +402,20 @@ public class WfServiceImpl implements WfService {
                 }
                 String strategy = o.getString("strategy");
                 if (strategy == null
-                        || !java.util.Set.of("approve", "countersign", "orsign").contains(strategy)) {
+                        || !Set.of("approve", "countersign", "orsign").contains(strategy)) {
                     throw new BadRequestException("审批节点 strategy 非法: " + code);
                 }
                 Object hs = o.get("handlers");
                 if (!(hs instanceof JSONArray handlers) || handlers.isEmpty()) {
                     throw new BadRequestException("审批节点 handlers 不能为空: " + code);
                 }
-                for (int j = 0; j < handlers.size(); j++) {
-                    Object hel = handlers.get(j);
+                for (Object hel : handlers) {
                     if (!(hel instanceof JSONObject h)) {
                         throw new BadRequestException("审批节点处理人须为对象: " + code);
                     }
                     String source = h.getString("source");
                     if (source == null
-                            || !java.util.Set.of("role", "user", "applicant").contains(source)) {
+                            || !Set.of("role", "user", "applicant").contains(source)) {
                         throw new BadRequestException("审批节点处理人来源非法: " + code);
                     }
                     // applicant 不带取值，role 取 code、user 取 userId

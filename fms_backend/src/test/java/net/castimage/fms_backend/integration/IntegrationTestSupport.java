@@ -12,6 +12,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.UUID;
 
 /**
@@ -72,7 +73,7 @@ public abstract class IntegrationTestSupport {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return java.util.HexFormat.of().formatHex(mac.doFinal(input.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(mac.doFinal(input.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -81,7 +82,7 @@ public abstract class IntegrationTestSupport {
     /** SHA-256 hex（构造带 body 请求的 body_hash） */
     protected static String sha256Hex(byte[] body) {
         try {
-            return java.util.HexFormat.of().formatHex(
+            return HexFormat.of().formatHex(
                     MessageDigest.getInstance("SHA-256").digest(body));
         } catch (Exception e) {
             throw new IllegalStateException(e);

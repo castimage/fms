@@ -129,7 +129,7 @@ public class ApServiceImpl implements ApService {
     @Transactional(readOnly = true)
     public PageResult<SupplierView> pageSuppliers(long page, long size, UUID companyId, String keyword) {
         return PageResult.of(supplierMapper.selectSupplierPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, keyword));
+                Math.clamp(size, 1, 100)), companyId, keyword));
     }
 
     /** {@inheritDoc} */
@@ -230,7 +230,7 @@ public class ApServiceImpl implements ApService {
             validateEnum(status, INVOICE_STATUSES, "发票状态");
         }
         return PageResult.of(apInvoiceMapper.selectInvoicePage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, supplierId, status, keyword));
+                Math.clamp(size, 1, 100)), companyId, supplierId, status, keyword));
     }
 
     /** {@inheritDoc} */
@@ -419,7 +419,7 @@ public class ApServiceImpl implements ApService {
             validateEnum(status, Set.of("PAID", "ALLOCATED", "REVERSED"), "付款单状态");
         }
         return PageResult.of(paymentMapper.selectPaymentPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, supplierId, status));
+                Math.clamp(size, 1, 100)), companyId, supplierId, status));
     }
 
     /** {@inheritDoc} */
@@ -584,8 +584,7 @@ public class ApServiceImpl implements ApService {
             index++;
         }
         // 发票状态推进，迁移合法性由不可变触发器终审 + 付款单核销完毕置 ALLOCATED
-        for (int i = 0; i < items.size(); i++) {
-            ApInvoice invoice = invoices.get(i);
+        for (ApInvoice invoice : invoices) {
             BigDecimal paid = money(paymentAllocationMapper.selectPaidSumByInvoice(invoice.getId()));
             boolean fullyPaid = paid.compareTo(money(invoice.getTotal())) >= 0;
             if (apInvoiceMapper.update(null, new LambdaUpdateWrapper<ApInvoice>()
@@ -709,7 +708,7 @@ public class ApServiceImpl implements ApService {
             validateEnum(status, RECONCILIATION_STATUSES, "对账单状态");
         }
         return PageResult.of(reconciliationMapper.selectReconciliationPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, supplierId, status));
+                Math.clamp(size, 1, 100)), companyId, supplierId, status));
     }
 
     /** {@inheritDoc} */
@@ -779,9 +778,9 @@ public class ApServiceImpl implements ApService {
             List<MatchCandidate> candidates = apInvoiceMapper.selectMatchCandidates(
                     reconciliation.getCompanyId(), line.trxDate(), money(line.amount()),
                     line.summary(), CANDIDATE_LIMIT);
-            if (!candidates.isEmpty() && candidates.get(0).similarity() != null
-                    && candidates.get(0).similarity().compareTo(SUGGEST_THRESHOLD) > 0) {
-                entity.setSimilarityScore(candidates.get(0).similarity());
+            if (!candidates.isEmpty() && candidates.getFirst().similarity() != null
+                    && candidates.getFirst().similarity().compareTo(SUGGEST_THRESHOLD) > 0) {
+                entity.setSimilarityScore(candidates.getFirst().similarity());
             }
             reconciliationLineMapper.insert(entity);
         }

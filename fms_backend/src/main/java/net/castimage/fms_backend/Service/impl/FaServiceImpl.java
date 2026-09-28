@@ -105,7 +105,7 @@ public class FaServiceImpl implements FaService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<AssetView> pageAssets(long page, long size, String keyword, String status) {
-        Page<AssetView> pg = new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 100));
+        Page<AssetView> pg = new Page<>(Math.max(page, 1), Math.clamp(size, 1, 100));
         return PageResult.of(assetMapper.selectAssetPage(pg, keyword, status));
     }
 
@@ -443,7 +443,7 @@ public class FaServiceImpl implements FaService {
     @Transactional(readOnly = true)
     public PageResult<DepreciationRunView> pageDepreciationRuns(long page, long size, UUID companyId, String period) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         // period 先判空再 trim：eq(condition, col, value) 的参数在方法调用前即求值，
         // 原写法 period 为 null 时 period.trim() 必然 NPE（可选参数缺省即 500）
         String p = period == null ? null : period.trim();
@@ -493,7 +493,7 @@ public class FaServiceImpl implements FaService {
                 .eq(UserOrgScope::getUserId, uid)
                 .isNull(UserOrgScope::getDeletedAt));
         if (scopes.size() == 1) {
-            return scopes.get(0).getOrgId();
+            return scopes.getFirst().getOrgId();
         }
         return null;
     }
