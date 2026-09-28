@@ -11,7 +11,6 @@ fms_backend/docs/
 fms_backend/start_backend.bat
 
 fms_db_pg/SPEC.md
-fms_db_pg/verify/
 
 fms_rgw/docs/
 fms_rgw/target-verify/
