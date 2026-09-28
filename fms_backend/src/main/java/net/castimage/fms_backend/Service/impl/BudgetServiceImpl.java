@@ -324,11 +324,12 @@ public class BudgetServiceImpl implements BudgetService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 预算执行对比，取计划最新版本，APPROVED 优先 LEFT JOIN rpt.budget_actual immv
      * （company×period×account×dept 直接对键）+ 已批调整净额，ratio = (actual + adjusted) / plan，
      * overLimit = ratio ≥ 100%，超支阻断阈值，拒绝由 db 触发器承担，level = BLOCK/WARN/NORMAL，warn 阈值 80%，availableAmount = plan + adjusted - actual。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
     public List<BudgetExecutionRow> execution(UUID companyId, String period, UUID deptId) {

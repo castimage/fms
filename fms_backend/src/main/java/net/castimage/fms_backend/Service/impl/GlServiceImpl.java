@@ -391,6 +391,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 提交凭证（状态机 DRAFT 转 SUBMITTED 第一步），仅制单人本人可提交，否则 40900，防
      * 他人代提交，Java 侧预检借贷平衡，按 db 现存分录复核，与触发器同步口径与期间
      * OPEN（db 触发器 trg_voucher_submit_check 终审，RAISE 统一映射 40900），通过后置
@@ -409,7 +411,6 @@ public class GlServiceImpl implements GlService {
      * @return 提交后的凭证详情
      * @throws ConflictException 状态非法/非制单人/借贷不平/期间未开，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView submitVoucher(UUID id) {
@@ -436,6 +437,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 审批凭证（状态机 SUBMITTED 转 APPROVED 第二步），SoD 强制审批人不得为制单人
      * （录入≠审核，db 触发器复核 approved_by≠created_by 终审），通过后写 APPROVED 并
      * 记录审批人/审批时间。审批后凭证进入过账队列，updateById 影响行数为 0（状态已变更
@@ -452,7 +455,6 @@ public class GlServiceImpl implements GlService {
      * @return 审批后的凭证详情
      * @throws ConflictException 状态非法或审批人=制单人，SoD，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView approveVoucher(UUID id) {
@@ -479,6 +481,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 过账凭证（状态机 APPROVED 转 POSTED 第三步），取号、状态推进与审计由 pg SECURITY
      * DEFINER 函数 fn_post_voucher 原子完成，规避 rls 与不可变触发器拒绝顺序，期间
      * CLOSED/状态非法/借贷不平由 db 侧 RAISE，异常统一映射 40900。过账后凭证不可再
@@ -496,7 +500,6 @@ public class GlServiceImpl implements GlService {
      * @return 过账后的凭证详情
      * @throws ConflictException 状态非法或 db 终审拒绝，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView postVoucher(UUID id) {
@@ -511,6 +514,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 驳回凭证（状态机 SUBMITTED 转 REJECTED），驳回为审核侧决策，原因必填，写入
      * voucher_status_history.remark 与审计，SoD 驳回人不得为制单人（与审批同族，录入≠
      * 审核），状态推进/原因/审计由 pg SECURITY DEFINER 函数 fn_reject_voucher 原子完成，权限闸口 gl.voucher.reject + 状态机白名单触发器终审，异常 RAISE 统一映射 40900。
@@ -526,7 +531,6 @@ public class GlServiceImpl implements GlService {
      * @return 驳回后的凭证详情
      * @throws ConflictException 状态非法/驳回人=制单人（SoD）/原因缺失或 db 终审拒绝，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView rejectVoucher(UUID id, RejectRequest req) {
@@ -549,6 +553,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 退回（状态机 REJECTED 转 DRAFT），被驳回凭证退回草稿：updateVoucher/deleteVoucher
      * 仅放行 DRAFT，无退回路径时 REJECTED 凭证成为死数据且阻断所在期间结账，
      * fn_close_period 将 REJECTED 计入未完成凭证；退回后凭证回到可编辑 DRAFT，可修改后
@@ -563,7 +569,6 @@ public class GlServiceImpl implements GlService {
      * @return 退回后的凭证详情（DRAFT）
      * @throws ConflictException 状态非法或 db 终审拒绝，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView revertVoucher(UUID id) {
@@ -578,6 +583,8 @@ public class GlServiceImpl implements GlService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 红字冲销（状态机 POSTED 转 REVERSED 末步），反向日期缺省当日、原因缺省空串，pg
      * SECURITY DEFINER 函数 fn_reverse_voucher 完成，新建借贷互换的反向凭证、置原凭证
      * REVERSED 并双向互链（reversal_of_voucher_id / reversed_by_voucher_id），返回反向
@@ -597,7 +604,6 @@ public class GlServiceImpl implements GlService {
      * @return 新建反向凭证的详情
      * @throws ConflictException 状态非法，非 POSTED 或 db 终审拒绝，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public VoucherDetailView reverseVoucher(UUID id, ReverseRequest req) {

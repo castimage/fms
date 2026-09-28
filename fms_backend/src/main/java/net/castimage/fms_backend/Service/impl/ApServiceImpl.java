@@ -325,6 +325,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 开票（DRAFT 转 ISSUED），预检发票号/供应商/金额后推进状态，ISSUED 之后发票进入
      * 资金闭环，trg_ap_invoice_immutable 终审，ISSUED/PARTIAL 仅可作废、PAID/VOID
      * 禁改禁删，预检通过但更新 0 行，并发/状态已变/rls 不可见一律 40900。
@@ -333,7 +335,6 @@ public class ApServiceImpl implements ApService {
      * @return 开票后详情
      * @throws ConflictException 状态非法或并发冲突，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ApInvoiceView issueInvoice(UUID id) {
@@ -383,6 +384,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 作废（ISSUED/PARTIAL 转 VOID），不可变触发器允许的唯一已开票迁移，作废后
      * 同 VOID 状态禁改禁删。Java 预检 + 0 行，并发/已作废则 40900。
      *
@@ -390,7 +393,6 @@ public class ApServiceImpl implements ApService {
      * @return 作废后详情
      * @throws ConflictException 状态非法，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ApInvoiceView voidInvoice(UUID id) {
@@ -502,6 +504,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 付款核销入口，一次核销多张发票，事务内顺序执行，防重双闸 + 防并发超分，
      *
      * FOR UPDATE 锁付款单（selectByIdForUpdate，写事务内），并发核销
@@ -525,7 +529,6 @@ public class ApServiceImpl implements ApService {
      * @return 新建核销明细列表
      * @throws ConflictException 付款单状态非法/超分/重复核销/发票不可核销，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public List<AllocationView> allocate(UUID paymentId, List<PaymentAllocateRequest> items) {
@@ -614,6 +617,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 撤销核销，仅发票仍 PARTIAL 可撤，乐观锁条件软删（version 不匹配/已撤销则
      * 0 行则 40900），并回算发票状态（剩余已核销 = 0 则回 ISSUED，否则保持 PARTIAL）。
      *
@@ -622,7 +627,6 @@ public class ApServiceImpl implements ApService {
      * @param allocationId 核销明细 id
      * @throws ConflictException 发票已 PAID/核销不存在/版本冲突，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void unallocate(UUID allocationId) {
@@ -649,6 +653,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 付款冲销（PAID/ALLOCATED 转 REVERSED），软性动作，置状态 + 软删该付款单全部
      * 核销明细，带版本条件逐条撤销，并回算受影响发票状态，ap.payments 无状态机
      * 触发器，Java 预检即可，若受影响发票已 PAID，冲销触发不可变触发器拒绝则
@@ -658,7 +664,6 @@ public class ApServiceImpl implements ApService {
      * @param req 冲销原因，审计追溯
      * @throws ConflictException 付款单已冲销/受影响发票已 PAID，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void reversePayment(UUID id, ReverseReceiptRequest req) {
@@ -747,6 +752,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 对账单行导入，全部落库 UNMATCHED，逐行做候选匹配建议，金额相等 + 日期差≤3 天
      * + similarity(摘要, 发票号) 降序取 top1，相似度 > 0.6 回写 similarity_score
      * 供 ui 展示建议，不自动匹配，留待人工 matchLine 或放弃，对账为核对动作，
@@ -756,7 +763,6 @@ public class ApServiceImpl implements ApService {
      * @param req 行列表
      * @throws ConflictException 对账单非 DRAFT，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void importLines(UUID id, ReconciliationImportRequest req) {
@@ -788,6 +794,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 对账行人工匹配，updateMatchStatus 原子守卫（WHERE match_status='UNMATCHED'，
      * 0 行则 40900"行已被匹配"，防并发双配），发票须 ISSUED/PARTIAL，matched_invoice_id
      * 仅回填不核销，与对账解耦，注释明确。
@@ -796,7 +804,6 @@ public class ApServiceImpl implements ApService {
      * @param req              lineId + invoiceId
      * @throws ConflictException 对账单非 DRAFT/行已被消费/发票不可匹配，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void matchLine(UUID reconciliationId, MatchLineRequest req) {
@@ -817,6 +824,8 @@ public class ApServiceImpl implements ApService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 确认对账单（DRAFT 转 CONFIRMED），预检全部行已处理，无 UNMATCHED 残留，对账
      * 为核对动作不改发票/付款状态，确认后禁改（Java 预检 + updateById 0 行则 40900）。
      *
@@ -824,7 +833,6 @@ public class ApServiceImpl implements ApService {
      * @return 确认后详情
      * @throws ConflictException 存在未匹配行/状态非法，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ReconciliationView confirm(UUID id) {

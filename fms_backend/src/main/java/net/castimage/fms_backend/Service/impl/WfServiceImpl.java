@@ -147,11 +147,12 @@ public class WfServiceImpl implements WfService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 激活流程定义（状态机 DRAFT 转 ACTIVE）：激活前校验节点编排为非空 JSON 数组（空编排
      * 无法推进审批）；激活后定义不可改删（update/delete 预检 DRAFT/ACTIVE 闸），
      * 只能走 disable 停用。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public WfDefinitionView activateDefinition(UUID id) {
@@ -232,12 +233,13 @@ public class WfServiceImpl implements WfService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 发起流程实例：Java 预检（定义可见 40400 / 须 ACTIVE 40900 / 节点编排合法 40001 /
      * 业务单据未重复发起 40900）后，委托 wf.fn_start_instance（SECURITY DEFINER）原子
      * 创建 RUNNING 实例 + 首个审批节点任务集（处理人按 strategy 与 handlers 展开）；
      * 并发重复发起由 uk_wf_inst_business 唯一索引兜底（23505 映射 40900）。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public WfInstanceView startInstance(WfInstanceRequest req) {
@@ -272,11 +274,12 @@ public class WfServiceImpl implements WfService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 领取任务：调 wf.claim_task（内部取 current_uid）——PG 侧 UPDATE + FOR UPDATE
      * SKIP LOCKED 原子完成，并发请求仅一人获得行锁领取成功（其余 false），且仅领取
      * 分配给本人的 PENDING 任务；false 则 40900"任务不可领取"（不存在/非本人/已被领取）。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void claim(UUID taskId) {
@@ -303,11 +306,12 @@ public class WfServiceImpl implements WfService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 转办任务：调 wf.complete_task(taskId, 'TRANSFER', remark)——remark 传新处理人
      * uuid 文本即同节点新建 PENDING 任务（PG 侧 CAST 失败仅记事件不转办）；任务置
      * TRANSFERRED，实例保持 RUNNING。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void transfer(UUID taskId, TaskActionRequest req) {

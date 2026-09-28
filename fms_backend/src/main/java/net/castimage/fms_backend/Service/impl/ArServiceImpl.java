@@ -309,6 +309,8 @@ public class ArServiceImpl implements ArService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 开票（DRAFT 转 ISSUED），预检发票编号/客户/金额后推进状态，ISSUED 之后发票进入
      * 资金闭环，trg_ar_invoice_immutable 终审，ISSUED/PARTIAL 仅可作废、PAID/VOID
      * 禁改禁删，预检通过但更新 0 行，并发/状态已变/rls 不可见一律 40900。
@@ -317,7 +319,6 @@ public class ArServiceImpl implements ArService {
      * @return 开票后详情
      * @throws ConflictException 状态非法或并发冲突，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ArInvoiceView issueInvoice(UUID id) {
@@ -367,6 +368,8 @@ public class ArServiceImpl implements ArService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 作废（ISSUED/PARTIAL 转 VOID），不可变触发器允许的唯一已开票迁移，作废通道，
      * 作废后同 VOID 状态禁改禁删。Java 预检 + 0 行，并发/已作废则 40900。
      *
@@ -374,7 +377,6 @@ public class ArServiceImpl implements ArService {
      * @return 作废后详情
      * @throws ConflictException 状态非法，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ArInvoiceView voidInvoice(UUID id) {
@@ -477,6 +479,8 @@ public class ArServiceImpl implements ArService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 核销入口（收款单对发票），事务内顺序执行，防重双闸 + 防并发超分 + 请求级幂等，
      *
      * FOR UPDATE 锁收款单（selectByIdForUpdate，写事务内），并发核销
@@ -506,7 +510,6 @@ public class ArServiceImpl implements ArService {
      * @return 新建核销明细
      * @throws ConflictException 收款单状态非法/超分/重复核销/发票不可核销，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public AllocationView allocate(UUID receiptId, AllocateRequest req) {
@@ -608,6 +611,8 @@ public class ArServiceImpl implements ArService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 撤销核销，仅发票仍 PARTIAL 可撤，乐观锁条件软删（version 不匹配/已撤销则
      * 0 行则 40900），并回算发票状态（剩余已核销 = 0 则回 ISSUED，否则保持 PARTIAL）。
      *
@@ -617,7 +622,6 @@ public class ArServiceImpl implements ArService {
      * @param allocationId 核销明细 id
      * @throws ConflictException 发票已 PAID/核销不存在/版本冲突，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void unallocate(UUID allocationId) {
@@ -648,6 +652,8 @@ public class ArServiceImpl implements ArService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 收款冲销（RECEIVED/ALLOCATED 转 REVERSED），软性动作，置状态 + 软删该收款单
      * 全部核销明细，带版本条件逐条撤销，并回算受影响发票状态，ar.receipts 无状态机
      * 触发器，Java 预检即可，若受影响发票已 PAID，本单核销使其结清，冲销将触发
@@ -657,7 +663,6 @@ public class ArServiceImpl implements ArService {
      * @param req 冲销原因，审计追溯
      * @throws ConflictException 收款单已冲销/受影响发票已 PAID，40900
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public void reverseReceipt(UUID id, ReverseReceiptRequest req) {

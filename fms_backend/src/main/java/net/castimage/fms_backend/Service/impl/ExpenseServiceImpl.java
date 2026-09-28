@@ -221,11 +221,12 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 提交报销单（状态机 DRAFT 转 SUBMITTED）：仅申请人本人可提交（防他人代提交）；明细行数
      * > 0 预检（行与头金额一致性在创建/更新时已强制）；DB 触发器 trg_reimburse_status_check
      * 终审（非法流转 RAISE 则 40900）。提交后单据进入审批队列，不可再改删。
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ReimbursementDetailView submitReimbursement(UUID id) {
@@ -312,12 +313,13 @@ public class ExpenseServiceImpl implements ExpenseService {
     }
 
     /**
+     * {@inheritDoc}
+     *
      * 出纳付款，状态机 APPROVED 转 PAID，Java 预检状态前置，DB 触发器终审
      *
      * 付款后单据冻结，仅可沿 PAID 转 POSTED 推进，该推进由显式生成凭证动作一并完成，
      * 本动作只落状态，不触碰凭证
      */
-    /** {@inheritDoc} */
     @Override
     @Transactional
     public ReimbursementDetailView payReimbursement(UUID id) {
