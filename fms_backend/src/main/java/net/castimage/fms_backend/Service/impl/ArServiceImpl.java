@@ -112,7 +112,7 @@ public class ArServiceImpl implements ArService {
     @Transactional(readOnly = true)
     public PageResult<CustomerView> pageCustomers(long page, long size, UUID companyId, String keyword) {
         return PageResult.of(customerMapper.selectCustomerPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, keyword));
+                Math.clamp(size, 1, 100)), companyId, keyword));
     }
 
     /** {@inheritDoc} */
@@ -214,7 +214,7 @@ public class ArServiceImpl implements ArService {
             validateEnum(status, INVOICE_STATUSES, "发票状态");
         }
         return PageResult.of(arInvoiceMapper.selectInvoicePage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, customerId, status, keyword));
+                Math.clamp(size, 1, 100)), companyId, customerId, status, keyword));
     }
 
     /** {@inheritDoc} */
@@ -405,7 +405,7 @@ public class ArServiceImpl implements ArService {
             validateEnum(status, Set.of("RECEIVED", "ALLOCATED", "REVERSED"), "收款单状态");
         }
         return PageResult.of(receiptMapper.selectReceiptPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, customerId, status));
+                Math.clamp(size, 1, 100)), companyId, customerId, status));
     }
 
     /** {@inheritDoc} */
@@ -726,7 +726,7 @@ public class ArServiceImpl implements ArService {
             validateEnum(status, BAD_DEBT_STATUSES, "计提状态");
         }
         return PageResult.of(badDebtProvisionMapper.selectBadDebtPage(new Page<>(Math.max(page, 1),
-                Math.min(Math.max(size, 1), 100)), companyId, status));
+                Math.clamp(size, 1, 100)), companyId, status));
     }
 
     /** {@inheritDoc} */

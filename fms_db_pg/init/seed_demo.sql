@@ -1,9 +1,23 @@
--- FMS 财务系统（init/seed_demo），演示数据（全部幂等，INSERT ... ON CONFLICT DO NOTHING 或 DO 块存在性守卫）
+-- FMS 财务系统（init/seed_demo），演示数据，全部幂等，INSERT ... ON CONFLICT DO NOTHING 或 DO 块存在性守卫
 
--- 内容，demo 公司与部门树（ltree）/ 4 演示用户（operator01/viewer01/auditor01/report01）/ user_role 与数据范围 / gl.periods（2026-07/2026-08 OPEN）/ 会计科目表，5 大类 21 一级 + 2 二级/ 预算计划 / 2 张演示凭证（POSTED 平衡 + DRAFT 草稿）/ 演示单据（ar 客户、ap 供应商、cash 银行账户加密写、wf 审批流、expense 报销单、wf 审批实例任务）
-
--- 设计，演示数据为可选加载，用于系统演示和测试，所有用户初始密码 Fms@ca5T1ma93
+-- 演示数据为可选加载，用于系统演示和测试，所有用户初始密码 Fms@ca5T1ma93
 -- 种子行携带固定 uuid 常量，v7 版本位可读可预期，显式 id 直插即可，种子以超级用户写入绕过 rls 属设计预期
+
+-- 内容分两部分，身份与凭据部分为六类适用人群各自的账号与凭据，附带数据部分为这些人群演示所需的业务行
+-- 身份与凭据含演示公司与部门树，五个演示账号，账号角色与数据范围，API Key 调用方演示密钥
+-- 附带数据含 2026-07 与 2026-08 两个 OPEN 会计期间，五类 21 个一级加 2 个二级会计科目
+-- 2026-08 财务部管理费用预算计划，一张已过账平衡凭证与一张草稿凭证，应收客户、应付供应商与加密写入的银行账户
+-- 费用报销单及其审批实例与任务
+
+-- 六类人群中管理员由系统种子建号，本文件补其公司与部门数据范围
+-- 操作员含凭证录入与提交、发票与收付款登记、核销、资产与预算维护、审批办理，库内由 accountant、cashier、approver 三个职责角色承担
+-- 三者映射同一 operator 令牌角色，故本文件为操作员一次挂满三个角色
+-- 其中 approver 是已启用报销审批流节点唯一的处理人来源，缺它则该节点取不到角色成员，任务会落到公司内最早创建的账号而非审批人
+-- 查阅员、审计员、报表员各挂一个职责角色，只读面分别为业务数据、审计与日志、报表与看板
+-- API Key 调用方按签发时绑定的 scope 与有效期执行，越权即时拒绝
+
+-- 上述业务数据是够演示用的最小集，不是拟真数据量，批量拟真数据另由演示数据生成器经 API 全链路生成
+-- 验收脚本不依赖本文件的业务数据，各自带夹具，故全新库无这些业务行时验收同样成立
 
 SET ROLE fms_admin;
 
@@ -43,7 +57,7 @@ VALUES ('00000000-0000-7000-0000-000000000021', '00000000-0000-7000-0000-0000000
         2)
 ON CONFLICT (company_id, path) DO NOTHING;
 
--- 演示用户（4 个，operator01/viewer01/auditor01/report01，密码 Fms@ca5T1ma93）
+-- 操作员、查阅员、审计员、报表员四个演示账号，密码与 admin 初始密码一致
 INSERT INTO um.users
     (login_name, login_name_hash, pass_hash, status, company_id,
      must_change_pwd, failed_login_count)
@@ -126,11 +140,17 @@ BEGIN
 END $$;
 
 -- 演示用户角色分配与数据范围
+-- 操作员按职责一次挂满 accountant、cashier、approver 三个职责角色，分别承担记账、资金与资产折旧、预算与报销审批
+-- 三者都映射 operator 令牌角色，故前端会话角色不变，变的是可办事的面
+
+-- approver 是已启用报销审批流节点唯一的处理人来源，缺它则该节点取不到角色成员
+-- 单审分支会依次静默回落，先取公司内最早创建的启用账号，仍为空才退到流程发起人
+-- 本库最早创建的启用账号是 admin，建号早于四个演示账号，故缺 approver 时审批任务会落到 admin 而非审批人
 INSERT INTO um.user_role (company_id, user_id, role_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', u.id, r.id,
        '00000000-0000-7000-0000-000000000001', now()
   FROM um.users u JOIN um.roles r
-    ON (u.login_name = 'operator01' AND r.code = 'accountant')
+    ON (u.login_name = 'operator01' AND r.code IN ('accountant', 'cashier', 'approver'))
     OR (u.login_name = 'viewer01'   AND r.code = 'viewer')
     OR (u.login_name = 'auditor01'  AND r.code = 'auditor')
     OR (u.login_name = 'report01'   AND r.code = 'report_viewer')
@@ -149,6 +169,7 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, d.id
    AND d.company_id = '00000000-0000-7000-0000-000000000010' AND d.deleted_at IS NULL
 ON CONFLICT (user_id, dept_id) DO NOTHING;
 
+-- 管理员数据范围，账号由系统种子创建，此处补公司与部门范围
 -- admin 数据范围，rls 策略经 auth.can_access_org 与 auth.can_access_dept 读会话变量
 -- fms.org_ids 与 fms.dept_ids 判定，变量由后端 set_session 从范围表预载，范围表无记录
 -- 即策略恒判假，管理员读写一并被拒
@@ -166,6 +187,44 @@ SELECT u.company_id, u.id, d.id
   FROM um.users u CROSS JOIN org.departments d
  WHERE u.login_name = 'admin' AND d.company_id = u.company_id AND d.deleted_at IS NULL
 ON CONFLICT (user_id, dept_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
+
+-- API Key 调用方，系统间集成凭据，按签发时绑定的 scope 与有效期执行，越权即时拒绝
+
+-- 演示密钥明文固定，与演示账号口令同属演示凭据，仅供测试实例演示，不得用于生产
+-- 库内不存明文，只存 hmac 盲索引，故此处以 fms_admin 身份直插行，落库形态与签发函数一致
+-- 明文前 8 位作 key_prefix，scope 取 read 映射只读职责角色 fms_viewer，越权写请求在网关与后端按 40100 与 40300 即时拒绝
+
+-- 密钥表由补齐脚本建表且早于本文件执行，全新库首轮即有该表
+-- 判存守卫为手工单跑本文件的兜底，ON CONFLICT 命中同一盲索引时复活状态与有效期，重复执行幂等
+DO $$
+DECLARE
+    v_key text := 'fms_f27018a578be274a6f64eb097ed6de9bab39b1944e78eda146d5ceba28e4ef01';
+    v_uid uuid;
+BEGIN
+    IF to_regclass('um.api_keys') IS NULL THEN
+        RAISE NOTICE 'seed_demo: um.api_keys 未建表（fill_missing 建表后执行本文件即可补上），跳过 API Key 调用方演示密钥';
+        RETURN;
+    END IF;
+    SELECT id INTO v_uid FROM um.users
+     WHERE login_name = 'viewer01' AND deleted_at IS NULL;
+    IF v_uid IS NULL THEN
+        RAISE NOTICE 'seed_demo: viewer01 缺失，跳过 API Key 调用方演示密钥';
+        RETURN;
+    END IF;
+    INSERT INTO um.api_keys
+        (company_id, user_id, name, key_prefix, key_hash, scope, expires_at, status)
+    VALUES
+        ('00000000-0000-7000-0000-000000000010', v_uid, '演示：系统间集成只读密钥',
+         left(v_key, 8),
+         encode(hmac(v_key,
+                     (SELECT value->>'v' FROM sec.app_secrets
+                       WHERE code = 'pgcrypto.blind_key'), 'sha256'), 'hex'),
+         'read', timestamptz '2027-12-31 23:59:59+08', 'ACTIVE')
+    ON CONFLICT (key_hash) DO UPDATE
+        SET status = 'ACTIVE', revoked_at = NULL, expires_at = EXCLUDED.expires_at,
+            scope = EXCLUDED.scope, deleted_at = NULL, updated_at = now();
+    RAISE NOTICE 'seed_demo: API Key 调用方演示密钥就绪（scope=read，绑定 viewer01，有效期至 2027-12-31）';
+END $$;
 
 -- gl.periods 会计期间（2026-07/2026-08 均 OPEN）
 INSERT INTO gl.periods (company_id, period, status, closed_by, closed_at)

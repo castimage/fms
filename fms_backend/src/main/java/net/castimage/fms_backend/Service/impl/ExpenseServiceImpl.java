@@ -95,7 +95,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     public PageResult<ReimbursementView> pageReimbursements(long page, long size, UUID companyId,
                                                             String status, String keyword) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(reimbursementMapper.selectReimbursementPage(
                 new Page<>(pageNum, sizeNum), companyId, status, keyword));
     }
@@ -105,7 +105,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Transactional(readOnly = true)
     public PageResult<ReimbursementView> pageMyReimbursements(long page, long size, String status, String keyword) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(reimbursementMapper.selectMyPage(
                 new Page<>(pageNum, sizeNum), RequestContext.requireUserId(), status, keyword));
     }

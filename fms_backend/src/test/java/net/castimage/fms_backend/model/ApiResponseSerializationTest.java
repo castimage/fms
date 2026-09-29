@@ -7,6 +7,7 @@ import net.castimage.fms_backend.Model.ApiResponse;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +81,7 @@ class ApiResponseSerializationTest {
     @Test
     void fieldNamesMatchProtocolExactly() throws Exception {
         // 防止未来重命名字段（如 traceId 变 trace_id）破坏协议
-        List<String> names = new java.util.ArrayList<>();
+        List<String> names = new ArrayList<>();
         mapper.readTree(mapper.writeValueAsString(ApiResponse.ok(null))).fieldNames()
                 .forEachRemaining(names::add);
         assertEquals(List.of("code", "message", "data", "traceId"), names);

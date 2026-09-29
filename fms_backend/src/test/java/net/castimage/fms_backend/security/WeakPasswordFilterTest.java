@@ -5,6 +5,7 @@ import net.castimage.fms_backend.Utils.WeakPasswordFilter;
 import net.castimage.fms_backend.Utils.WeakPasswordList;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -101,7 +102,7 @@ class WeakPasswordFilterTest {
         int iterations = 50_000;
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         try {
-            List<Callable<Boolean>> tasks = new java.util.ArrayList<>();
+            List<Callable<Boolean>> tasks = new ArrayList<>();
             for (int t = 0; t < threads; t++) {
                 tasks.add(() -> {
                     boolean ok = true;

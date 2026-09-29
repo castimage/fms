@@ -76,7 +76,7 @@ class TotpUtilsTest {
     void backupCodesCountParameterized() {
         List<String> codes = TotpUtils.generateBackupCodes(5, 10);
         assertEquals(5, codes.size());
-        assertEquals(12, codes.get(0).length()); // XXXX-XXXX-XX
+        assertEquals(12, codes.getFirst().length()); // XXXX-XXXX-XX
     }
 
     @Test

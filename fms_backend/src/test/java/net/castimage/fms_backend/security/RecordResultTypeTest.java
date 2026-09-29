@@ -90,7 +90,7 @@ class RecordResultTypeTest {
         List<Object> results = handler.handleResultSets(stmt);
 
         assertEquals(1, results.size(), "record 结果映射必须产出一行");
-        LedgerView row = (LedgerView) results.get(0);
+        LedgerView row = (LedgerView) results.getFirst();
         assertNotNull(row);
         assertEquals(accountId, row.accountId());
         assertEquals("1001", row.accountCode());

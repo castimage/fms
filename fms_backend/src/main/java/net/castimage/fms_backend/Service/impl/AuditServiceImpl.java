@@ -48,7 +48,7 @@ public class AuditServiceImpl implements AuditService {
     public PageResult<AuditLogView> pageLogs(long page, long size, UUID actorId, String tableName,
                                              UUID recordId, String action, LocalDateTime from, LocalDateTime to) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(auditLogMapper.selectLogPage(new Page<>(pageNum, sizeNum),
                 actorId, trim(tableName), recordId, trim(action), from, to));
     }

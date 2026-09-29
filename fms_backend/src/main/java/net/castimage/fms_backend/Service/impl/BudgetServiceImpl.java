@@ -89,7 +89,7 @@ public class BudgetServiceImpl implements BudgetService {
     public PageResult<BudgetPlanView> pagePlans(long page, long size, UUID companyId, String period,
                                                 UUID deptId, String status) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(planMapper.selectPlanPage(new Page<>(pageNum, sizeNum),
                 companyId, period, deptId, status));
     }
@@ -215,7 +215,7 @@ public class BudgetServiceImpl implements BudgetService {
     public PageResult<BudgetAdjustmentView> pageAdjustments(long page, long size, UUID companyId,
                                                            UUID planId, String status) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         return PageResult.of(adjustmentMapper.selectAdjustmentPage(
                 new Page<>(pageNum, sizeNum), companyId, planId, status));
     }

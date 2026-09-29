@@ -17,6 +17,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -133,7 +134,7 @@ class SandboxSessionInterceptorTest {
 
     @Test
     void identifiedQueryInTransactionInjectsSessionAndRole() throws SQLException {
-        java.util.UUID uid = UuidV7.next();
+        UUID uid = UuidV7.next();
         RequestContext.set(new RequestContext(uid, JwtRole.OPERATOR, null, null, null));
         when(conn.getAutoCommit()).thenReturn(false);
         inject();
@@ -145,7 +146,7 @@ class SandboxSessionInterceptorTest {
 
     @Test
     void identifiedQueryWithoutTransactionInjectsSessionLevelGuc() throws SQLException {
-        java.util.UUID uid = UuidV7.next();
+        UUID uid = UuidV7.next();
         RequestContext.set(new RequestContext(uid, JwtRole.VIEWER, null, null, null));
         when(conn.getAutoCommit()).thenReturn(true);
         inject();

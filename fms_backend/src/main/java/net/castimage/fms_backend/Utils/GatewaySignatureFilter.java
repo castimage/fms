@@ -876,7 +876,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         @Override
         public String getHeader(String name) {
             List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
-            return (values == null || values.isEmpty()) ? null : values.get(0);
+            return (values == null || values.isEmpty()) ? null : values.getFirst();
         }
 
         @Override

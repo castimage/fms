@@ -67,7 +67,7 @@ class CashServiceImplTest {
         MockMultipartFile f = file("2026-08-01,100.00,工资\n2026-08-02,50.50,餐费,OUT\n");
         StatementImportPreview preview = service.importStatement(f, ACCOUNT_ID);
         assertEquals(2, preview.totalLines());
-        StatementLinePreview first = preview.rows().get(0);
+        StatementLinePreview first = preview.rows().getFirst();
         assertEquals(LocalDate.of(2026, 8, 1), first.trxDate());
         assertEquals(new BigDecimal("100.00"), first.amount());
         assertEquals("工资", first.summary());
@@ -87,14 +87,14 @@ class CashServiceImplTest {
         MockMultipartFile f = file("2026-08-01\t100.00\t工资\n");
         StatementImportPreview preview = service.importStatement(f, ACCOUNT_ID);
         assertEquals(1, preview.totalLines());
-        assertEquals("工资", preview.rows().get(0).summary());
+        assertEquals("工资", preview.rows().getFirst().summary());
     }
 
     @Test
     void singleZeroDateCompatible() {
         MockMultipartFile f = file("2026/8/1,100.00,工资\n");
         StatementImportPreview preview = service.importStatement(f, ACCOUNT_ID);
-        assertEquals(LocalDate.of(2026, 8, 1), preview.rows().get(0).trxDate());
+        assertEquals(LocalDate.of(2026, 8, 1), preview.rows().getFirst().trxDate());
     }
 
     @Test

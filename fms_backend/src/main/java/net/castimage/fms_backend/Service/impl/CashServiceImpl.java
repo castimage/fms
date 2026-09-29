@@ -134,7 +134,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<BankAccountView> pageBankAccounts(long page, long size, String keyword) {
-        Page<BankAccountView> pg = new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 100));
+        Page<BankAccountView> pg = new Page<>(Math.max(page, 1), Math.clamp(size, 1, 100));
         // 列表 sql 不选密文/盲索引列，accountNo 恒 null，掩码由前端创建时携带
         return PageResult.of(bankAccountMapper.selectBankAccountPage(pg, keyword));
     }
@@ -236,7 +236,7 @@ public class CashServiceImpl implements CashService {
     @Transactional(readOnly = true)
     public PageResult<CashTransactionView> pageTransactions(long page, long size, UUID bankAccountId,
                                                             String direction, String matchStatus, UUID companyId) {
-        Page<CashTransactionView> pg = new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 100));
+        Page<CashTransactionView> pg = new Page<>(Math.max(page, 1), Math.clamp(size, 1, 100));
         return PageResult.of(cashTransactionMapper.selectTransactionPage(pg, bankAccountId, companyId,
                 direction, matchStatus));
     }
@@ -406,7 +406,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<BankStatementView> pageStatements(long page, long size, UUID bankAccountId) {
-        Page<BankStatementView> pg = new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 100));
+        Page<BankStatementView> pg = new Page<>(Math.max(page, 1), Math.clamp(size, 1, 100));
         return PageResult.of(bankStatementMapper.selectPage(pg, bankAccountId));
     }
 
@@ -489,7 +489,7 @@ public class CashServiceImpl implements CashService {
         // 运行统计归属公司，显式入参优先，否则取现存流水/对账单公司，与 pg 函数 fallback 同语义，防 NULL 公司
         UUID runCompanyId = companyId;
         if (runCompanyId == null && !trxs.isEmpty()) {
-            runCompanyId = trxs.get(0).getCompanyId();
+            runCompanyId = trxs.getFirst().getCompanyId();
         }
         ReconcileRun run = new ReconcileRun();
         run.setId(UuidV7.next());
@@ -550,7 +550,7 @@ public class CashServiceImpl implements CashService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<ReconcileRunView> pageReconcileRuns(long page, long size, UUID companyId) {
-        Page<ReconcileRunView> pg = new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 100));
+        Page<ReconcileRunView> pg = new Page<>(Math.max(page, 1), Math.clamp(size, 1, 100));
         return PageResult.of(reconcileRunMapper.selectPage(pg, companyId));
     }
 
@@ -708,7 +708,7 @@ public class CashServiceImpl implements CashService {
         if (records.isEmpty()) {
             return new String[0];
         }
-        CSVRecord record = records.get(0);
+        CSVRecord record = records.getFirst();
         String[] cols = new String[record.size()];
         for (int i = 0; i < cols.length; i++) {
             cols[i] = record.get(i);

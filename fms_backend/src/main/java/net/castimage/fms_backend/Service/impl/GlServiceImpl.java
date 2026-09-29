@@ -265,7 +265,7 @@ public class GlServiceImpl implements GlService {
     public PageResult<VoucherListView> pageVouchers(long page, long size, String period, String status,
                                                     UUID companyId, String keyword, Boolean createdByMe) {
         long pageNum = Math.max(page, 1);
-        long sizeNum = Math.min(Math.max(size, 1), 100);
+        long sizeNum = Math.clamp(size, 1, 100);
         Page<VoucherListView> pg = new Page<>(pageNum, sizeNum);
         return PageResult.of(voucherMapper.selectVoucherPage(pg, period, status, companyId,
                 createdByMe, keyword, RequestContext.userId()));
@@ -870,7 +870,7 @@ public class GlServiceImpl implements GlService {
         List<Object> objs = userMapper.selectObjs(new LambdaQueryWrapper<User>()
                 .select(User::getLoginName)
                 .eq(User::getId, userId));
-        return objs.isEmpty() ? null : String.valueOf(objs.get(0));
+        return objs.isEmpty() ? null : String.valueOf(objs.getFirst());
     }
 
     /** 科目枚举校验（@Pattern 之外 Service 侧兜底，db CHECK 终审） */
