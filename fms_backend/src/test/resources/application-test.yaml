@@ -1,5 +1,5 @@
 # 集成测试 profile（@ActiveProfiles("test") 激活）：连测试机 fms-db（经 SSH 隧道
-# 127.0.0.1:15432 -> 测试机 fms-db 容器 5432），沙箱角色 fms_app 直连——与生产
+# 127.0.0.1:15432 转发到测试机 fms-db 容器 5432），沙箱角色 fms_app 直连——与生产
 # 连接模型一致（prepareThreshold=0 适配 PgBouncer transaction 池语义）。
 # 运行前置：隧道在线 + 测试机 fms 库已初始化（种子含 admin/users/params/凭证）。
 spring:

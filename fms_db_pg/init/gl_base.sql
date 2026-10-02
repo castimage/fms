@@ -133,7 +133,7 @@ CREATE INDEX IF NOT EXISTS ix_line_summary_tsv ON gl.voucher_lines USING GIN (su
 DROP INDEX IF EXISTS gl.ix_line_summary;
 
 -- 触发器函数
--- 6.1 凭证号取号（per-company 序列，nextval 串行取号），序列首值 = 该公司现有最大凭证号 + 1，兼容种子数据，uk_voucher 仍兜底唯一
+-- 凭证号取号（per-company 序列，nextval 串行取号），序列首值 = 该公司现有最大凭证号 + 1，兼容种子数据，uk_voucher 仍兜底唯一
 CREATE OR REPLACE FUNCTION gl.fn_get_voucher_no(p_company_id uuid, p_period text)
 RETURNS integer
 LANGUAGE plpgsql
@@ -158,7 +158,7 @@ BEGIN
     RETURN v_no::integer;
 END $$;
 
--- 6.2 POSTED/REVERSED 凭证不可变（BEFORE UPDATE OR DELETE，第二层防线，覆盖超级用户绕过 rls 的场景，fn_reverse_voucher 互指冲销路径放行）
+-- POSTED/REVERSED 凭证不可变（BEFORE UPDATE OR DELETE，第二层防线，覆盖超级用户绕过 rls 的场景，fn_reverse_voucher 互指冲销路径放行）
 CREATE OR REPLACE FUNCTION gl.fn_voucher_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -172,7 +172,7 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END $$;
 
--- 6.3 状态机校验（BEFORE UPDATE OF status / INSERT），提交/审批/过账时校验 ① 分录借贷平衡，含总额一致性，② 期间 OPEN ③ 过账取号（POSTED 且未取号时分配 voucher_no）
+-- 状态机校验（BEFORE UPDATE OF status / INSERT），提交/审批/过账时校验分录借贷平衡含总额一致性、期间 OPEN、过账取号（POSTED 且未取号时分配 voucher_no）
 
 -- 行为与边界，INSERT 仅 DRAFT 豁免校验，草稿可暂存不平衡，非 DRAFT 直插即校验，UPDATE 仅在状态实际迁移，新旧不同，时校验，同状态字段修改放行
 
@@ -257,7 +257,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 6.3b 期间前向锁定守卫，gl.periods 仅允许 OPEN 转 CLOSED 前向锁定，CLOSED 转 OPEN，反结账必须显式开启 fms.force_reopen 二次确认（fn_reopen_period 同款开关），超级用户直改期间同样被触发器拦截，兜底反结账仅能经函数把关
+-- 期间前向锁定守卫，gl.periods 仅允许 OPEN 转 CLOSED 前向锁定，CLOSED 转 OPEN，反结账必须显式开启 fms.force_reopen 二次确认（fn_reopen_period 同款开关），超级用户直改期间同样被触发器拦截，兜底反结账仅能经函数把关
 CREATE OR REPLACE FUNCTION gl.fn_period_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -277,7 +277,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 6.3c 凭证期间守卫，凭证 INSERT（含 DRAFT）时期间 CLOSED 一律拒绝，已结账期间不得再建任何凭证，含 fms_admin 直插，防止结账后向已锁定期间注入凭证
+-- 凭证期间守卫，凭证 INSERT（含 DRAFT）时期间 CLOSED 一律拒绝，已结账期间不得再建任何凭证，含 fms_admin 直插，防止结账后向已锁定期间注入凭证
 CREATE OR REPLACE FUNCTION gl.fn_period_voucher_guard()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -296,7 +296,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 6.4 分录末级科目校验
+-- 分录末级科目校验
 CREATE OR REPLACE FUNCTION gl.fn_voucher_line_leaf_check()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -314,7 +314,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 6.5 分录防篡改（父凭证 POSTED/REVERSED 后禁改禁删）
+-- 分录防篡改（父凭证 POSTED/REVERSED 后禁改禁删）
 CREATE OR REPLACE FUNCTION gl.fn_voucher_line_posted_freeze()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -492,7 +492,7 @@ BEGIN
 END $$;
 
 -- gl cron 任务函数（queues_cron.sql 调度段 cron 命令惰性解析，运行时可用）
--- 凭证断号扫描（每日 06:00，queues_cron.sql），期间内 POSTED/REVERSED 凭证号缺口计数，终版另写 audit.record(voucher_gap) 留痕，见 gl_fx_rates ③
+-- 凭证断号扫描（每日 06:00，queues_cron.sql），期间内 POSTED/REVERSED 凭证号缺口计数，终版另写 audit.record(voucher_gap) 留痕，见 init/gl_fx_rates.sql
 CREATE OR REPLACE FUNCTION gl.fn_cron_voucher_number_check()
 RETURNS int
 LANGUAGE plpgsql
@@ -569,7 +569,7 @@ BEGIN
 END $guard$;
 
 -- 期间守卫触发器函数（反结账二次确认 + 已结账期间禁建凭证，
--- 与b/6.3c 行为等价，幂等重定义）
+-- 与上文期间前向锁定守卫、凭证期间守卫行为等价，幂等重定义）
 CREATE OR REPLACE FUNCTION gl.fn_period_guard()
 RETURNS trigger
 LANGUAGE plpgsql

@@ -220,7 +220,7 @@ public class FileServiceImpl implements FileService {
     /** 下载侧完整性复验：重算文件 SHA-256 与落库值比对（false=损坏/被篡改；读流失败也按不匹配处理，fail-closed） */
     private boolean sha256Matches(Path path, String expectedHex) {
         if (expectedHex == null || expectedHex.length() != 64) {
-            return false; // 落库值缺失/异常：拒绝（宁严勿松，历史遗留文档无哈希按损坏处理）
+            return false; // 落库值缺失/异常即拒绝（宁严勿松，无哈希的文档按损坏处理）
         }
         try (InputStream in = Files.newInputStream(path)) {
             MessageDigest digest = sha256Digest();

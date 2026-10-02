@@ -1,11 +1,11 @@
 -- gl 函数部署后自查，9 个核心函数可调用性，不得出现类型/签名错误
 
--- 2026-08 修复，验证脚本只读、无副作用，
--- 全文件包裹 BEGIN/ROLLBACK 事务，原 fn_close_period('2026-08') 在无未完成凭证的
+-- 验证脚本只读、无副作用，
+-- 全文件包裹 BEGIN/ROLLBACK 事务，fn_close_period('2026-08') 在无未完成凭证的
 
---      库上会真实结账（gl.periods 2026-08 OPEN->CLOSED，系统无法再录凭证），重跑 selfcheck
+--      库上会真实结账（gl.periods 2026-08 OPEN 转 CLOSED，系统无法再录凭证），重跑 selfcheck
 --      即对库产生不可逆修改，事务回滚后任何状态变更均不落库。
--- 结账/反结账改用不存在的测试期间 '2099-01'，不存在期间必然触发业务异常
+-- 结账/反结账使用不存在的测试期间 '2099-01'，不存在期间必然触发业务异常
 
 --      （'不存在或已结账'/'未结账'），"期望抛错"断言在任何库状态下都成立，
 --      且不触碰真实期间，即使脱离事务包裹单独执行本 DO 块也无副作用。
@@ -17,7 +17,7 @@ DECLARE
     v_int int;
     r     jsonb;
 BEGIN
-    --gl.fn_post_voucher(uuid): DRAFT -> 状态机拒绝，业务异常，非类型错误
+    -- gl.fn_post_voucher(uuid)，DRAFT 时状态机拒绝，业务异常，非类型错误
 
     BEGIN
         PERFORM gl.fn_post_voucher(v_uid);
@@ -41,9 +41,9 @@ BEGIN
         RAISE NOTICE 'reverse_voucher ok (expected raise): %', left(SQLERRM, 70);
     END;
 
-    --gl.fn_close_period(uuid, text)，测试期间 '2099-01' 不存在 -> 必然业务异常（'不存在或已结账'），
+    -- gl.fn_close_period(uuid, text)，测试期间 '2099-01' 不存在则必然业务异常（'不存在或已结账'），
 
-    --    不触碰真实期间，原 '2026-08' 在无未完成凭证的库上会真实结账，OPEN->CLOSED，不可逆副作用
+    --    不触碰真实期间，'2026-08' 在无未完成凭证的库上会真实结账，OPEN 转 CLOSED，不可逆副作用
     BEGIN
         PERFORM gl.fn_close_period(v_cid, '2099-01');
         RAISE NOTICE 'close_period: unexpectedly ok';
@@ -54,9 +54,9 @@ BEGIN
         RAISE NOTICE 'close_period ok (expected raise): %', left(SQLERRM, 70);
     END;
 
-    --gl.fn_reopen_period(uuid, text, text)，测试期间 '2099-01' 不存在 -> 必然业务异常，
+    -- gl.fn_reopen_period(uuid, text, text)，测试期间 '2099-01' 不存在则必然业务异常，
 
-    --    原 '2026-08' 在已结账库上会真实反结账，CLOSED->OPEN，同样不可逆副作用
+    --    '2026-08' 在已结账库上会真实反结账，CLOSED 转 OPEN，同样不可逆副作用
     BEGIN
         PERFORM gl.fn_reopen_period(v_cid, '2099-01', 'selfcheck');
         RAISE NOTICE 'reopen_period: unexpectedly ok';
@@ -67,7 +67,7 @@ BEGIN
         RAISE NOTICE 'reopen_period ok (expected raise): %', left(SQLERRM, 70);
     END;
 
-    --cash.fn_daily_report(uuid, date) -> jsonb
+    -- cash.fn_daily_report(uuid, date) 返回 jsonb
 
     BEGIN
         SELECT cash.fn_daily_report(v_cid, DATE '2026-08-01') INTO r;
@@ -115,7 +115,7 @@ BEGIN
         RAISE NOTICE 'revert_voucher ok (expected raise): %', left(SQLERRM, 70);
     END;
 
-    --gl.fn_fx_adjustment(uuid, text, text)，2026-08 授权核对，'2099-01' 无汇率/期间 -> 业务路径
+    -- gl.fn_fx_adjustment(uuid, text, text)，2026-08 授权核对，'2099-01' 无汇率/期间则走业务路径
 
     --，0 或跳过，仅核对可调用性与 EXECUTE 授权存在，不落任何数据
     BEGIN

@@ -5,7 +5,7 @@
 
 -- 解密出口按 current_user 身份校验
 
--- 1a) fms_app 直调 -> 必须失败（insufficient privilege）
+-- fms_app 直调必须失败（insufficient privilege）
 BEGIN;
 SET ROLE fms_app;
 DO $$
@@ -17,7 +17,7 @@ EXCEPTION WHEN insufficient_privilege OR others THEN
 END $$;
 ROLLBACK;
 
--- 1b) SET ROLE fms_report -> 必须失败
+-- SET ROLE fms_report 必须失败
 BEGIN;
 SET ROLE fms_report;
 DO $$
@@ -29,14 +29,14 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 ROLLBACK;
 
--- 1c) SET ROLE fms_operator -> 必须成功并返回明文账号
+-- SET ROLE fms_operator 必须成功并返回明文账号
 BEGIN;
 SET ROLE fms_operator;
 SELECT 'CHK1c' AS chk,
        auth.decrypt_bank_account('019fe2de-8c97-7d49-bb65-18a7bb305be2') AS acct;
 ROLLBACK;
 
--- 伪造 guc 注入 LOCKED 用户 -> current_uid 恒 NULL
+-- 伪造 guc 注入 LOCKED 用户则 current_uid 恒 NULL
 
 BEGIN;
 SELECT set_config('fms.user_id', (SELECT id::text FROM um.users WHERE login_name = 'operator01'), true);
@@ -157,9 +157,9 @@ BEGIN
 END $$;
 ROLLBACK;
 
--- trg_period_guard，未置 force_reopen 的 CLOSED->OPEN 被拒
+-- trg_period_guard，未置 force_reopen 的 CLOSED 转 OPEN 被拒
 
--- 2026-08 修复，与 CHK7 同口径，动态取最新 CLOSED 期间，原硬编码 2026-07 在双 OPEN 库上误报
+-- 与 CHK7 同口径，动态取最新 CLOSED 期间，避免硬编码 2026-07 在双 OPEN 库上误报
 BEGIN;
 SET ROLE fms_admin;
 DO $$

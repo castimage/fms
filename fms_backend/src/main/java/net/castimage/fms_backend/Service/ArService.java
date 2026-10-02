@@ -93,9 +93,9 @@ public interface ArService {
     void deleteReceipt(UUID id);
 
     /**
-     * 核销（收款单对发票）：事务内 ① FOR UPDATE 锁收款单（防并发超分，status 须
-     * RECEIVED）② 发票须 ISSUED/PARTIAL + 累计≤total ③ INSERT allocation
-     * （uk_ar_alloc 防同对重复，23505 映射 40900）④ 累计=total 则发票置 PAID + 收款单
+     * 核销（收款单对发票）：事务内先 FOR UPDATE 锁收款单（防并发超分，status 须
+     * RECEIVED），发票须 ISSUED/PARTIAL + 累计≤total，INSERT allocation
+     * （uk_ar_alloc 防同对重复，23505 映射 40900），累计=total 则发票置 PAID + 收款单
      * ALLOCATED，否则发票 PARTIAL（发票状态迁移由不可变触发器终审）。
      */
     AllocationView allocate(UUID receiptId, AllocateRequest req);

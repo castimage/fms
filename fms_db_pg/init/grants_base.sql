@@ -1,4 +1,4 @@
--- FMS 财务系统（Apply 阶段五层授权总闸，执行库，fms），① fa/expense/budget/wf/rpt 五 schema USAGE + 表级授权总闸 ② log.* 对 fms_auditor/fms_operator SELECT 补齐（audit-chain-check 闭环与 admin 会话可读）③ SECURITY DEFINER 业务函数 EXECUTE 精确矩阵（REVOKE PUBLIC 兜底）④ um.params/sec.app_secrets/pgmq 最小授权，密钥收敛⑤ rpt 视图 SELECT 授权（security_invoker=on 由 init/rpt_log_base.sql 设定后生效）⑥ audit/log 管理员授权与 rls（admin 会话 = fms_operator + auth.is_admin 判定）
+-- FMS 财务系统（Apply 阶段五层授权总闸，执行库，fms），fa/expense/budget/wf/rpt 五 schema USAGE 与表级授权总闸，log.* 对 fms_auditor/fms_operator SELECT 补齐（audit-chain-check 闭环与 admin 会话可读），SECURITY DEFINER 业务函数 EXECUTE 精确矩阵（REVOKE PUBLIC 兜底），um.params/sec.app_secrets/pgmq 最小授权与密钥收敛，rpt 视图 SELECT 授权（security_invoker=on 由 init/rpt_log_base.sql 设定后生效），audit/log 管理员授权与 rls（admin 会话 = fms_operator + auth.is_admin 判定）
 
 -- 无 BEGIN/COMMIT，全部 GRANT/REVOKE 幂等，重复执行无副作用，依赖 init/um_org_base.sql-init/queues_cron.sql已部署，表/函数已存在
 

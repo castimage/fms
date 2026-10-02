@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 2fa 设置向导，后端 totp/setup · enable · backup-codes 契约，① 扫码，后端返回 otpauthUrl，
- * QrCode 组件用 qrcode-generator 渲染 + 手动密钥，② 密码复验 + 6 位动态码启用，③ 一次性备用码展示，
+ * 2fa 设置向导，后端 totp/setup · enable · backup-codes 契约，扫码，后端返回 otpauthUrl，
+ * QrCode 组件用 qrcode-generator 渲染 + 手动密钥，密码复验 + 6 位动态码启用，一次性备用码展示，
  * 复制/下载，完成后跳 redirect 或首页。
  */
 import { onMounted, ref } from 'vue'

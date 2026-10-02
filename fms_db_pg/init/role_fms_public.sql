@@ -3,7 +3,7 @@
 -- fms_app 为沙箱连接角色，仅保留 CONNECT 与认证函数（auth.* 认证族
 --        EXECUTE，登录/2fa/jwt 签发为连接角色认证职责），禁止业务/公开类函数 EXECUTE。
 
--- 收敛，① 新角色 fms_public（NOLOGIN），公开读口（/api/public/**）匿名请求经
+-- 收敛，新角色 fms_public（NOLOGIN），公开读口（/api/public/**）匿名请求经
 --        SandboxSessionInterceptor 注入，仅 EXECUTE fn_get_param_value / fn_public_document_meta
 --        + um/docs/log schema USAGE，函数解析必需，无任何表权限，
 -- fms_app 撤销 4 个业务/公开类函数 EXECUTE（docs.fn_public_document_meta /

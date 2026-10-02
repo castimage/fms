@@ -8,7 +8,7 @@
 SET ROLE fms_admin;
 
 -- wf 工作流模块，4 表，流程定义（node_json 节点编排）创建流程实例，业务单据挂接生成任务（assignee/status/due_at 联合索引 + 乐观锁 version），任务事件仅追加
--- 1.1 wf.definitions 流程定义
+-- wf.definitions 流程定义
 CREATE TABLE IF NOT EXISTS wf.definitions (
     id          uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id  uuid          NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS wf.definitions (
 COMMENT ON TABLE  wf.definitions IS '工作流流程定义（node_json 编排审批节点）';
 COMMENT ON COLUMN wf.definitions.node_json IS '节点编排 JSONB 数组，元素含 node_code 与 type；APPROVE 节点含 strategy（approve/countersign/orsign）与 handlers 处理人来源数组（source 为 role/user/applicant）；START/END 不携带处理人';
 
--- 1.2 wf.instances 流程实例
+-- wf.instances 流程实例
 CREATE TABLE IF NOT EXISTS wf.instances (
     id             uuid    PRIMARY KEY DEFAULT uuidv7(),
     company_id     uuid    NOT NULL,
@@ -48,7 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_wf_inst_biz     ON wf.instances (business_type, b
 CREATE INDEX IF NOT EXISTS idx_wf_inst_init    ON wf.instances (initiator_id, status);
 CREATE INDEX IF NOT EXISTS idx_wf_inst_def     ON wf.instances (definition_id);
 
--- 1.3 wf.tasks 任务（SKIP LOCKED 并发领取核心表），company_id 由 trg_wf_task_fill_company 从实例自动补全（BEFORE INSERT）
+-- wf.tasks 任务（SKIP LOCKED 并发领取核心表），company_id 由 trg_wf_task_fill_company 从实例自动补全（BEFORE INSERT）
 CREATE TABLE IF NOT EXISTS wf.tasks (
     id           uuid   PRIMARY KEY DEFAULT uuidv7(),
     company_id   uuid   NOT NULL,                -- 冗余公司范围（rls 用，触发器补全）
@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_wf_task_assignee_status ON wf.tasks (assignee_id,
 CREATE INDEX IF NOT EXISTS idx_wf_task_status_due      ON wf.tasks (status, due_at);
 CREATE INDEX IF NOT EXISTS idx_wf_task_instance_status ON wf.tasks (instance_id, status);
 
--- 1.4 wf.task_events 任务事件（仅追加，company_id 由触发器从任务补全）
+-- wf.task_events 任务事件（仅追加，company_id 由触发器从任务补全）
 CREATE TABLE IF NOT EXISTS wf.task_events (
     id           uuid   PRIMARY KEY DEFAULT uuidv7(),
     company_id   uuid   NOT NULL,                -- 冗余公司范围（rls 用，触发器补全）
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_wf_evt_task ON wf.task_events (task_id);
 CREATE INDEX IF NOT EXISTS idx_wf_evt_company ON wf.task_events (company_id, occurred_at);
 
 -- fa 固定资产模块，2 表
--- 2.1 fa.assets 资产卡片（net_value 为生成列 = original_value - accumulated_depreciation）
+-- fa.assets 资产卡片（net_value 为生成列 = original_value - accumulated_depreciation）
 CREATE TABLE IF NOT EXISTS fa.assets (
     id                      uuid           PRIMARY KEY DEFAULT uuidv7(),
     company_id              uuid           NOT NULL,
@@ -126,7 +126,7 @@ COMMENT ON COLUMN fa.assets.net_value IS '净值 = 原值 - 累计折旧（生�
 CREATE INDEX IF NOT EXISTS idx_asset_status   ON fa.assets (status);
 CREATE INDEX IF NOT EXISTS idx_asset_category ON fa.assets (company_id, category);
 
--- 2.2 fa.depreciation_runs 折旧批次（period 唯一按公司，CONFIRMED 批次仅一条防重复计提，部分唯一索引）
+-- fa.depreciation_runs 折旧批次（period 唯一按公司，CONFIRMED 批次仅一条防重复计提，部分唯一索引）
 CREATE TABLE IF NOT EXISTS fa.depreciation_runs (
     id          uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id  uuid          NOT NULL,
@@ -146,7 +146,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_depr_run ON fa.depreciation_runs (company_i
 CREATE INDEX IF NOT EXISTS idx_depr_run ON fa.depreciation_runs (company_id, period);
 
 -- expense 费用报销模块，2 表
--- 3.1 expense.reimbursements 报销单（wf_instance_id 挂接审批实例，voucher_id 过账后回填）
+-- expense.reimbursements 报销单（wf_instance_id 挂接审批实例，voucher_id 过账后回填）
 CREATE TABLE IF NOT EXISTS expense.reimbursements (
     id             uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id     uuid          NOT NULL,
@@ -176,7 +176,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_reimb_idem ON expense.reimbursements
     (company_id, applicant_id, idem_key)
     WHERE idem_key IS NOT NULL AND deleted_at IS NULL;
 
--- 3.2 expense.reimbursement_lines 报销明细
+-- expense.reimbursement_lines 报销明细
 CREATE TABLE IF NOT EXISTS expense.reimbursement_lines (
     id               uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id       uuid          NOT NULL,
@@ -199,7 +199,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_reimb_line ON expense.reimbursement_lines
     (reimbursement_id, line_no) WHERE deleted_at IS NULL;
 
 -- budget 预算模块，2 表
--- 4.1 budget.budget_plans 预算计划（period + account + dept + version 唯一，版本化调整）
+-- budget.budget_plans 预算计划（period + account + dept + version 唯一，版本化调整）
 CREATE TABLE IF NOT EXISTS budget.budget_plans (
     id           uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id   uuid          NOT NULL,
@@ -228,7 +228,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_plan
 CREATE INDEX IF NOT EXISTS idx_plan_dept_period ON budget.budget_plans (dept_id, period);
 CREATE INDEX IF NOT EXISTS idx_plan_acct_period ON budget.budget_plans (account_id, period);
 
--- 4.2 budget.budget_adjustments 预算调整单
+-- budget.budget_adjustments 预算调整单
 CREATE TABLE IF NOT EXISTS budget.budget_adjustments (
     id          uuid          PRIMARY KEY DEFAULT uuidv7(),
     company_id  uuid          NOT NULL,
@@ -248,7 +248,7 @@ COMMENT ON TABLE budget.budget_adjustments IS '预算调整单（正负金额，
 CREATE INDEX IF NOT EXISTS idx_adj_plan ON budget.budget_adjustments (plan_id);
 
 -- rls 行级安全（FORCE ROW LEVEL SECURITY + 统一策略函数族 auth.*），全部 SELECT 策略追加 deleted_at IS NULL，INSERT 仅公司范围 WITH CHECK，UPDATE 由状态机/状态前置限制，任何角色不授 DELETE 权限（无 DELETE 策略）
--- 5.1 wf
+-- wf 模块 rls
 ALTER TABLE wf.definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wf.definitions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS wf_definitions_select ON wf.definitions;
@@ -302,7 +302,7 @@ DROP POLICY IF EXISTS wf_task_events_insert ON wf.task_events;
 CREATE POLICY wf_task_events_insert ON wf.task_events FOR INSERT
     WITH CHECK (auth.can_access_org(company_id));
 
--- 5.2 fa
+-- fa 模块 rls
 ALTER TABLE fa.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fa.assets FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS fa_assets_select ON fa.assets;
@@ -328,12 +328,12 @@ DROP POLICY IF EXISTS fa_depreciation_runs_update ON fa.depreciation_runs;
 CREATE POLICY fa_depreciation_runs_update ON fa.depreciation_runs FOR UPDATE
     USING (status = 'DRAFT' AND deleted_at IS NULL)
     WITH CHECK (status IN ('DRAFT','CONFIRMED') AND deleted_at IS NULL);
-    -- WITH CHECK 放行 DRAFT->CONFIRMED 迁移，CONFIRMED 行因 USING (status='DRAFT') 恒被拒，
+    -- WITH CHECK 放行 DRAFT 转 CONFIRMED 迁移，CONFIRMED 行因 USING (status='DRAFT') 恒被拒，
     -- 确认后禁改禁删语义不变，防重复计提。
     -- 软删统一经 auth.fn_soft_delete（SECURITY DEFINER 绕过 rls），WITH CHECK 的 deleted_at IS NULL
     -- 不影响软删路径。
 
--- 5.3 expense
+-- expense 模块 rls
 ALTER TABLE expense.reimbursements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expense.reimbursements FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS expense_reimbursements_select ON expense.reimbursements;
@@ -371,7 +371,7 @@ CREATE POLICY expense_reimbursement_lines_update ON expense.reimbursement_lines 
                                 WHERE r.id = reimbursement_id AND r.deleted_at IS NULL))
            AND deleted_at IS NULL);
 
--- 5.4 budget
+-- budget 模块 rls
 ALTER TABLE budget.budget_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget.budget_plans FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS budget_budget_plans_select ON budget.budget_plans;
@@ -408,7 +408,7 @@ CREATE POLICY budget_budget_adjustments_update ON budget.budget_adjustments FOR 
                 AND status IN ('DRAFT','APPROVED','REJECTED'));
 
 -- 函数（全部 OR REPLACE 可重复执行，SECURITY DEFINER 属主 fms_admin）
--- 6.1 budget.fn_block_if_exceeded(p_company_id, p_period, p_account_id, p_dept_id, p_amount) 预算超支判定，锁定预算计划行（FOR UPDATE 防并发超支）后比较执行比例
+-- budget.fn_block_if_exceeded(p_company_id, p_period, p_account_id, p_dept_id, p_amount) 预算超支判定，锁定预算计划行（FOR UPDATE 防并发超支）后比较执行比例
 -- 已执行金额优先读 rpt.budget_actual immv（rpt_log_base.sql 建，WITH (automatic) 提交即一致），若本文件先于 rpt_log_base.sql 执行，immv 不存在，运行期 to_regclass 探测并回退为 gl 表内联聚合（口径一致，POSTED/REVERSED 凭证 × 期间×科目×部门），开关/阈值读 um.params（budget.block.enabled / budget.block.ratio，缺省视为启用、阈值 100%）
 -- 类型适配，入参 p_company_id/p_account_id/p_dept_id 转 uuid，dept_id 空值匹配用 IS NOT DISTINCT FROM（uuid 无 = 0 比较，COALESCE(...,0) 不可行）
 CREATE OR REPLACE FUNCTION budget.fn_block_if_exceeded(
@@ -508,7 +508,7 @@ $$;
 COMMENT ON FUNCTION budget.fn_block_if_exceeded(uuid,text,uuid,uuid,numeric)
     IS '预算超支判定（锁定预算行 + IMMV/内联聚合执行比例，>=阈值返回 true 由调用方 RAISE）';
 
--- 6.2 budget.fn_voucher_budget_block 触发器函数，挂 gl.voucher_lines BEFORE INSERT/UPDATE，凭证期间×科目×部门执行比例 ≥100%，或配置阈值，时 RAISE 阻断，本文件执行在 gl_base.sql 之后，以 DROP+CREATE 接管 trg_voucher_budget_check，若 gl_base.sql 已挂同名触发器
+-- budget.fn_voucher_budget_block 触发器函数，挂 gl.voucher_lines BEFORE INSERT/UPDATE，凭证期间×科目×部门执行比例 ≥100%，或配置阈值，时 RAISE 阻断，本文件执行在 gl_base.sql 之后，以 DROP+CREATE 接管 trg_voucher_budget_check，若 gl_base.sql 已挂同名触发器
 CREATE OR REPLACE FUNCTION budget.fn_voucher_budget_block()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -540,7 +540,7 @@ $$;
 COMMENT ON FUNCTION budget.fn_voucher_budget_block()
     IS '凭证分录预算超支阻断触发器函数（BEFORE INSERT/UPDATE ON gl.voucher_lines）';
 
--- 6.3 wf.fn_claim_task(p_task_id, p_assignee_id) 任务领取，并发安全，UPDATE + CTE 内 FOR UPDATE SKIP LOCKED，并发仅一人领取成功，其余返回 false，成功写入 CLAIM 事件
+-- wf.fn_claim_task(p_task_id, p_assignee_id) 任务领取，并发安全，UPDATE + CTE 内 FOR UPDATE SKIP LOCKED，并发仅一人领取成功，其余返回 false，成功写入 CLAIM 事件
 CREATE OR REPLACE FUNCTION wf.fn_claim_task(p_task_id uuid, p_assignee_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -600,7 +600,7 @@ BEGIN
 END
 $$;
 
--- 6.4 节点级推进引擎（多处理人/会签/或签），由 fn_start_instance 与 fn_complete_task 调用
+-- 节点级推进引擎（多处理人/会签/或签），由 fn_start_instance 与 fn_complete_task 调用
 -- 实例推进由 fn_node_done 与 fn_advance_instance 承担
 DROP FUNCTION IF EXISTS wf.fn_auto_activate_next(uuid);
 -- wf.fn_activate_node(p_instance_id, p_node) 依节点 strategy 与 handlers 展开处理人并生成任务集。
@@ -874,7 +874,7 @@ BEGIN
 END
 $$;
 
--- 6.5 wf.fn_complete_task(p_task_id, p_assignee_id, p_action, p_remark) 任务办结，推进状态机，
+-- wf.fn_complete_task(p_task_id, p_assignee_id, p_action, p_remark) 任务办结，推进状态机，
 -- APPROVE 则任务置 APPROVED 后经 fn_node_done 判定当前节点完成条件，会签/或签多票按策略判定，
 -- 通过则 fn_advance_instance 沿 node_json 激活下一节点直至 END；REJECT 则任务置 REJECTED 且实例
 -- 直接置 REJECTED，同节点其余 PENDING/CLAIMED 票一并软删；TRANSFER 则任务置 TRANSFERRED，
@@ -1021,7 +1021,7 @@ BEGIN
 END
 $$;
 
--- 6.6 fa.fn_run_depreciation(p_company_id, p_period) 折旧计提，直线法 monthly=，原值-残值/月数，双倍余额递减 monthly=净值*2/月数，单资产计提额封顶，不超过 原值-残值-已计提
+-- fa.fn_run_depreciation(p_company_id, p_period) 折旧计提，直线法 monthly=，原值-残值/月数，双倍余额递减 monthly=净值*2/月数，单资产计提额封顶，不超过 原值-残值-已计提
 -- 产物，fa.depreciation_runs（DRAFT 批次，重复执行先清旧 DRAFT）+ 折旧凭证草稿（科目按 code='1601'/'6602' 查询，科目不存在或凭证结构不兼容时跳过凭证生成仅记录批次，容错设计），供 queues_cron.sql 注册的 pg_cron 任务 fa-depreciation 调用（p_company_id NULL = 全部公司）
 CREATE OR REPLACE FUNCTION fa.fn_run_depreciation(
     p_company_id uuid    DEFAULT NULL,
@@ -1162,7 +1162,7 @@ $$;
 COMMENT ON FUNCTION fa.fn_run_depreciation(uuid,text)
     IS '折旧计提：直线/双倍余额 -> depreciation_runs 批次 + 折旧凭证草稿（防重复：CONFIRMED 批次存在则跳过）';
 
--- 6.7 fa.fn_asset_immutable 资产不可变触发器函数，处置/报废（DISPOSED/SCRAPPED）后禁止 UPDATE/DELETE，对全员生效，含 superuser
+-- fa.fn_asset_immutable 资产不可变触发器函数，处置/报废（DISPOSED/SCRAPPED）后禁止 UPDATE/DELETE，对全员生效，含 superuser
 CREATE OR REPLACE FUNCTION fa.fn_asset_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1181,7 +1181,7 @@ BEGIN
 END
 $$;
 
--- 6.8 expense.fn_reimburse_status_check 报销单状态机触发器函数，正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），另有受控冲销 POSTED 转 REVERSED（前置为其凭证已冲销，账先冲单后标），POSTED/REVERSED 后禁改含非状态字段，唯一例外是该受控冲销，过账另要求 voucher_id 非空，凭证先于状态落定
+-- expense.fn_reimburse_status_check 报销单状态机触发器函数，正向流转 DRAFT 提交 SUBMITTED、审核 APPROVED、付款 PAID、过账 POSTED，REJECTED 仅从 SUBMITTED 进入（退回后可再提交 DRAFT），另有受控冲销 POSTED 转 REVERSED（前置为其凭证已冲销，账先冲单后标），POSTED/REVERSED 后禁改含非状态字段，唯一例外是该受控冲销，过账另要求 voucher_id 非空，凭证先于状态落定
 CREATE OR REPLACE FUNCTION expense.fn_reimburse_status_check()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1237,7 +1237,7 @@ BEGIN
 END
 $$;
 
--- 6.9 wf.fn_fill_company 公司范围补全触发器函数（wf.tasks / wf.task_events），BEFORE INSERT 时 NEW.company_id 未提供则按父对象，实例/任务补全，保证 rls insert WITH CHECK 与 NOT NULL 均成立
+-- wf.fn_fill_company 公司范围补全触发器函数（wf.tasks / wf.task_events），BEFORE INSERT 时 NEW.company_id 未提供则按父对象，实例/任务补全，保证 rls insert WITH CHECK 与 NOT NULL 均成立
 CREATE OR REPLACE FUNCTION wf.fn_fill_company()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1261,20 +1261,20 @@ END
 $$;
 
 -- 触发器（全部 DROP IF EXISTS 前置 + CREATE，可重复执行），通用 updated_at 触发器引用 gl_base.sql 的 gl.fn_set_updated_at，审计触发器条件挂载，audit.fn_audit_log 由 audit_base.sql 创建，正常执行顺序恒先于本文件存在，本文件是 wf/fa/expense/budget 四模块审计触发器的挂载点，to_regprocedure 探测仅防御乱序执行，缺失时跳过并留 NOTICE，重跑本文件补齐
--- 7.1 专用触发器
--- 7.1.1 fa.assets 不可变，处置/报废后禁改禁删
+-- 专用触发器
+-- fa.assets 不可变，处置/报废后禁改禁删
 DROP TRIGGER IF EXISTS trg_asset_immutable ON fa.assets;
 CREATE TRIGGER trg_asset_immutable
     BEFORE UPDATE OR DELETE ON fa.assets
     FOR EACH ROW EXECUTE FUNCTION fa.fn_asset_immutable();
 
--- 7.1.2 expense.reimbursements 状态机（正向推进 + POSTED 后禁改 + 受控冲销）
+-- expense.reimbursements 状态机（正向推进 + POSTED 后禁改 + 受控冲销）
 DROP TRIGGER IF EXISTS trg_reimburse_status_check ON expense.reimbursements;
 CREATE TRIGGER trg_reimburse_status_check
     BEFORE UPDATE ON expense.reimbursements
     FOR EACH ROW EXECUTE FUNCTION expense.fn_reimburse_status_check();
 
--- 7.1.3 wf.tasks / wf.task_events 公司范围补全（BEFORE INSERT，rls 依赖 company_id）
+-- wf.tasks / wf.task_events 公司范围补全（BEFORE INSERT，rls 依赖 company_id）
 DROP TRIGGER IF EXISTS trg_wf_task_fill_company ON wf.tasks;
 CREATE TRIGGER trg_wf_task_fill_company
     BEFORE INSERT ON wf.tasks
@@ -1285,13 +1285,13 @@ CREATE TRIGGER trg_wf_task_event_fill_company
     BEFORE INSERT ON wf.task_events
     FOR EACH ROW EXECUTE FUNCTION wf.fn_fill_company();
 
--- 7.1.4 预算超支阻断（BEFORE INSERT/UPDATE ON gl.voucher_lines）
+-- 预算超支阻断（BEFORE INSERT/UPDATE ON gl.voucher_lines）
 DROP TRIGGER IF EXISTS trg_voucher_budget_check ON gl.voucher_lines;
 CREATE TRIGGER trg_voucher_budget_check
     BEFORE INSERT OR UPDATE ON gl.voucher_lines
     FOR EACH ROW EXECUTE FUNCTION budget.fn_voucher_budget_block();
 
--- 7.2 通用 updated_at 触发器，10 张表
+-- 通用 updated_at 触发器，10 张表
 DROP TRIGGER IF EXISTS trg_wf_definitions_updated ON wf.definitions;
 CREATE TRIGGER trg_wf_definitions_updated
     BEFORE UPDATE ON wf.definitions
@@ -1367,7 +1367,7 @@ BEGIN
 END $$;
 
 -- cron 任务函数补充（queues_cron.sql pg_cron 调度段命令惰性解析，运行时需要）
--- 8.1 budget.fn_cron_budget_warning（budget-warning 任务，每 15 分钟），扫描执行比例 ≥80%（um.params budget.warn.ratio 可配）的已批准预算计划则 pgmq.send('q_budget_warning') 预警
+-- budget.fn_cron_budget_warning（budget-warning 任务，每 15 分钟），扫描执行比例 ≥80%（um.params budget.warn.ratio 可配）的已批准预算计划则 pgmq.send('q_budget_warning') 预警
 CREATE OR REPLACE FUNCTION budget.fn_cron_budget_warning()
 RETURNS int
 LANGUAGE plpgsql
@@ -1428,7 +1428,7 @@ BEGIN
     RETURN v_cnt;
 END $$;
 
--- 8.2 wf.fn_timeout_remind（wf-timeout 任务，每分钟），超时待办置 TIMEOUT 并入队催办消息 q_notify_task，队列不存在时降级跳过，
+-- wf.fn_timeout_remind（wf-timeout 任务，每分钟），超时待办置 TIMEOUT 并入队催办消息 q_notify_task，队列不存在时降级跳过，
 -- 单轮处理批量上限读 um.params wf.timeout.batch.size，缺省 500，任务量增长后可经系统参数页调大
 CREATE OR REPLACE FUNCTION wf.fn_timeout_remind()
 RETURNS int

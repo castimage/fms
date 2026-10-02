@@ -8,9 +8,9 @@
 -- 并发安全设计，fn_audit_log_hash 取前驱哈希的并发竞态已根治，
 -- 写路径加事务级咨询锁 pg_advisory_xact_lock，后到事务获锁后的 SELECT 在新快照下必然
 
--- 看到先到事务已提交的行，提交序=链序=id 序，② 触发器内强制 NEW.id 严格大于末行 id，
+-- 看到先到事务已提交的行，提交序=链序=id 序，触发器内强制 NEW.id 严格大于末行 id，
 -- 不足则重生成 uuidv7，期望 ~2 次迭代，时钟回拨由循环内 pg_sleep 兜底，100 次仍失败
--- WARN 留痕，③ 哈希公式收敛为单一实现 audit.fn_audit_row_hash，触发器/校验/修复三处同源，
+-- WARN 留痕，哈希公式收敛为单一实现 audit.fn_audit_row_hash，触发器/校验/修复三处同源，
 -- audit.audit_log_chain_repair，从首断链点起重算重挂，带 NOTICE 留痕，init 幂等调用。
 
 
@@ -40,7 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_time  ON audit.audit_log (occurred_at DESC)
 CREATE INDEX IF NOT EXISTS idx_audit_table ON audit.audit_log (table_name, record_id);
 
 -- 触发器函数
--- 2.1 仅追加硬拒（BEFORE UPDATE OR DELETE，防超级用户直连绕过 rls）
+-- 仅追加硬拒（BEFORE UPDATE OR DELETE，防超级用户直连绕过 rls）
 CREATE OR REPLACE FUNCTION audit.fn_audit_log_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -51,7 +51,7 @@ BEGIN
     RAISE EXCEPTION 'audit_log 仅追加：禁止 UPDATE/DELETE（表 audit.audit_log）';
 END $$;
 
--- 2.2 哈希链（BEFORE INSERT，SECURITY DEFINER 属主 fms_admin），actor_id/record_id 以 ::text 化后参与 concat，uuid 无 = 0 比较，ip/request_id 纳入哈希输入，与 chain_check 公式同源（统一 audit.fn_audit_row_hash），写路径篡改可被发现
+-- 哈希链（BEFORE INSERT，SECURITY DEFINER 属主 fms_admin），actor_id/record_id 以 ::text 化后参与 concat，uuid 无 = 0 比较，ip/request_id 纳入哈希输入，与 chain_check 公式同源（统一 audit.fn_audit_row_hash），写路径篡改可被发现
 CREATE OR REPLACE FUNCTION audit.fn_audit_log_hash()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -106,7 +106,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- 2.3 显式记录函数，SECURITY DEFINER，应用角色无 audit_log 表权限，审计写入统一经此函数与触发器完成
+-- 显式记录函数，SECURITY DEFINER，应用角色无 audit_log 表权限，审计写入统一经此函数与触发器完成
 
 -- 参数，p_action 动作类型（INSERT/UPDATE/DELETE 或业务动作如 voucher_post/period_close），p_table_name 目标表，p_record_id 目标记录 id，p_old_values/p_new_values 变更前后快照 jsonb，p_ip/p_request_id 来源信息（空串则 NULL 入库）
 -- 行为，actor_id 从 fms.user_id guc 取（未注入则 NULL），INSERT 由 trg_audit_log_hash 自动补 prev_hash/row_hash 构成哈希链，返回新行 id
@@ -140,7 +140,7 @@ BEGIN
     RETURN v_id;
 END $$;
 
--- 2.4 通用审计捕获触发器函数（业务表 AFTER INSERT/UPDATE/DELETE 挂载，SECURITY DEFINER 以 fms_admin 身份写审计，不受业务表 rls 限制）
+-- 通用审计捕获触发器函数（业务表 AFTER INSERT/UPDATE/DELETE 挂载，SECURITY DEFINER 以 fms_admin 身份写审计，不受业务表 rls 限制）
 -- 行为，按 TG_OP 取变更快照（UPDATE/DELETE 取 OLD，INSERT/UPDATE 取 NEW），记录 id 取 OLD.id（DELETE）或 NEW.id，经 audit.record 写入，捕获路径 ip/request_id 传 NULL，返回 COALESCE(NEW, OLD) 不阻断业务 DML
 -- SECURITY DEFINER 使审计写入不受业务表 rls 约束，任何业务 DML（含软删 UPDATE deleted_at=now）自动留痕，触发器函数不对外授权，仅触发器以内置身份调用
 CREATE OR REPLACE FUNCTION audit.fn_audit_log()
@@ -429,7 +429,7 @@ AS $$
 $$;
 
 -- 链修复，幂等，链完好则 no-op，断链则从首断链点起逐行重算重挂，断链点之前的行校验完好保持
--- 原样。覆盖两类断链，① 并发 INSERT 竞态，fn_audit_log_hash 链锁外的断链在此修复，
+-- 原样。覆盖两类断链，并发 INSERT 竞态，fn_audit_log_hash 链锁外的断链在此修复，
 -- 绕过触发器写入，session_replication_role=replica 直插 audit_log 产生的 NULL 哈希行。
 
 
@@ -492,7 +492,7 @@ GRANT EXECUTE ON FUNCTION audit.audit_log_chain_repair() TO fms_admin;
 
 -- 存量链修复，幂等，先校验，仅当断链时从首断链点起重算重挂。
 
--- 断链根因两类，① 并发 INSERT 竞态，见 fn_audit_log_hash 注释，已加链锁根治，
+-- 断链根因两类，并发 INSERT 竞态，见 fn_audit_log_hash 注释，已加链锁根治，
 -- 哈希公式差异/绕过触发器写入（replica 直插），修复动作与断链点均 RAISE NOTICE 留痕。
 
 

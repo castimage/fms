@@ -1,8 +1,8 @@
 -- FMS 财务系统（init/rpt_ap_aging），AP 侧账龄补齐，镜像 rpt.ar_aging_paid / rpt.ar_aging 的
 -- 应付版本，rpt immv 仅定义 ar_aging/ar_aging_paid，AP 侧聚合缺失，账龄按
--- 未核销余额分桶 30/60/90/180+，① rpt.ap_aging_paid 已核销金额 immv（ap.payment_allocations
--- 单表增量聚合，automatic 模式提交即一致）② rpt.ap_aging 普通视图（ap.invoices ISSUED/PARTIAL
--- 余额 = total - 已核销，按供应商×期间展开，security_invoker=on 行级收敛）③ rpt SELECT 授权
+-- 未核销余额分桶 30/60/90/180+，rpt.ap_aging_paid 已核销金额 immv（ap.payment_allocations
+-- 单表增量聚合，automatic 模式提交即一致），rpt.ap_aging 普通视图（ap.invoices ISSUED/PARTIAL
+-- 余额 = total - 已核销，按供应商×期间展开，security_invoker=on 行级收敛），rpt SELECT 授权
 -- 镜像 init/grants_base.sql rpt 段（operator/viewer/auditor/report 四职责角色只读）
 
 -- 幂等，immv 不支持 OR REPLACE，按 relkind 判别 DROP TABLE / DROP MATERIALIZED VIEW IF EXISTS ...

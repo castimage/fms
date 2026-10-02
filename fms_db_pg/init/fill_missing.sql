@@ -1,12 +1,12 @@
--- FMS 财务系统（补齐缺失对象 + 分区注册，执行库，fms），① 7 个对象（um.login_log 按月分区 / um.api_keys / org.positions / org.employees / gl.voucher_status_history / log.access_logs 按天分区 / audit.safe_voucher_view）② 审计捕获触发器统一挂载 ③ 分区注册，audit.audit_log，按年与 log.app_logs，按天普通表转分区父表，带数据迁移，+ partman.create_parent 幂等注册 4 张表 + retention 保留策略
+-- FMS 财务系统（补齐缺失对象 + 分区注册，执行库，fms），7 个对象（um.login_log 按月分区 / um.api_keys / org.positions / org.employees / gl.voucher_status_history / log.access_logs 按天分区 / audit.safe_voucher_view），审计捕获触发器统一挂载，分区注册，audit.audit_log 按年与 log.app_logs 按天普通表转分区父表，带数据迁移，partman.create_parent 幂等注册 4 张表，retention 保留策略
 
 -- 全部 DDL 幂等，新业务表一律 FORCE rls，分区父表不使用部分索引（pg 不支持 partitioned index with WHERE clause）
 
--- C.1 数据迁移显式 id 直插（uuidv7 后无 identity 语义，无需 OVERRIDING SYSTEM VALUE），C.1.1 转换后 audit_log SELECT 策略按 init/audit_base.sql 已部署定义重建（has_role('fms_auditor') OR current_user='fms_admin'）并补回 GRANT，补 log/audit schema USAGE 授权，C.2 p_start_partition 取 min(occurred_at) 对齐分区边界防存量数据越界
+-- 数据迁移显式 id 直插（uuidv7 后无 identity 语义，无需 OVERRIDING SYSTEM VALUE），转换后 audit_log SELECT 策略按 init/audit_base.sql 已部署定义重建（has_role('fms_auditor') OR current_user='fms_admin'）并补回 GRANT，补 log/audit schema USAGE 授权，p_start_partition 取 min(occurred_at) 对齐分区边界防存量数据越界
 
 SET ROLE fms_admin;
 
--- um.login_log，登录日志，按月分区父表，写入封闭，error_msg 即 fail_reason 列，locked_until 记录登录失败触发的账户锁定到期时间，C.2 分区注册前禁止 INSERT（分区父表无分区时插报 no partition of relation found）
+-- um.login_log，登录日志，按月分区父表，写入封闭，error_msg 即 fail_reason 列，locked_until 记录登录失败触发的账户锁定到期时间，分区注册前禁止 INSERT（分区父表无分区时插报 no partition of relation found）
 CREATE TABLE IF NOT EXISTS um.login_log (
     id           uuid NOT NULL DEFAULT uuidv7(),
     user_id      uuid REFERENCES um.users(id),      -- 未知用户登录失败为 NULL
@@ -281,7 +281,7 @@ CREATE POLICY vsh_select ON gl.voucher_status_history
                                  AND auth.can_access_org(v.company_id)));
 GRANT SELECT ON gl.voucher_status_history TO fms_operator, fms_viewer, fms_auditor, fms_report;
 
--- log.access_logs，访问日志，按天分区父表，仅追加，分区父表不能建部分索引（cannot create a partitioned index with a WHERE clause），写入仅经 SECURITY DEFINER 消费函数，分区注册见 C.2
+-- log.access_logs，访问日志，按天分区父表，仅追加，分区父表不能建部分索引（cannot create a partitioned index with a WHERE clause），写入仅经 SECURITY DEFINER 消费函数，分区注册见本文件 partman 注册段
 CREATE TABLE IF NOT EXISTS log.access_logs (
     id              uuid NOT NULL DEFAULT uuidv7(),
     method          text NOT NULL,
@@ -336,7 +336,7 @@ GRANT SELECT ON audit.safe_voucher_view TO fms_auditor, fms_operator, fms_viewer
 -- 补齐，audit schema USAGE 授 operator/viewer，仅 USAGE，不含 audit_log 等对象的表级权限，无此授权将无法访问本视图
 GRANT USAGE ON SCHEMA audit TO fms_operator, fms_viewer;
 
--- B.8 审计捕获触发器统一挂载（audit.fn_audit_log，init/audit_base.sql已建），挂 modules/user_direct_permissions，init/um_perm.sql已建则生效，/api_keys/positions/employees，不挂，本身即日志/历史，login_log / voucher_status_history / access_logs
+-- 审计捕获触发器统一挂载（audit.fn_audit_log，init/audit_base.sql已建），挂 modules/user_direct_permissions，init/um_perm.sql已建则生效，/api_keys/positions/employees，不挂，本身即日志/历史，login_log / voucher_status_history / access_logs
 DO $$
 DECLARE t text;
 BEGIN
@@ -352,9 +352,9 @@ BEGIN
     END LOOP;
 END $$;
 
--- C.1 普通表转分区父表（audit.audit_log 按年 / log.app_logs 按天，带数据迁移），init/audit_base.sql/init/rpt_log_base.sql已部署版本为普通表（PK 仅 id），native 分区父表要求全部唯一约束含分区键，必须先转结构，幂等，pg_partitioned_table 判存，DO 块内 DDL+DML 同一事务中途失败整体回滚
+-- 普通表转分区父表（audit.audit_log 按年 / log.app_logs 按天，带数据迁移），init/audit_base.sql/init/rpt_log_base.sql已部署版本为普通表（PK 仅 id），native 分区父表要求全部唯一约束含分区键，必须先转结构，幂等，pg_partitioned_table 判存，DO 块内 DDL+DML 同一事务中途失败整体回滚
 -- 数据迁移显式保 id（uuidv7 后 id 为普通 DEFAULT，无 identity 语义），prev_hash/row_hash 原样复制不重算，新表未挂哈希触发器时插入，哈希链不断
--- 9.1 audit.audit_log，按年分区
+-- audit.audit_log，按年分区
 DO $$
 DECLARE
     v_ymin date;
@@ -381,7 +381,7 @@ BEGIN
             row_hash     char(64),
             CONSTRAINT audit_log_new_pkey PRIMARY KEY (id, occurred_at)
         ) PARTITION BY RANGE (occurred_at);
-        -- 按数据实际年份动态预建真实分区（命名与 C.2 partman create_parent 一致，audit_log_pYYYY0101，后续 create_parent 会跳过已存在分区）
+        -- 按数据实际年份动态预建真实分区（命名与 partman create_parent 一致，audit_log_pYYYY0101，后续 create_parent 会跳过已存在分区）
         -- DEFAULT 分区承接存量行后 DETACH+DROP 会把数据随默认分区一起删除，故先建真实分区再直接迁移，INSERT 按 occurred_at 路由进对应年份分区，空表则建当年分区防 'no partition of relation found'
         SELECT date_trunc('year', min(occurred_at))::date,
                date_trunc('year', max(occurred_at))::date
@@ -443,7 +443,7 @@ BEGIN
     END IF;
 END $$;
 
--- 9.2 log.app_logs，按天分区，同模式
+-- log.app_logs，按天分区，同模式
 DO $$
 DECLARE
     v_dmin date;
@@ -465,7 +465,7 @@ BEGIN
             CONSTRAINT app_logs_new_pkey PRIMARY KEY (id, occurred_at),
             CONSTRAINT ck_app_logs_new_level CHECK (level IN ('DEBUG','INFO','WARN','ERROR'))
         ) PARTITION BY RANGE (occurred_at);
-        -- 按数据实际日期动态预建真实分区（命名与 C.2 partman create_parent 一致，app_logs_pYYYYMMDD），DEFAULT 分区承接后 DETACH+DROP 会随分区删除数据，故先建真实分区再直接迁移，空表则建当日分区
+        -- 按数据实际日期动态预建真实分区（命名与 partman create_parent 一致，app_logs_pYYYYMMDD），DEFAULT 分区承接后 DETACH+DROP 会随分区删除数据，故先建真实分区再直接迁移，空表则建当日分区
         SELECT date_trunc('day', min(occurred_at))::date,
                date_trunc('day', max(occurred_at))::date
           INTO v_dmin, v_dmax
@@ -501,7 +501,7 @@ BEGIN
                               OR auth.is_admin());
         COMMENT ON TABLE log.app_logs IS
         '应用日志（结构化，仅追加，按天分区）。写入仅经 SECURITY DEFINER 消费函数/超级用户，FORCE RLS 仅 SELECT 策略';
-        -- 授权恢复（DROP 表丢失 GRANT 与 COMMENT，与 9.1 audit_log 同模式），
+        -- 授权恢复（DROP 表丢失 GRANT 与 COMMENT，与上文 audit_log 同模式），
         -- init/grants_base.sql 在本文件之前执行，其 GRANT SELECT ON log.app_logs 已被上方
         -- DROP TABLE log.app_logs 抹除（relacl 归 NULL），此处必须补回，否则
         -- verify/grants_check.sql 'grants_base-log.* auditor 只读' 判 FAIL
@@ -514,7 +514,7 @@ BEGIN
     END IF;
 END $$;
 
--- C.2 partman.create_parent 幂等注册（part_config 判存），um.login_log 按月 / audit.audit_log 按年 / log.app_logs 按天，分区自动创建/清理由 init/queues_cron.sql文件已注册的 partman-maintenance cron（每日 init/audit_base.sql:00 CALL run_maintenance_proc）负责，本块只做一次性注册
+-- partman.create_parent 幂等注册（part_config 判存），um.login_log 按月 / audit.audit_log 按年 / log.app_logs 按天，分区自动创建/清理由 init/queues_cron.sql文件已注册的 partman-maintenance cron（每日 init/audit_base.sql:00 CALL run_maintenance_proc）负责，本块只做一次性注册
 -- 对含存量数据的表（audit_log/app_logs）p_start_partition 取 min(occurred_at) 并对齐分区边界，月/年首日、日防 partman 对 start 之前的存量数据报错，空表（login_log）保持起点，上月，兼容补录
 DO $$
 DECLARE
@@ -581,7 +581,7 @@ BEGIN
     END IF;
 END $$;
 
--- C.2b 分区自愈兜底，4 个分区父表无任何子分区时重建 part_config 并立即
+-- 分区自愈兜底，4 个分区父表无任何子分区时重建 part_config 并立即
 -- 预建分区，不依赖 partman-maintenance cron（pgmq/pg_cron 缺失环境下每日维护任务未注册，
 -- run_maintenance 永不执行，且父表零分区时 run_maintenance 报 'Child table given does not
 -- exist' 永久跳过该分区集）。um.login_log 无分区时登录写入必报
@@ -667,7 +667,7 @@ UPDATE partman.part_config
 GRANT SELECT ON ALL TABLES IN SCHEMA audit TO fms_auditor, fms_operator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA audit GRANT SELECT ON TABLES TO fms_auditor, fms_operator;
 
--- B.9 um.users 敏感列补齐（MFA / 身份证），init/um_org_base.sql文件建表已含，此处幂等补列，兼容 init/um_perm.sql先行/存量库原地升级
+-- um.users 敏感列补齐（MFA / 身份证），init/um_org_base.sql文件建表已含，此处幂等补列，兼容 init/um_perm.sql先行/存量库原地升级
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns

@@ -3,8 +3,8 @@
 
 CREATE TEMP TABLE IF NOT EXISTS grant_check_results (check_name text PRIMARY KEY, ok boolean);
 
--- 一、五 schema 授权可达性，修复前全为 permission denied
--- 1.1 fa/expense/budget/wf schema USAGE（operator/viewer/auditor/report）
+-- 五 schema 授权可达性，缺授权则全为 permission denied
+-- fa/expense/budget/wf schema USAGE（operator/viewer/auditor/report）
 DO $$
 DECLARE v_ok boolean := true; v_miss text := '';
 BEGIN
@@ -24,7 +24,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-五schema USAGE', false);
 END $$;
 
--- 1.2 operator 对五 schema 代表表 SELECT（fa.assets/budget.budget_plans/wf.tasks）
+-- operator 对五 schema 代表表 SELECT（fa.assets/budget.budget_plans/wf.tasks）
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -46,7 +46,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-五schema表级SELECT', false);
 END $$;
 
--- 1.3 rpt.* 可达（report/operator/viewer）+ security_invoker
+-- rpt.* 可达（report/operator/viewer）+ security_invoker
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -74,7 +74,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-rpt可达+invoker', false);
 END $$;
 
--- 1.4 log.* 对 auditor 只读（audit-chain-check 闭环可读）
+-- log.* 对 auditor 只读（audit-chain-check 闭环可读）
 -- 分区级校验，log.app_logs/log.access_logs 为分区父表：按父表扫描的查询只需父表授权（子分区
 -- 继承父表的权限需求，PG 不逐分区另查 ACL），分区自身 relacl 只在直接访问该分区时生效；
 -- 此处父表与既有分区一并核对，任一处缺权均判 FAIL（父表缺权则扫描不可读，分区缺权则直查分区不可读）
@@ -109,7 +109,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-log auditor只读', false);
 END $$;
 
--- 1.5 log.* admin 通道只读可达，2026-08-13 修复，admin jwt 映射 pg 职责角色 fms_operator，
+-- log.* admin 通道只读可达，admin jwt 映射 pg 职责角色 fms_operator，
 -- 安全中心 /api/admin/app-logs + /api/admin/task-runs 需 fms_operator 对 log.* SELECT + schema USAGE，
 -- api 层 requireAdminRole 仍限 admin 调用，operator jwt 不可达
 DO $$
@@ -141,9 +141,9 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-log admin通道只读', false);
 END $$;
 
--- 1.6 audit.audit_log 只读可达（auditor 与 admin 通道，父表 + 全部分区），并核对越权面未被放宽
--- 与 1.4/1.5 同口径：按父表扫描的查询只需父表授权，分区 relacl 只在直接访问分区时生效
--- （2026-09 曾因 fill_missing 重建该表后未补回 fms_operator 的父表授权而报 permission denied）；
+-- audit.audit_log 只读可达（auditor 与 admin 通道，父表 + 全部分区），并核对越权面未被放宽
+-- 与上文 log 只读校验同口径，按父表扫描的查询只需父表授权，分区 relacl 只在直接访问分区时生效
+-- （该表重建后须补回 fms_operator 父表授权，否则报 permission denied）；
 -- 正向之外补反向断言，viewer/report 必须不可达，防后续改动把读取面放大
 -- 反向下标只查表级 SELECT：读该表需模式使用权与表级 SELECT 同时成立，而查阅员本就持
 -- audit 模式使用权（供屏障视图），以模式使用权判越权会误报
@@ -198,7 +198,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-audit 只读（父表+分区）', false);
 END $$;
 
--- 1.7 行级策略不得被"后执行的文件用更宽版本覆盖"（本类问题的根因：同一策略在多份 init 脚本里
+-- 行级策略不得被"后执行的文件用更宽版本覆盖"（本类问题的根因：同一策略在多份 init 脚本里
 -- 各写一份，后执行者生效），逐条核对关键策略当前是否为收紧版：
 -- audit.audit_log 与应用日志须含 is_admin 分支（auditor/admin 只读），否则普通会话即可读
 DO $$
@@ -232,8 +232,8 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('关键读策略收紧版（含 is_admin）', false);
 END $$;
 
--- 二、FMS-pg 系列安全断言
--- 2.1 解密出口，fms_app 不可执行，fms_operator 可执行，无 PUBLIC EXECUTE
+-- FMS-pg 系列安全断言
+-- 解密出口，fms_app 不可执行，fms_operator 可执行，无 PUBLIC EXECUTE
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -264,7 +264,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('解密出口授权', false);
 END $$;
 
--- 2.2 密钥收敛，um.params 职责角色零 SELECT，sec.app_secrets 无角色授权
+-- 密钥收敛，um.params 职责角色零 SELECT，sec.app_secrets 无角色授权
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -294,7 +294,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('密钥收敛', false);
 END $$;
 
--- 2.3 audit.record，PUBLIC 不可执行、fms_operator 不可执行、fms_admin 可执行
+-- audit.record，PUBLIC 不可执行、fms_operator 不可执行、fms_admin 可执行
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -324,7 +324,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('audit.record最小授权', false);
 END $$;
 
--- 2.4 pgmq，内部表零角色授权，管理函数 PUBLIC 零 EXECUTE，业务函数 operator 可执行
+-- pgmq，内部表零角色授权，管理函数 PUBLIC 零 EXECUTE，业务函数 operator 可执行
 -- 环境适配，pgmq 扩展未装（pg_extension 无记录）即视为未安装，SKIP 记为通过；
 -- has_function_privilege 对不存在函数会硬报错，扩展已装（schema 必在）才核对授权
 DO $$
@@ -366,7 +366,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('PGMQ最小授权', false);
 END $$;
 
--- 2.5 SECURITY DEFINER 函数的 PUBLIC 可执行面清零，范围为全部业务 schema 与闸口 schema，
+-- SECURITY DEFINER 函数的 PUBLIC 可执行面清零，范围为全部业务 schema 与闸口 schema，
 -- proacl 为 NULL 表示从未收回，默认即 PUBLIC 可执行，与显式 PUBLIC 条目同判，两者都须为 0
 DO $$
 DECLARE v_ok boolean := true; v_cnt int; v_list text;
@@ -396,7 +396,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('SECURITY-DEFINER-PUBLIC清零', false);
 END $$;
 
--- 2.6 无闸口函数不对外（fa.fn_run_depreciation 仅 operator，viewer/auditor/report 拒）
+-- 无闸口函数不对外（fa.fn_run_depreciation 仅 operator，viewer/auditor/report 拒）
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -419,7 +419,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('无闸口函数暴露面收敛', false);
 END $$;
 
--- 2.7 数据范围闸口授权，三个函数须存在、PUBLIC 已收回、仅职责角色通道可执行
+-- 数据范围闸口授权，三个函数须存在、PUBLIC 已收回、仅职责角色通道可执行
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -454,7 +454,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('数据范围闸口授权', false);
 END $$;
 
--- 2.8 邮箱解密出口授权与本人判定，auth.get_user_email 以 is_self 或 is_admin 放行，
+-- 邮箱解密出口授权与本人判定，auth.get_user_email 以 is_self 或 is_admin 放行，
 -- is_self 在无会话时返回 NULL 会使取反后的守卫不成立而穿透，故同时钉住出口授权与 is_self 的返回值范围
 DO $$
 DECLARE v_ok boolean := true; v_self boolean;
@@ -501,7 +501,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('邮箱出口与is_self fail-closed', false);
 END $$;
 
--- 2.9 函数属主约定，业务与闸口 schema 的 SECURITY DEFINER 函数属主须为 fms_admin，
+-- 函数属主约定，业务与闸口 schema 的 SECURITY DEFINER 函数属主须为 fms_admin，
 -- 唯一例外是软删除出口 auth.fn_soft_delete 与 auth.fn_soft_delete_v，两函数体内以
 -- current_user <> 'fms_admin' 判定调用方，SECURITY DEFINER 下 current_user 即属主，
 -- 属主若被改为 fms_admin 该判定恒假、拒绝分支永不触发，属主本身即控制成立条件，
@@ -548,7 +548,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('函数属主约定', false);
 END $$;
 
--- 三、汇总
+-- 汇总
 -- 条数守卫，结果表行数须等于断言总数，少于总数即说明有断言整条丢失
 -- 该类丢失只表现为计数变小，看的人无从察觉，故一并报出并以 FAIL 措辞提示
 DO $$

@@ -29,7 +29,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- 1.1 rpt.budget_actual 预算执行实际数（期间×科目×部门 SUM），基表 gl.vouchers JOIN gl.voucher_lines（凭证行级聚合，JOIN 等值条件 vl.voucher_id = v.id，两表均有主键满足 pg_ivm 约束），与 budget.budget_plans(company_id,period,account_id,dept_id) 直接对键，供预算对比与 budget.fn_block_if_exceeded 读取执行比例
+-- rpt.budget_actual 预算执行实际数（期间×科目×部门 SUM），基表 gl.vouchers JOIN gl.voucher_lines（凭证行级聚合，JOIN 等值条件 vl.voucher_id = v.id，两表均有主键满足 pg_ivm 约束），与 budget.budget_plans(company_id,period,account_id,dept_id) 直接对键，供预算对比与 budget.fn_block_if_exceeded 读取执行比例
 SELECT pgivm.create_immv(
     'rpt.budget_actual',
     'SELECT vl.company_id, v.period, vl.account_id, vl.dept_id,
@@ -44,7 +44,7 @@ SELECT pgivm.create_immv(
 COMMENT ON TABLE rpt.budget_actual IS
 '预算执行实际数 IMMV：凭证分录按（公司×期间×科目×部门）SUM(debit-credit)；pg_ivm 自动增量维护，提交即一致';
 
--- 1.2 rpt.ar_aging_paid 已核销金额增量聚合，ar_aging 降级方案，pg_ivm 1.15 不允许"聚合函数 + 左连接"及"含聚合的子查询"，LEFT JOIN 骨架不可直接物化，改为基于 ar.receipt_allocations 的单表增量聚合，按发票分组，+ 普通视图 rpt.ar_aging 计算余额
+-- rpt.ar_aging_paid 已核销金额增量聚合，ar_aging 降级方案，pg_ivm 1.15 不允许"聚合函数 + 左连接"及"含聚合的子查询"，LEFT JOIN 骨架不可直接物化，改为基于 ar.receipt_allocations 的单表增量聚合，按发票分组，+ 普通视图 rpt.ar_aging 计算余额
 -- CASCADE，rpt.ar_aging 视图依赖本 immv，重跑时需连带删除后再重建
 SELECT pgivm.create_immv(
     'rpt.ar_aging_paid',
@@ -56,7 +56,7 @@ SELECT pgivm.create_immv(
 COMMENT ON TABLE rpt.ar_aging_paid IS
 '应收已核销金额 IMMV：按发票累计核销额；rpt.ar_aging 视图基于本 IMMV 计算未核销余额（降级方案）';
 
--- 1.3 rpt.dept_expense 部门费用（部门×期间×科目 SUM）
+-- rpt.dept_expense 部门费用（部门×期间×科目 SUM）
 SELECT pgivm.create_immv(
     'rpt.dept_expense',
     'SELECT vl.company_id, v.period, vl.dept_id, vl.account_id,
@@ -72,7 +72,7 @@ SELECT pgivm.create_immv(
 COMMENT ON TABLE rpt.dept_expense IS
 '部门费用 IMMV：费用凭证分录按（公司×期间×部门×科目）SUM(debit-credit)，部门费用仪表板数据源';
 
--- 1.4 rpt.cash_flow_daily 资金流水按日聚合，收入/支出，SUM(CASE WHEN ...) 为聚合参数内表达式，pg_ivm 支持，非窗口/非子查询
+-- rpt.cash_flow_daily 资金流水按日聚合，收入/支出，SUM(CASE WHEN ...) 为聚合参数内表达式，pg_ivm 支持，非窗口/非子查询
 SELECT pgivm.create_immv(
     'rpt.cash_flow_daily',
     'SELECT t.company_id, t.trx_date,
@@ -87,7 +87,7 @@ COMMENT ON TABLE rpt.cash_flow_daily IS
 
 -- 核心报表普通 sql 视图，非物化，避免维护成本，利润表/资产负债表/试算平衡表用普通视图 + 基表索引，查询计划走基表索引，全部为汇总级（GROUP BY 聚合），不暴露凭证/分录明细，符合 fms_report 角色"汇总只读、无明细敏感列"定位
 -- 视图属主 fms_admin（SUPERUSER），视图内部对基表的访问不触发 rls，查询者可看到全部公司汇总数，全部视图 ALTER VIEW SET (security_invoker = on)，使基表行级策略按调用者身份生效，与 audit.safe_voucher_view 同模式，防止补授权后跨公司汇总泄漏
--- 2.1 rpt.trial_balance 试算平衡表（公司×期间×科目 借/贷/余额）
+-- rpt.trial_balance 试算平衡表（公司×期间×科目 借/贷/余额）
 CREATE OR REPLACE VIEW rpt.trial_balance AS
 SELECT v.company_id,
        v.period,
@@ -107,7 +107,7 @@ GROUP BY v.company_id, v.period, vl.account_id, ca.code, ca.name;
 COMMENT ON VIEW rpt.trial_balance IS
 '试算平衡表（汇总视图）：已过账/已冲销凭证分录按（公司×期间×科目）借贷合计与余额';
 
--- 2.2 rpt.income_statement 利润表（公司×期间，收入/费用/净利润），REVENUE 类科目贷方余额计收入，EXPENSE 类科目借方余额计费用
+-- rpt.income_statement 利润表（公司×期间，收入/费用/净利润），REVENUE 类科目贷方余额计收入，EXPENSE 类科目借方余额计费用
 CREATE OR REPLACE VIEW rpt.income_statement AS
 SELECT v.company_id,
        v.period,
@@ -127,7 +127,7 @@ GROUP BY v.company_id, v.period;
 COMMENT ON VIEW rpt.income_statement IS
 '利润表（汇总视图）：按（公司×期间）汇总收入、费用与净利润（account_type 判定；net_profit = total_revenue - total_expense）';
 
--- 2.3 rpt.balance_sheet 资产负债表（公司×期间，资产/负债/权益，权益含当期未结转损益（REVENUE-EXPENSE 净额），与利润表净利润一致，保证勾稽 资产=负债+权益）
+-- rpt.balance_sheet 资产负债表（公司×期间，资产/负债/权益，权益含当期未结转损益（REVENUE-EXPENSE 净额），与利润表净利润一致，保证勾稽 资产=负债+权益）
 CREATE OR REPLACE VIEW rpt.balance_sheet AS
 SELECT v.company_id,
        v.period,
@@ -146,7 +146,7 @@ GROUP BY v.company_id, v.period;
 COMMENT ON VIEW rpt.balance_sheet IS
 '资产负债表（汇总视图）：按（公司×期间）汇总资产/负债/权益（account_type 判定）；权益包含当期未结转损益（REVENUE 与 EXPENSE 净额，即本期净利润），保证 资产=负债+权益 勾稽';
 
--- 2.4 rpt.cash_flow 现金流量（按（公司×月）汇总银行流水收支与净额）
+-- rpt.cash_flow 现金流量（按（公司×月）汇总银行流水收支与净额）
 CREATE OR REPLACE VIEW rpt.cash_flow AS
 SELECT t.company_id,
        date_trunc('month', t.trx_date)::date AS period,
@@ -161,7 +161,7 @@ GROUP BY t.company_id, date_trunc('month', t.trx_date)::date;
 COMMENT ON VIEW rpt.cash_flow IS
 '现金流量（汇总视图）：按（公司×月）聚合资金流入/流出/净额，月报与趋势图数据源';
 
--- 2.5 rpt.ar_aging 应收账龄（未核销余额，客户×期间），余额 = 发票总额 - 已核销（immv rpt.ar_aging_paid 实时累计），消费侧按需要再按账龄区间（0-30/31-60/…）对 open_balance 分桶
+-- rpt.ar_aging 应收账龄（未核销余额，客户×期间），余额 = 发票总额 - 已核销（immv rpt.ar_aging_paid 实时累计），消费侧按需要再按账龄区间（0-30/31-60/…）对 open_balance 分桶
 CREATE OR REPLACE VIEW rpt.ar_aging AS
 SELECT i.company_id,
        i.customer_id,
@@ -182,7 +182,7 @@ WHERE i.status IN ('ISSUED', 'PARTIAL')
 COMMENT ON VIEW rpt.ar_aging IS
 '应收账龄视图：已开具未付清发票（ISSUED/PARTIAL）按（客户×期间）计算未核销余额，数据源为 IMMV rpt.ar_aging_paid';
 
--- 2.6 报表视图安全调用者，security_invoker=on，视图内对基表的访问按调用者身份受 rls 收敛，视图授权按矩阵下发（init/grants_base.sql）后任意角色只能看到自己 org 范围的汇总行（配合注入 guc），防视图属主绕过 rls 的泄漏
+-- 报表视图安全调用者，security_invoker=on，视图内对基表的访问按调用者身份受 rls 收敛，视图授权按矩阵下发（init/grants_base.sql）后任意角色只能看到自己 org 范围的汇总行（配合注入 guc），防视图属主绕过 rls 的泄漏
 ALTER VIEW rpt.trial_balance      SET (security_invoker = on);
 ALTER VIEW rpt.income_statement   SET (security_invoker = on);
 ALTER VIEW rpt.balance_sheet      SET (security_invoker = on);
@@ -195,7 +195,7 @@ COMMENT ON VIEW rpt.trial_balance IS
 
 -- 两表均"仅追加"，FORCE rls + 仅 SELECT 策略，非超级用户无 INSERT/UPDATE/DELETE 能力，写入仅经 SECURITY DEFINER 函数，如消费队列批量入库函数，与超级用户（pg_cron 任务）完成
 -- SELECT 策略 USING (auth.current_uid IS NOT NULL)，审计/管理侧注入 fms.user_id 上下文后可读（L3 仅 auditor/admin），log.app_logs 按天分区由 queues_cron.sql 注册的 partman-maintenance cron 配套管理，本文件只建普通表并保持结构兼容分区父表（occurred_at NOT NULL），日志表非业务表，无 company_id
--- 3.1 log.app_logs 应用日志，按天分区声明
+-- log.app_logs 应用日志，按天分区声明
 CREATE TABLE IF NOT EXISTS log.app_logs (
     id          UUID        PRIMARY KEY DEFAULT uuidv7(),
     level       TEXT        NOT NULL DEFAULT 'INFO',
@@ -212,7 +212,7 @@ COMMENT ON TABLE log.app_logs IS
 
 CREATE INDEX IF NOT EXISTS idx_app_logs_occurred ON log.app_logs (occurred_at);
 
--- 3.2 log.task_runs 定时任务执行记录，pg_cron 任务结果落库，如 close-check 汇总、audit-chain-check 哈希链校验结果
+-- log.task_runs 定时任务执行记录，pg_cron 任务结果落库，如 close-check 汇总、audit-chain-check 哈希链校验结果
 CREATE TABLE IF NOT EXISTS log.task_runs (
     id          UUID        PRIMARY KEY DEFAULT uuidv7(),
     job_name    TEXT        NOT NULL,
@@ -229,7 +229,7 @@ COMMENT ON TABLE log.task_runs IS
 
 CREATE INDEX IF NOT EXISTS idx_task_runs_job ON log.task_runs (job_name, started_at);
 
--- 3.3 log 表 rls，FORCE rls + 仅 SELECT 策略，写入封闭
+-- log 表 rls，FORCE rls + 仅 SELECT 策略，写入封闭
 ALTER TABLE log.app_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE log.app_logs FORCE ROW LEVEL SECURITY;
 -- 应用日志含请求上下文，读取面收敛到审计与管理员（与 init/grants_base.sql 同名策略一致，

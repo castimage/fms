@@ -653,7 +653,7 @@ REVOKE EXECUTE ON FUNCTION auth.recovery_lookup(text,text) FROM PUBLIC;
 
 RESET ROLE;
 
--- 2.2 auth.decrypt_bank_account，current_user 职责身份守卫，仅 fms_admin/资金职责角色可解，+ 密钥读 sec.app_secrets
+-- auth.decrypt_bank_account，current_user 职责身份守卫，仅 fms_admin/资金职责角色可解，密钥读 sec.app_secrets
 CREATE OR REPLACE FUNCTION auth.decrypt_bank_account(p_id uuid)
 RETURNS text
 LANGUAGE plpgsql
@@ -683,7 +683,7 @@ BEGIN
     RETURN v_no;
 END $$;
 
--- 2.3 jwt 委托断言，标准 jwt 签发/验签由 pgjwt 扩展统一实现，部署后断言
+-- jwt 委托断言，标准 jwt 签发/验签由 pgjwt 扩展统一实现，部署后断言
 -- auth.jwt_sign 函数体委托 pgjwt.sign，无原生实现覆盖，断言不通过仅 WARNING，不阻断 apply 链
 DO $$
 DECLARE
@@ -699,13 +699,13 @@ BEGIN
     END IF;
 END $$;
 
--- 2.4 解密出口授权收口，fms_app 不可执行
+-- 解密出口授权收口，fms_app 不可执行
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
 SET ROLE fms_admin;
 
--- 2.5 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL
+-- 用户邮箱解密出口，本人或系统管理员可读，其余返回 NULL
 -- 返回 NULL 不抛错，因本出口被用户列表逐行调用，越权行抛错会使整表查询失败，且 NULL 不泄露存在性
 -- 邮箱以 pgp_sym_encrypt(aes256) 加密存储，等值查询走 email_hash 盲索引，明文只经本出口返回
 CREATE OR REPLACE FUNCTION auth.get_user_email(p_user_id uuid)

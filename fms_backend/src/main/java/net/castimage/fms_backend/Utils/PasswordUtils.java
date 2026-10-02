@@ -47,7 +47,7 @@ public final class PasswordUtils {
     }
 
     /**
-     * 密码长度二次校验（P9 收敛：配置收紧立即生效——min 取 max(配置,8) 防与 DTO @Size(min=8) 漂移出更弱策略；
+     * 密码长度二次校验（配置收紧立即生效——min 取 max(配置,8) 防与 DTO @Size(min=8) 漂移出更弱策略；
      * 超限抛 40001，调用点位于弱密码预检之前）。
      */
     public static void checkLength(String rawPassword, int configuredMin, int configuredMax) {

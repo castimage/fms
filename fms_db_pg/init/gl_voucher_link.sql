@@ -31,7 +31,7 @@ SET ROLE fms_admin;
 
 --    "仅 status 列可变更"检查在排除 voucher_id 后判断，其余列，金额/日期/客户等，仍不可变，
 --    DELETE 禁令与状态机白名单（同状态更新 NEW.status=OLD.status 放行，凭证联动回填
---    ISSUED->ISSUED 场景，仅 status/voucher_id 可变更仍由 v_only_status 终审，
+--    ISSUED 保持 ISSUED 场景，仅 status/voucher_id 可变更仍由 v_only_status 终审，
 --    ISSUED 转 PARTIAL/PAID/VOID、PARTIAL 转 ISSUED/PAID/VOID）与 ar_ap_cash_base.sql 实现语义一致。
 CREATE OR REPLACE FUNCTION ar.fn_ar_invoice_immutable()
 RETURNS trigger
@@ -51,10 +51,10 @@ BEGIN
         RAISE EXCEPTION '应收发票已结清/作废（status=%），禁止修改（trg_ar_invoice_immutable）', OLD.status;
     END IF;
     IF OLD.status IN ('ISSUED','PARTIAL') THEN
-        -- 状态机迁移白名单，ISSUED -> PARTIAL/PAID，核销推进，/ VOID，作废，
-        -- PARTIAL -> ISSUED，撤销核销回退，/ PAID，核销结清，/ VOID，作废，
+        -- 状态机迁移白名单，ISSUED 转 PARTIAL/PAID 为核销推进，ISSUED 转 VOID 为作废，
+        -- PARTIAL 转 ISSUED 为撤销核销回退，PARTIAL 转 PAID 为核销结清，PARTIAL 转 VOID 为作废，
         -- NEW.status = OLD.status，状态不变，放行，凭证联动回填 voucher_id 即此形态
-        -- （ISSUED->ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
+        -- （即 ISSUED 保持 ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
         IF NOT (
             (NEW.status = OLD.status) OR
             (OLD.status = 'ISSUED'  AND NEW.status = ANY (v_allowed_new_states)) OR

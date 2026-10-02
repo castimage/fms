@@ -95,9 +95,9 @@ public interface ApService {
     void deletePayment(UUID id);
 
     /**
-     * 付款核销（一次可核销多张发票）：事务内 ① FOR UPDATE 锁付款单（防并发超分，
-     * status 须 PAID）② 逐张发票余额预检（累计≤total）③ 批量 INSERT
-     * payment_allocations（uk_ap_alloc 防同对重复，23505 映射 40900）④ 核销合计=付款金额
+     * 付款核销（一次可核销多张发票）：事务内先 FOR UPDATE 锁付款单（防并发超分，
+     * status 须 PAID），再逐张发票余额预检（累计≤total），批量 INSERT
+     * payment_allocations（uk_ap_alloc 防同对重复，23505 映射 40900），核销合计=付款金额
      * 则付款单置 ALLOCATED；发票累计=total 则置 PAID，否则 PARTIAL（不可变触发器终审）。
      */
     List<AllocationView> allocate(UUID paymentId, List<PaymentAllocateRequest> items);

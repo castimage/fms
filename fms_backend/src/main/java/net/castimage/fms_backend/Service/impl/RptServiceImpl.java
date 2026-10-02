@@ -172,7 +172,7 @@ public class RptServiceImpl implements RptService {
     /**
      * {@inheritDoc}
      *
-     * 看板聚合七路数据，① 资金日报，rpt.cash_flow_daily immv 近 30 日，net=income-expense，
+     * 看板聚合七路数据，资金日报，rpt.cash_flow_daily immv 近 30 日，net=income-expense，
      * 预算执行 top（rpt.budget_actual immv 对键最新 APPROVED budget_plans，实际数倒序 top10），
 
      * 应收账龄分桶，rpt.ar_aging 视图全部未核销行按 due_date 相对 date 分桶合计 open_balance，

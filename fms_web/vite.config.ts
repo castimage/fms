@@ -6,7 +6,7 @@ import Components from 'unplugin-vue-components/vite'
 import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
-// ccb，alias @ -> src，naive-ui 按需自动导入(组件 + API 均生成 dts 供 vue-tsc 消费)
+// ccb，alias @ 指向 src，naive-ui 按需自动导入(组件 + API 均生成 dts 供 vue-tsc 消费)
 export default defineConfig({
   plugins: [
     vue(),

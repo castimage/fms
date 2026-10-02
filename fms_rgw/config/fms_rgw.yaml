@@ -137,8 +137,8 @@ log:
   ua_max_len: 256
   pgmq:
     # PGMQ 投递（HTTP 中转，架构铁律 INTERFACE.md 决策 1：网关不直连 PG/PGMQ）：
-    # 网关批量 POST 后端 {endpoint}（该路径豁免网关签名但需内部 token 校验）→
-    # 后端批量 pgmq.send("q_log_access") → 后端 cron 消费落 log.access_logs
+    # 网关批量 POST 后端 {endpoint}（该路径豁免网关签名但需内部 token 校验），
+    # 后端批量 pgmq.send("q_log_access")，后端 cron 消费落 log.access_logs
     enabled: false          # 默认关闭，不改变现有行为；开启后访问日志经 HTTP 中转投递 PGMQ 供审计落库
     endpoint: "/internal/log-batch"   # 后端批量接收路径
     token: ""               # 内部 token（X-FMS-Int-Token）；经环境变量 FMS_RGW_LOG_TOKEN 注入，留空禁用

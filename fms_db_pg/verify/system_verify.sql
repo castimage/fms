@@ -1,4 +1,4 @@
--- FMS 财务系统（纯验证脚本，执行库，fms），对象存在性（13 schema/6 角色/10 代表表/审计日志表/auth 8 函数/audit 函数/pgmq 函数/8 cron 任务/5 immv/通知幂等键唯一索引/闸口幂等与串行化）+ 五层安全与扩展能力场景断言（rls 注入可见与匿名空集、不平衡凭证拒绝、POSTED 凭证 rls+触发器双层拦截、audit_log 写入拒绝、pgmq send->read->archive 闭环、审计哈希链完好->篡改断链->恢复、五 schema 授权可达、rpt 报表可达、immv 自动维护、通知落库幂等、等锁上限范围、报销单冲销路径与冲销前置）
+-- FMS 财务系统（纯验证脚本，执行库，fms），对象存在性（13 schema/6 角色/10 代表表/审计日志表/auth 8 函数/audit 函数/pgmq 函数/8 cron 任务/5 immv/通知幂等键唯一索引/闸口幂等与串行化）+ 五层安全与扩展能力场景断言（rls 注入可见与匿名空集、不平衡凭证拒绝、POSTED 凭证 rls+触发器双层拦截、audit_log 写入拒绝、pgmq send/read/archive 闭环、审计哈希链完好、篡改断链、恢复后完好、五 schema 授权可达、rpt 报表可达、immv 自动维护、通知落库幂等、等锁上限范围、报销单冲销路径与冲销前置）
 -- 全部断言用 DO 块 + EXCEPTION WHEN OTHERS 捕获，任何失败不中断脚本（-v ON_ERROR_STOP=1 依然零错误通过），每个断言输出 RAISE NOTICE 'PASS/FAIL'，guc 注入值一律为固定 uuid 常量（canonical 小写），broken_at 语义 uuid（NULL=链完好），无 BEGIN/COMMIT，场景块内用 SET LOCAL / SET ROLE，DO 块内作用域随函数退出自动还原，可整体重复执行
 -- 例外，immv 断言需在同一事务内造数并回滚，DO 块内无法回滚，故该段用顶层 BEGIN 与 ROLLBACK 包裹，结果经 psql 变量带出后落盘
 -- 条数守卫，汇总校验结果表行数等于断言总数，少于总数即判有断言整条丢失
@@ -7,7 +7,7 @@
 CREATE TEMP TABLE IF NOT EXISTS verify_results (test_name text PRIMARY KEY, ok boolean);
 
 -- 对象存在性
--- 1.1 13 个业务 schema
+-- 13 个业务 schema
 DO $$
 DECLARE
     v_expect  int := 13;
@@ -35,7 +35,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-13个schema', false);
 END $$;
 
--- 1.2 6 个角色
+-- 6 个角色
 DO $$
 DECLARE
     v_cnt int;
@@ -57,7 +57,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-6个角色', false);
 END $$;
 
--- 1.3 10 张代表表 + 审计/日志表 2 张
+-- 10 张代表表 + 审计/日志表 2 张
 DO $$
 DECLARE
     v_tables text[] := ARRAY['um.users','org.companies','org.departments',
@@ -94,7 +94,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-审计日志表', false);
 END $$;
 
--- 1.4 auth.* 策略函数族 + 上下文/加密函数（8 个，uuid 签名）
+-- auth.* 策略函数族 + 上下文/加密函数（8 个，uuid 签名）
 DO $$
 DECLARE
     v_fns text[] := ARRAY['auth.current_uid()','auth.can_access_org(uuid)',
@@ -123,7 +123,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-auth函数', false);
 END $$;
 
--- 1.5 audit.* 函数（record / 哈希链校验，双命名探测/ 3 个触发器函数）
+-- audit.* 函数（record / 哈希链校验，双命名探测/ 3 个触发器函数）
 DO $$
 DECLARE
     v_ok boolean := true;
@@ -156,7 +156,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-audit函数', false);
 END $$;
 
--- 1.6 pgmq 函数（send/read/archive/meta/list）
+-- pgmq 函数（send/read/archive/meta/list）
 -- 环境适配，pgmq 扩展未装（pg_extension 无记录）即视为未安装，SKIP 不记 FAIL，
 -- 部分函数缺失，扩展已装但版本差异，才记 FAIL
 DO $$
@@ -200,7 +200,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-pgmq函数', false);
 END $$;
 
--- 1.7 pg_cron 9 个定时任务
+-- pg_cron 9 个定时任务
 -- 环境适配，本测试库 cron.database_name=postgres，cron.job 位于 postgres 库（init/queues_cron.sql文件经 schedule_in_database 注册，任务 database='fms'），本库无 cron schema 时经 dblink 跨库核验，pg_cron 完全不可用则按部署策略条件跳过
 DO $$
 DECLARE
@@ -254,7 +254,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-cron9任务', false);
 END $$;
 
--- 1.7b 分区断言，① part_config 4 行（um.login_log/audit.audit_log/log.app_logs/log.access_logs）② 4 行均已配置 retention 且不保留过期分区 ③ partman-maintenance cron 命令为 CALL 形态 ④ CALL 路径可执行，DO 块内不能 CALL 含事务控制的 PROCEDURE，run_maintenance_proc 内部有 COMMIT 路径会报 'invalid transaction termination'，故用等价的函数形态 run_maintenance(NULL) 验证维护链路，cron 任务为顶层 CALL 不受此限制，⑤ 分区子表存在
+-- 分区断言，part_config 4 行（um.login_log/audit.audit_log/log.app_logs/log.access_logs），4 行均已配置 retention 且不保留过期分区，partman-maintenance cron 命令为 CALL 形态，CALL 路径可执行，DO 块内不能 CALL 含事务控制的 PROCEDURE，run_maintenance_proc 内部有 COMMIT 路径会报 'invalid transaction termination'，故用等价的函数形态 run_maintenance(NULL) 验证维护链路，cron 任务为顶层 CALL 不受此限制，分区子表存在
 DO $$
 DECLARE
     v_cfg    int := -1;
@@ -290,7 +290,7 @@ BEGIN
             SELECT command INTO v_cmd FROM cron.job
              WHERE jobname = 'partman-maintenance' AND database = current_database();
         ELSE
-            -- 1.7b 回退分支与 1.7 主路径同口径，硬编码异机 ip 测试机
+            -- 回退分支与主路径同口径，硬编码异机 ip 测试机
             -- 会连到另一台机器，故用本机 unix socket（/var/run/postgresql，peer 认证）
             SELECT t.c INTO v_cmd FROM dblink(
                 'host=/var/run/postgresql dbname=postgres user=postgres',
@@ -325,7 +325,7 @@ BEGIN
     END IF;
 END $$;
 
--- 1.7c jwt 委托断言，auth.jwt_sign 必须委托 pgjwt.sign，防原生实现静默覆盖
+-- jwt 委托断言，auth.jwt_sign 必须委托 pgjwt.sign，防原生实现静默覆盖
 DO $$
 DECLARE
     v_def text;
@@ -346,7 +346,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('JWT委托pgjwt', false);
 END $$;
 
--- 1.8 pg_ivm 5 个增量物化视图（rpt，budget_actual/ar_aging_paid/ap_aging_paid/dept_expense/cash_flow_daily，ap_aging_paid 为 AP 账龄，pgivm.create_immv 实现，与 AR 同构）
+-- pg_ivm 5 个增量物化视图（rpt，budget_actual/ar_aging_paid/ap_aging_paid/dept_expense/cash_flow_daily，ap_aging_paid 为 AP 账龄，pgivm.create_immv 实现，与 AR 同构）
 DO $$
 DECLARE
     v_immvs text[] := ARRAY['rpt.budget_actual','rpt.ar_aging_paid',
@@ -393,7 +393,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-IMMV5个', false);
 END $$;
 
--- 1.9 通知落库幂等键，notify.notifications 部分唯一索引 (user_id, ref_type, ref_id) WHERE deleted_at IS NULL
+-- 通知落库幂等键，notify.notifications 部分唯一索引 (user_id, ref_type, ref_id) WHERE deleted_at IS NULL
 DO $$
 DECLARE
     v_idxdef text;
@@ -419,8 +419,8 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-通知幂等键索引', false);
 END $$;
 
--- 1.10 通知闸口幂等与串行化，函数体必含 ON CONFLICT DO NOTHING，广播闸口另含 pg_advisory_xact_lock
--- 函数体包含式断言，与 1.7c 的 jwt 委托断言同款，防后续实现被静默替换成裸 INSERT
+-- 通知闸口幂等与串行化，函数体必含 ON CONFLICT DO NOTHING，广播闸口另含 pg_advisory_xact_lock
+-- 函数体包含式断言，与上文 jwt 委托断言同款，防后续实现被静默替换成裸 INSERT
 DO $$
 DECLARE
     v_bcast text;
@@ -457,7 +457,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('对象存在性-通知闸口幂等与串行化', false);
 END $$;
 
--- 1.11 报销单冲销路径，状态机白名单含已过账转已冲销且以其凭证已冲销为前置；
+-- 报销单冲销路径，状态机白名单含已过账转已冲销且以其凭证已冲销为前置；
 -- 更新策略须放行已过账行（否则行级策略先于触发器拦下，冲销路径不可达），
 -- 查询策略把已冲销一并纳入审批后可见集合
 DO $$
@@ -496,7 +496,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- 场景验证，五层安全 + 扩展能力闭环
--- 2.1 rls 场景 A，注入身份（fms.user_id=ADMIN_UID + org/dept 范围）+ SET ROLE fms_operator -> gl.vouchers 应可见，有数据，验证上下文预载 guc + 策略函数族链路
+-- rls 场景 A，注入身份（fms.user_id=ADMIN_UID + org/dept 范围）+ SET ROLE fms_operator 则 gl.vouchers 应可见，有数据，验证上下文预载 guc + 策略函数族链路
 -- 断言自带夹具，不依赖业务种子，内层子事务现建一张 DRAFT 凭证，断言后以 RAISE 回滚子事务，库无残留
 -- 变量不随子事务回滚，故结果经变量带出后落盘，制单人取注入身份本人，与策略 is_self 分支一致
 DO $$
@@ -537,7 +537,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-RLS-注入身份凭证可见', false);
 END $$;
 
--- 2.2 rls 场景 B，匿名，无 guc 上下文，-> 凭证查询应返回空集
+-- rls 场景 B，匿名，无 guc 上下文，凭证查询应返回空集
 DO $$
 DECLARE v_cnt bigint;
 BEGIN
@@ -556,7 +556,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-RLS-匿名不可见', false);
 END $$;
 
--- 2.3 场景，借贷不平衡凭证提交（DRAFT 可存，转 SUBMITTED 被状态机校验 RAISE）
+-- 场景，借贷不平衡凭证提交（DRAFT 可存，转 SUBMITTED 被状态机校验 RAISE）
 DO $$
 DECLARE
     v_vid uuid;
@@ -586,7 +586,7 @@ BEGIN
     VALUES
         (v_vid, 1, v_acc, '验证：不平衡分录（仅借方 100，无贷方）', 100.00, 0.00, 'CNY',
          '00000000-0000-7000-0000-000000000021', '00000000-0000-7000-0000-000000000010');
-    UPDATE gl.vouchers SET status = 'SUBMITTED' WHERE id = v_vid;   -- 贷借差=100 ≠ 0 -> 应 RAISE
+    UPDATE gl.vouchers SET status = 'SUBMITTED' WHERE id = v_vid;   -- 贷借差=100 ≠ 0 则应 RAISE
     RAISE NOTICE 'FAIL: 场景-不平衡凭证提交未被拒绝（已置 SUBMITTED，平衡校验缺失）';
     RESET ROLE;
     INSERT INTO verify_results VALUES ('场景-不平衡凭证提交拒绝', false);
@@ -601,7 +601,7 @@ EXCEPTION WHEN OTHERS THEN
     END IF;
 END $$;
 
--- 2.4 场景，POSTED 凭证不可更新， 第一层，operator 被 rls 静默拦截，0 行
+-- 场景，POSTED 凭证不可更新， 第一层，operator 被 rls 静默拦截，0 行
 -- 断言自带夹具，不依赖业务种子，内层子事务按状态机现建一张 POSTED 凭证
 -- 草稿到提交到审核由 operator 走，过账由 fms_admin 走，断言后回滚子事务，库无残留
 DO $$
@@ -663,7 +663,7 @@ BEGIN
     INSERT INTO verify_results VALUES ('场景-POSTED凭证UPDATE-RLS拦截', v_rc = 0);
 END $$;
 
--- 2.5 场景，POSTED 凭证不可更新， 第二层，fms_admin（超级用户绕过 rls）被 BEFORE 触发器 trg_voucher_immutable 硬拒绝（RAISE）
+-- 场景，POSTED 凭证不可更新， 第二层，fms_admin（超级用户绕过 rls）被 BEFORE 触发器 trg_voucher_immutable 硬拒绝（RAISE）
 -- 断言自带夹具，内层子事务现建 POSTED 凭证，fms_admin 直改应被触发器硬拒绝，断言后回滚子事务
 DO $$
 DECLARE
@@ -718,7 +718,7 @@ BEGIN
     INSERT INTO verify_results VALUES ('场景-POSTED凭证UPDATE-触发器拒绝', v_hit);
 END $$;
 
--- 2.6 场景，INSERT INTO audit.audit_log 被拒（应用角色无 INSERT 权限 + FORCE rls 无策略）
+-- 场景，INSERT INTO audit.audit_log 被拒（应用角色无 INSERT 权限 + FORCE rls 无策略）
 DO $$
 BEGIN
     SET ROLE fms_operator;
@@ -734,7 +734,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-audit_log写入拒绝', true);
 END $$;
 
--- 2.7 场景，pgmq send -> read -> archive 闭环（q_notify_task，operator 消费），pgmq msg_id 为 bigint（pgmq schema 内部语义不动），uuid 仅消息体 jsonb 文本
+-- 场景，pgmq send/read/archive 闭环（q_notify_task，operator 消费），pgmq msg_id 为 bigint（pgmq schema 内部语义不动），uuid 仅消息体 jsonb 文本
 -- 环境适配，pgmq 扩展未装即视为未安装，SKIP 不记 FAIL
 DO $$
 DECLARE
@@ -765,7 +765,7 @@ BEGIN
     SELECT pgmq.archive('q_notify_task', v_read) INTO v_ok;
     -- 归档复核，pgmq 1.12.0 移除了 pgmq.archived(text)，改直查归档表 a_<队列>；
     -- 归档表不对业务角色授权，故先 RESET ROLE 以超级用户口径复核（本脚本以 postgres 运行），
-    -- 旧版仍走 pgmq.archived，双路径兼容
+    -- 归档表缺失时回退 pgmq.archived，双路径兼容
     RESET ROLE;
     IF to_regprocedure('pgmq.archived(text)') IS NOT NULL THEN
         EXECUTE 'SELECT count(*) FROM pgmq.archived(''q_notify_task'') WHERE msg_id = $1'
@@ -787,7 +787,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-PGMQ闭环', false);
 END $$;
 
--- 2.8 场景，审计哈希链， 初始完好 -> 篡改一行，禁不可变触发器模拟后台强制篡改，-> chain_check 定位断链点（broken_at 非 NULL，uuid）-> 恢复后链完好
+-- 场景，审计哈希链，初始完好，篡改一行（禁不可变触发器模拟后台强制篡改），chain_check 定位断链点（broken_at 非 NULL，uuid），恢复后链完好
 -- 校验函数双命名探测（与 init/queues_cron.sql文件 log.fn_cron_audit_chain_check 同一策略），优先 audit.audit_log_chain_check，回退 audit.chain_check，uuid 语义，NULL = 链完好，非 NULL = 断链点行 id
 DO $$
 DECLARE
@@ -820,7 +820,7 @@ BEGIN
         RETURN;
     END IF;
 
-    --篡改前，链应完好（broken_at = NULL）
+    -- 篡改发生前，链应完好（broken_at = NULL）
 
     FOR v_row IN EXECUTE format('SELECT * FROM %s', v_fn) LOOP
         v_j := to_jsonb(v_row);
@@ -901,7 +901,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-审计哈希链', false);
 END $$;
 
--- 2.9 场景，五 schema 授权可达性，原 verify/system_verify.sql未覆盖 fa/expense/budget/wf/rpt，导致四模块零授权与 rpt 零授权在验收时全 PASS，注入 operator 上下文后 wf.tasks / budget.budget_plans 应可见
+-- 场景，五 schema 授权可达性，fa/expense/budget/wf/rpt 须覆盖，否则四模块与 rpt 零授权在验收时全 PASS，注入 operator 上下文后 wf.tasks / budget.budget_plans 应可见
 -- 断言自带夹具，不依赖业务种子，内层子事务现建预算计划与流程实例任务各一行
 -- 任务归属注入身份本人以命中 is_self 分支，断言 operator 可见后回滚子事务，库无残留
 DO $$
@@ -967,7 +967,7 @@ BEGIN
     INSERT INTO verify_results VALUES ('场景-五schema授权可达', v_tasks > 0 AND v_plans > 0);
 END $$;
 
--- 2.10 场景，rpt 报表可达（fms_report 查询 rpt.trial_balance 成功且行级收敛）
+-- 场景，rpt 报表可达（fms_report 查询 rpt.trial_balance 成功且行级收敛）
 DO $$
 DECLARE v_cnt bigint;
 BEGIN
@@ -984,8 +984,8 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-rpt报表可达', false);
 END $$;
 
--- 2.11 场景，pg_ivm immv 自动维护，顶层事务，DO 块内无法 ROLLBACK 测试数据，断言结果经 psql 变量带出，ROLLBACK 后落盘 verify_results
--- 单事务，operator 注入 guc 插入平衡凭证（DRAFT->SUBMITTED->APPROVED，25 状态机白名单要求逐级迁移）+ fms_admin 过账（等价 SECURITY DEFINER 路径）+ operator 插入核销分配与银行流水 -> 事务内断言 4 个 immv 聚合增量（automatic 模式同事务立即可见）-> ROLLBACK 无残留
+-- 场景，pg_ivm immv 自动维护，顶层事务，DO 块内无法 ROLLBACK 测试数据，断言结果经 psql 变量带出，ROLLBACK 后落盘 verify_results
+-- 单事务，operator 注入 guc 插入平衡凭证（DRAFT 转 SUBMITTED 转 APPROVED，25 状态机白名单要求逐级迁移），fms_admin 过账（等价 SECURITY DEFINER 路径），operator 插入核销分配与银行流水，事务内断言 4 个 immv 聚合增量（automatic 模式同事务立即可见），ROLLBACK 无残留
 -- 注，INSERT...RETURNING 受 SELECT 策略校验，DRAFT 行对 operator 不可见，is_self 依赖 um.users ACTIVE 用户，凭证用显式 id 插入
 BEGIN;
 SET LOCAL fms.user_id  = '00000000-0000-7000-0000-000000000001';
@@ -1115,7 +1115,7 @@ INSERT INTO verify_results VALUES ('场景-IMMV自动维护', :'ok'::boolean);
 \echo FAIL: 场景-IMMV自动维护 detail=:detail
 \endif
 
--- 2.12 场景，通知落库幂等，同一 user_id+ref_type+ref_id 连插两次只落一行（唯一索引 uk_notify_user_ref
+-- 场景，通知落库幂等，同一 user_id+ref_type+ref_id 连插两次只落一行（唯一索引 uk_notify_user_ref
 -- 与闸口函数 ON CONFLICT DO NOTHING 共同承担），ref 为空的行不受约束可重复插入，验证后清理测试行
 DO $$
 DECLARE
@@ -1155,8 +1155,8 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-通知落库幂等', false);
 END $$;
 
--- 2.13 场景，广播等锁上限只作用于广播锁，取锁前施加、取到后还原，故调用返回时 lock_timeout 与调用前一致；
--- 参数取空值或越界值亦不致命（回落缺省与越界截断的判定由 1.10 的函数体断言承担，单会话内无法观测被还原后的上限）。
+-- 场景，广播等锁上限只作用于广播锁，取锁前施加、取到后还原，故调用返回时 lock_timeout 与调用前一致；
+-- 参数取空值或越界值亦不致命（回落缺省与越界截断的判定由通知闸口幂等与串行化的函数体断言承担，单会话内无法观测被还原后的上限）。
 -- 探针行与临时改动的参数在本块内还原，本脚本逐语句提交，留下异常参数会把上限关掉。
 DO $$
 DECLARE
@@ -1202,7 +1202,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO verify_results VALUES ('场景-等锁上限范围', false);
 END $$;
 
--- 2.14 场景，报销单冲销前置（账先冲、单后标）：已过账单据在其凭证未冲销时置已冲销应被状态机触发器拒绝，
+-- 场景，报销单冲销前置（账先冲、单后标）：已过账单据在其凭证未冲销时置已冲销应被状态机触发器拒绝，
 -- 同一单据的非状态字段在已过账后仍被冻结（受控冲销是唯一例外）。
 -- 夹具用一张非冲销态真实凭证占位（voucher_id 有外键约束），块内创建、块内清理。
 DO $$
@@ -1279,7 +1279,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- 清理与汇总
--- 3.1 清理 2.3 场景遗留的测试凭证，VERIFY_TEST，superuser 直删，rls/权限不受限
+-- 清理上文不平衡凭证场景遗留的测试凭证，VERIFY_TEST，superuser 直删，rls/权限不受限
 DO $$
 DECLARE v_ids uuid[];
 BEGIN
@@ -1295,7 +1295,7 @@ EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'WARN: 验证测试凭证清理失败：%', SQLERRM;
 END $$;
 
--- 3.2 汇总（PASS/FAIL 计数 + 明细清单）
+-- 汇总（PASS/FAIL 计数 + 明细清单）
 -- 条数守卫，结果表行数须等于断言总数，少于总数即说明有断言整条丢失
 -- 该类丢失只表现为计数变小，看的人无从察觉，故一并报出并以 FAIL 措辞提示
 DO $$

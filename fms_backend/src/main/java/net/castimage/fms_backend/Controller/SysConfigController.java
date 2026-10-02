@@ -21,7 +21,7 @@ import java.util.List;
  * um.params web.refdata.page.size（Web 系统参数页可改，缺省 200，db 无值/异常回落缺省）。
  *
  * 仅需认证（requireUserId），不要求管理员角色，登录态即可渲染页面级校验，如改密页，
- * 不含任何敏感/部署级参数，jwt 密钥、db 口令、调度周期等运维值绝不下发，铁律①/③。
+ * 不含任何敏感/部署级参数，jwt 密钥、db 口令、调度周期等运维值绝不下发，铁律。
  */
 @RestController
 @RequiredArgsConstructor

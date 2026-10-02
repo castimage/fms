@@ -1,4 +1,4 @@
--- FMS 背景设置（init/um_user_preferences），① um.user_preferences 用户级背景偏好，rls 限定本人，四职责角色可读写自己的行，个人 ui 偏好非业务数据，不属业务写权限面，② docs.documents 业务类型白名单扩展（LOGIN_BACKGROUND/USER_BACKGROUND 背景图）③ docs.fn_public_document_meta 匿名读口，仅放行 LOGIN_BACKGROUND 类型，登录页匿名加载背景图的最小暴露面
+-- FMS 背景设置（init/um_user_preferences），um.user_preferences 用户级背景偏好，rls 限定本人，四职责角色可读写自己的行，个人 ui 偏好非业务数据，不属业务写权限面，docs.documents 业务类型白名单扩展（LOGIN_BACKGROUND/USER_BACKGROUND 背景图），docs.fn_public_document_meta 匿名读口，仅放行 LOGIN_BACKGROUND 类型，登录页匿名加载背景图的最小暴露面
 
 -- 幂等，CREATE TABLE IF NOT EXISTS / DROP CONSTRAINT IF EXISTS / CREATE OR REPLACE FUNCTION，依赖 init/um_org_base.sql（um.users/auth.current_uid）与 init/docs_base.sql（docs.documents）已部署
 

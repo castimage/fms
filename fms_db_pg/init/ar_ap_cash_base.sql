@@ -369,7 +369,7 @@ GRANT SELECT ON cash.bank_accounts TO fms_pgaudit_role;
 -- 状态迁移例外，业务生命周期，Java 核销/撤销核销/作废走此通道，终审仍在此触发器，
 --   ISSUED 转 PARTIAL/PAID 为核销推进、ISSUED 转 VOID 为作废，
 --   PARTIAL 转 PAID 为核销完毕、PARTIAL 转 ISSUED 为撤销核销回退、PARTIAL 转 VOID 为作废。
--- 同状态更新（NEW.status = OLD.status，ISSUED->ISSUED）放行，凭证联动回填 voucher_id
+-- 同状态更新（NEW.status = OLD.status，ISSUED 保持 ISSUED）放行，凭证联动回填 voucher_id
 -- 即此形态（gl_voucher_link 联动凭证开票时/补生成端点回填）。
 -- voucher_id 为凭证联动回填列，豁免"仅 status 可变更"检查（与 init/gl_voucher_link.sql
 -- 内重定义保持同构，两文件定义必须一致，否则执行顺序会互相覆盖）。
@@ -392,10 +392,10 @@ BEGIN
         RAISE EXCEPTION '应收发票已结清/作废（status=%），禁止修改（trg_ar_invoice_immutable）', OLD.status;
     END IF;
     IF OLD.status IN ('ISSUED','PARTIAL') THEN
-        -- 状态机迁移白名单，ISSUED -> PARTIAL/PAID，核销推进/ VOID，作废，
-        -- PARTIAL -> ISSUED，撤销核销回退/ PAID，核销结清/ VOID，作废，
+        -- 状态机迁移白名单，ISSUED 转 PARTIAL/PAID 为核销推进，ISSUED 转 VOID 为作废，
+        -- PARTIAL 转 ISSUED 为撤销核销回退，PARTIAL 转 PAID 为核销结清，PARTIAL 转 VOID 为作废，
         -- NEW.status = OLD.status，状态不变放行，凭证联动回填 voucher_id 即此形态
-        -- （ISSUED->ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
+        -- （即 ISSUED 保持 ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
         IF NOT (
             (NEW.status = OLD.status) OR
             (OLD.status = 'ISSUED'  AND NEW.status = ANY (v_allowed_new_states)) OR
@@ -434,10 +434,10 @@ BEGIN
         RAISE EXCEPTION '应付发票已结清/作废（status=%），禁止修改（trg_ap_invoice_immutable）', OLD.status;
     END IF;
     IF OLD.status IN ('ISSUED','PARTIAL') THEN
-        -- 状态机迁移白名单，ISSUED -> PARTIAL/PAID，核销推进/ VOID，作废，
-        -- PARTIAL -> ISSUED，撤销核销回退/ PAID，核销结清/ VOID，作废，
+        -- 状态机迁移白名单，ISSUED 转 PARTIAL/PAID 为核销推进，ISSUED 转 VOID 为作废，
+        -- PARTIAL 转 ISSUED 为撤销核销回退，PARTIAL 转 PAID 为核销结清，PARTIAL 转 VOID 为作废，
         -- NEW.status = OLD.status，状态不变放行，凭证联动回填 voucher_id 即此形态
-        -- （ISSUED->ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
+        -- （即 ISSUED 保持 ISSUED），仅 status/voucher_id 可变更由下方 v_only_status 终审兜底
         IF NOT (
             (NEW.status = OLD.status) OR
             (OLD.status = 'ISSUED'  AND NEW.status = ANY (v_allowed_new_states)) OR

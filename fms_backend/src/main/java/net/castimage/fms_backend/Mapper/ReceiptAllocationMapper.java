@@ -53,7 +53,7 @@ public interface ReceiptAllocationMapper extends BaseMapper<ReceiptAllocation> {
      * 命中则 version+1 推进。
      *
      * @param id         核销明细 id
-     * @param oldVersion 读到的旧版本号
+     * @param oldVersion 读到的版本号
      * @param amount     新核销金额（不可超过发票余额，Service 预检）
      * @return 更新行数（0 = 版本冲突/已删除）
      */

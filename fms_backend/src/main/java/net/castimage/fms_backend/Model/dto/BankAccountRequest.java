@@ -15,7 +15,7 @@ public record BankAccountRequest(
         /** 银行账号（仅创建时生效；更新忽略） */
         @NotBlank(message = "银行账号必填")
         String accountNo,
-        /** 展示掩码（前端自持，如 ****1234，不落库） */
+        /** 展示掩码（前端自持，仅回显，不落库） */
         String accountNoMasked,
         /** 账户类型（CORPORATE/PERSONAL，缺省 CORPORATE） */
         String accountType,

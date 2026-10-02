@@ -448,7 +448,7 @@ public class ApServiceImpl implements ApService {
             throw new BadRequestException("付款金额必须大于 0");
         }
 
-        // 幂等双闸 ① 预检，同公司/供应商/银行账户/金额/付款日期 已存在有效付款单则 40900，防客户端重复提交/重试产生重复付款，uk_ap_payments_dup 部分唯一索引为②并发兜底
+        // 幂等双闸，预检同公司/供应商/银行账户/金额/付款日期 已存在有效付款单则 40900，防客户端重复提交或重试产生重复付款，uk_ap_payments_dup 部分唯一索引为并发兜底
         UUID dupKey = paymentDupKey(req.companyId(), req.supplierId(), req.bankAccountId(),
                 amount, req.paymentDate());
         if (paymentMapper.selectActiveByDupKey(req.companyId(), dupKey) != null) {

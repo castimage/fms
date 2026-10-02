@@ -391,7 +391,7 @@ SELECT '00000000-0000-7000-0000-000000000010', u.id, p.id,
 ON CONFLICT (user_id, permission_id) DO UPDATE SET reason = EXCLUDED.reason, valid_until = EXCLUDED.valid_until, deleted_at = NULL, updated_at = now();
 
 -- auth.* 权限判定函数族（SECURITY DEFINER，读 guc fms.user_id，fail-closed），不依赖 current_user，DEFINER 内恒为属主，未注入上下文则空集/false/异常，fms_admin（NOLOGIN）与 postgres，引导连接用户，维护直通
--- 8.1 合并权限集，角色权限（含 user_role/role_perm 有效期过滤）+ 用户直接权限（valid_until 过滤）+ 权限/模块启用状态过滤，返回权限明细与依赖缺口
+-- 合并权限集，角色权限（含 user_role/role_perm 有效期过滤）+ 用户直接权限（valid_until 过滤）+ 权限/模块启用状态过滤，返回权限明细与依赖缺口
 CREATE OR REPLACE FUNCTION auth.user_permissions()
 RETURNS TABLE (
     permission_id        uuid,
@@ -436,7 +436,7 @@ $$;
 COMMENT ON FUNCTION auth.user_permissions()
     IS '合并权限集：角色权限（user_role/role_perm 有效期过滤）+ 直接权限（valid_until 过滤）+ 启用状态过滤；含前置依赖缺口标记';
 
--- 8.2 判定，identifier 命中且前置依赖全部满足
+-- 权限判定，identifier 命中且前置依赖全部满足
 CREATE OR REPLACE FUNCTION auth.has_permission(p_identifier text)
 RETURNS boolean
 LANGUAGE sql
@@ -450,7 +450,7 @@ $$;
 COMMENT ON FUNCTION auth.has_permission(text)
     IS '权限判定：合并权限集中命中 identifier 且前置依赖全部满足（依赖缺口->false）';
 
--- 8.3 闸口，供 SECURITY DEFINER 业务函数函数体内显式鉴权，绕过 rls 的代价
+-- 闸口，供 SECURITY DEFINER 业务函数函数体内显式鉴权，绕过 rls 的代价
 CREATE OR REPLACE FUNCTION auth.require_permission(p_identifier text)
 RETURNS void
 LANGUAGE plpgsql
@@ -542,7 +542,7 @@ ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now
 -- 闸口收敛（sql 侧纵深防御）
 
 
--- 2.1 auth.assign_role，仅持 admin.user.grant 者可分配角色，防自助分配/自升
+-- auth.assign_role，仅持 admin.user.grant 者可分配角色，防自助分配/自升
 CREATE OR REPLACE FUNCTION auth.assign_role(p_user_id uuid, p_role_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -573,7 +573,7 @@ BEGIN
 END
 $$;
 
--- 2.2 auth.revoke_role，仅持 admin.user.grant 者可回收角色
+-- auth.revoke_role，仅持 admin.user.grant 者可回收角色
 CREATE OR REPLACE FUNCTION auth.revoke_role(p_user_id uuid, p_role_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -595,7 +595,7 @@ BEGIN
 END
 $$;
 
--- 2.3 auth.upsert_role，仅持 admin.role.create 者可创建/更新角色，公司取调用者公司，兜底最早公司
+-- auth.upsert_role，仅持 admin.role.create 者可创建/更新角色，公司取调用者公司，兜底最早公司
 CREATE OR REPLACE FUNCTION auth.upsert_role(p_code text, p_name text, p_is_system boolean)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -622,7 +622,7 @@ BEGIN
 END
 $$;
 
--- 2.4 auth.grant_role_permission，仅持 admin.role.grant 者可绑定角色-权限，权限点/角色存在性校验+幂等
+-- auth.grant_role_permission，仅持 admin.role.grant 者可绑定角色-权限，权限点/角色存在性校验+幂等
 CREATE OR REPLACE FUNCTION auth.grant_role_permission(p_role_id uuid, p_perm_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -650,7 +650,7 @@ BEGIN
 END
 $$;
 
--- 2.5 auth.revoke_role_permission，仅持 admin.role.grant 者可解绑角色-权限，软删幂等
+-- auth.revoke_role_permission，仅持 admin.role.grant 者可解绑角色-权限，软删幂等
 CREATE OR REPLACE FUNCTION auth.revoke_role_permission(p_role_id uuid, p_perm_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -669,7 +669,7 @@ BEGIN
 END
 $$;
 
--- 2.6 org.fn_upsert_company，仅持 org.company.create 者可创建/更新公司，幂等 upsert + company_id 自引用回填
+-- org.fn_upsert_company，仅持 org.company.create 者可创建/更新公司，幂等 upsert + company_id 自引用回填
 CREATE OR REPLACE FUNCTION org.fn_upsert_company(
     p_code text, p_name text, p_currency text,
     p_fiscal_year_start date, p_status text)

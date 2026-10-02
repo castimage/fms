@@ -128,7 +128,7 @@ ON CONFLICT (identifier) DO NOTHING;
 
 -- auth.* 策略函数族（SECURITY DEFINER 属主 fms_admin，GRANT 见本文件授权段（L683 起））
 -- 全部 fail-closed，guc 缺失/非法则 NULL/false，绝不 RAISE 阻断 SELECT，fms.user_id/org_ids/dept_ids 均为 canonical 小写 uuid 文本，经 auth.set_session 或验证脚本字面量注入
--- 2.1 当前会话用户 id（安全版，上下文缺失/非法/用户不存在返回 NULL）
+-- 当前会话用户 id（安全版，上下文缺失/非法/用户不存在返回 NULL）
 -- 全库 rls 策略的身份来源，读 fms.user_id guc（后端每请求经 auth.set_session 注入，验证脚本以字面量注入），函数无参数、STABLE，可被任何策略表达式直接调用而无需额外上下文
 -- 行为，guc 缺失/为空/非 canonical uuid，8-4-4-4-12 十六进制则 NULL，fail-closed 不抛错，策略视行不可见，格式合法但用户已软删或状态非 ACTIVE 则 NULL，LOCKED/DISABLED 账户经伪造 guc 在 rls 层即失效，与 set_session 的 ACTIVE 语义一致
 -- fms_admin 会话未注入 guc 同样返回 NULL，管理放行一律经 session_user/current_user 短路判定而非本函数
@@ -157,7 +157,7 @@ BEGIN
     RETURN v_uid;
 END $$;
 
--- 2.2 公司数据范围（读 fms.org_ids 逗号分隔集合，fms_admin 短路放行）
+-- 公司数据范围（读 fms.org_ids 逗号分隔集合，fms_admin 短路放行）
 -- rls 行级收敛核心判定，gl/ar/ap/cash/org 等业务表的公司范围策略一律经此函数
 -- 参数，p_org_id 目标行所属公司 id，策略表达式以行值传入
 -- 行为，p_org_id NULL 或 guc 缺失则 false，未注入上下文不可见，fail-closed，否则按 p_org_id::text 精确匹配逗号分隔集合，canonical 小写 uuid 文本，与 set_session 的 uuid::text 输出恒一致
@@ -187,7 +187,7 @@ BEGIN
     RETURN p_org_id::text = ANY (string_to_array(v_ids, ','));
 END $$;
 
--- 2.3 部门数据范围（读 fms.dept_ids），直接成员命中，或 include_subtree=true 的授予部门存在后代部门 d（d.path <@ g.path，GIST 索引加速），部门管理员看其子树的能力，SECURITY DEFINER 绕过 rls，两处查询均走既有索引，失败静默
+-- 部门数据范围（读 fms.dept_ids），直接成员命中，或 include_subtree=true 的授予部门存在后代部门 d（d.path <@ g.path，GIST 索引加速），部门管理员看其子树的能力，SECURITY DEFINER 绕过 rls，两处查询均走既有索引，失败静默
 -- 参数，p_dept_id 目标行所属部门 id，策略表达式以行值传入
 -- 行为，fms.dept_ids 直接包含 p_dept_id 则 true，否则查 um.user_dept_scope 中当前用户 include_subtree=true 且未软删的授予部门（g 与目标部门 d 均须未软删），目标部门是任一授予部门的 ltree 子树节点（d.path <@ g.path）则 true
 -- p_dept_id NULL 则 false，未注入身份时 auth.current_uid 为 NULL，EXISTS 恒 false（fail-closed），与 can_access_org 组合使用（vouchers 等表按 org 与 dept 双收敛）
@@ -223,7 +223,7 @@ BEGIN
            AND d.path <@ g.path);                 -- 目标部门是授予部门的子树节点
 END $$;
 
--- 2.4 本人数据判定，恒返回 true 或 false，不产生 NULL
+-- 本人数据判定，恒返回 true 或 false，不产生 NULL
 -- 会话标识缺失时直接比较将得到 NULL，而调用方普遍写作取反后拒绝，NULL 使该条件不成立即放行，
 -- 守卫被穿透，故此处显式判空并落在 false，缺失即判非本人，调用点随之收敛为拒绝
 CREATE OR REPLACE FUNCTION auth.is_self(p_owner_id uuid)
@@ -243,7 +243,7 @@ BEGIN
     RETURN p_owner_id = auth.current_uid();
 END $$;
 
--- 2.5 角色判定（audit 等表的 SELECT 策略使用），普通函数（非 DEFINER）+ current_user + 'MEMBER'，沙箱模型下 INHERIT FALSE 使 'USAGE' 恒为 false，而 SET ROLE fms_auditor 后 current_user=fms_auditor 则 MEMBER 命中放行，未 SET ROLE 的 fms_app 直连由表级权限拦截，职责隔离精确
+-- 角色判定（audit 等表的 SELECT 策略使用），普通函数（非 DEFINER）+ current_user + 'MEMBER'，沙箱模型下 INHERIT FALSE 使 'USAGE' 恒为 false，而 SET ROLE fms_auditor 后 current_user=fms_auditor 则 MEMBER 命中放行，未 SET ROLE 的 fms_app 直连由表级权限拦截，职责隔离精确
 CREATE OR REPLACE FUNCTION auth.has_role(p_role text)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -257,7 +257,7 @@ BEGIN
     RETURN p_role IS NOT NULL AND pg_has_role(current_user, p_role, 'MEMBER');
 END $$;
 
--- 2.6 沙箱上下文注入，后端每请求调用，校验用户存在性与 ACTIVE 状态后 SET LOCAL 三个 fms.* guc，org/dept 数组缺省时从授权表预载，uuid::text 输出 canonical 小写，与 p_org_id::text 比较恒一致
+-- 沙箱上下文注入，后端每请求调用，校验用户存在性与 ACTIVE 状态后 SET LOCAL 三个 fms.* guc，org/dept 数组缺省时从授权表预载，uuid::text 输出 canonical 小写，与 p_org_id::text 比较恒一致
 -- 参数，p_user_id 必填（NULL 则 RAISE），p_org_ids/p_dept_ids 缺省 NULL 时从 um.user_org_scope/um.user_dept_scope 预载（仅未软删授权行，COALESCE 兜底空数组）
 -- 行为，用户不存在或已软删则 RAISE，状态非 ACTIVE 则 RAISE 拒绝注入，LOCKED/DISABLED 不可建立会话上下文，通过后 SET LOCAL，事务级，提交/回滚即失效，写入三个 guc，仅本事务内 rls 生效
 -- 边界与错误，空授权数组写入空串，策略 ANY 恒 false，fail-closed，无授权则全库不可见，三个 RAISE 分支（user_id 为空/用户不存在或已删除/状态非法）由调用方，后端登录/切换会话捕获转业务错误
@@ -302,7 +302,7 @@ END $$;
 COMMENT ON FUNCTION auth.set_session(uuid, uuid[], uuid[])
     IS '沙箱上下文注入：校验用户后 SET LOCAL 注入 fms.user_id/org_ids/dept_ids（uuid 文本，事务级）';
 
--- 2.7 jwt 签发/校验（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets）
+-- jwt 签发/校验（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets）
 -- 签发强制注入 iat/exp，默认 24h，调用方已提供则尊重其值，pgjwt.verify 仅对携带 exp/nbf 的载荷做时间窗校验，无 exp 令牌永不过期，RFC 7519 要求 exp，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
 -- 能力边界，pgjwt 0.2.0 仅支持 hmac 系，FMS 硬编码 HS256 且签发/验签同密钥，无算法混淆面，HS256 共享密钥须在所有验签方（rgw 网关 + db）间安全分发
 -- 密钥存续约束，jwt.secret/pgcrypto.master_key 以明文 jsonb 存于库内 sec.app_secrets，库被攻破即密文+密钥同失，官方 pgcrypto 文档明示若无法信任 DBA 则加密应放客户端，沙箱环境接受该约束，生产化路径为外部 KMS/密钥服务注入
@@ -330,7 +330,7 @@ BEGIN
     END IF;
     IF NOT (p_payload ? 'exp') THEN
         -- 兜底缺省 24h（调用方未带 exp 时），期望值由后端 yaml fms.jwt.expiry（默认 24h）登记，与 fms.jwt.access-ttl 联动评估，
-        -- 非协议值，issuer/audience/算法不动（铁律①仅涉有效期），后端签发恒显式注入 exp，本兜底缺省按配置值保留
+        -- 非协议值，issuer/audience/算法不动（铁律仅涉有效期），后端签发恒显式注入 exp，本兜底缺省按配置值保留
         p_payload := p_payload || jsonb_build_object('exp',
             extract(epoch from now() + interval '24 hours')::bigint);
     END IF;
@@ -339,7 +339,7 @@ BEGIN
     RETURN pgjwt.sign(v_compact::json, v_secret, 'HS256');
 END $$;
 
--- 2.7b jwt 验签（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets，与 jwt_sign 对称）
+-- jwt 验签（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets，与 jwt_sign 对称）
 -- 参数，p_token 待验紧凑 jwt，三段式，p_secret 缺省 NULL 时读 sec.app_secrets 的 jwt.secret，须与签发侧同密钥
 -- 行为，委托 pgjwt.verify 做签名验证 + 时间窗校验，仅对携带 exp/nbf 的载荷生效，签发侧已强制注入 exp，无 exp 令牌永不过期问题被签发约束封堵，校验通过返回 payload jsonb
 -- 边界与错误，签名失败/令牌被篡改/密钥不匹配则 RAISE，保持错误语义，调用方不可继续处理，密钥未配置则 RAISE，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
@@ -367,7 +367,7 @@ BEGIN
     RETURN v_result.payload::jsonb;
 END $$;
 
--- 2.8 银行账号解密（唯一出口，SECURITY DEFINER，仅 fms_admin 与资金职责角色）
+-- 银行账号解密（唯一出口，SECURITY DEFINER，仅 fms_admin 与资金职责角色）
 -- 参数，p_id 目标银行账户 id（cash.bank_accounts 主键）
 -- 行为，读 sec.app_secrets 的 pgcrypto.master_key，库内密钥收敛点，后 pgp_sym_decrypt 解 cash.bank_accounts.account_no_enc 密文，返回明文账号，显式 cipher-algo=aes256，默认 aes128，OpenPGP 数据包自带算法标识，存量 aes128 密文照常可解
 -- 守卫用 current_user（SET ROLE 后的职责身份）而非 session_user，fms_app 恰为职责角色成员，session_user 判定对 fms_app 直连恒真会误放行，fms_operator 为 NOLOGIN，须经 SET ROLE 注入后才可执行，fms_app 直连必被拒
@@ -723,7 +723,7 @@ GRANT SELECT ON um.users, sec.app_secrets TO fms_pgaudit_role;
 
 -- 安全加固与组织管理员授权（存量重加密、密钥收敛、current_uid、敏感列、admin rls 与软删除出口）
 
--- 1.1 存量重加密，旧密钥读 um.params，新密钥写回前先迁移，防旋转后密文不可解
+-- 存量重加密，旧密钥读 um.params，新密钥写回前先迁移，防旋转后密文不可解
 DO $$
 DECLARE
     v_old_key text;
@@ -750,7 +750,7 @@ BEGIN
     RAISE NOTICE 'security_hardening_fix: 银行账户已按新主密钥重加密 % 行', v_cnt;
 END $$;
 
--- 1.2 写入旋转后的密钥（幂等，master_key/blind_key 重放时经 DO UPDATE 收敛回本文件声明常量，本段为
+-- 写入旋转后的密钥（幂等，master_key/blind_key 重放时经 DO UPDATE 收敛回本文件声明常量，本段为
 -- 密钥权威写入点，覆盖上文 L32 首写，jwt.secret 被 WHERE 排除仅首次落库，防重放覆盖已旋转值），
 -- pgcrypto.blind_key（盲索引 hmac 密钥，本文件上文 L32 已首写同值），盲索引必须带密钥，
 -- 纯 digest 可被持库只读者对低熵值离线字典爆破
@@ -764,11 +764,11 @@ INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
 ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
   WHERE sec.app_secrets.code <> 'jwt.secret';
 
--- 1.3 敏感参数移出 um.params（密钥收敛，职责角色已由 grants_base 收表权限）
+-- 敏感参数移出 um.params（密钥收敛，职责角色已由 grants_base 收表权限）
 DELETE FROM um.params WHERE code IN ('jwt.secret', 'pgcrypto.master_key');
 
 -- auth.* 函数族
--- 2.1 auth.current_uid，LOCKED/DISABLED 账户在 rls 层即失效（二次校验 status='ACTIVE'）
+-- auth.current_uid，LOCKED/DISABLED 账户在 rls 层即失效（二次校验 status='ACTIVE'）
 CREATE OR REPLACE FUNCTION auth.current_uid()
 RETURNS uuid
 LANGUAGE plpgsql
@@ -878,7 +878,7 @@ CREATE POLICY depts_write ON org.departments
 -- 的状态，auth.* 其余函数族属主仍为 fms_admin 不受影响）
 RESET ROLE;
 
--- 4.1 软删除统一出口，白名单表按公司范围收敛
+-- 软删除统一出口，白名单表按公司范围收敛
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete(p_schema text, p_table text, p_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -927,7 +927,7 @@ GRANT EXECUTE ON FUNCTION auth.fn_soft_delete(text, text, uuid) TO fms_operator;
 COMMENT ON FUNCTION auth.fn_soft_delete(text, text, uuid)
     IS '软删除统一出口（SECURITY DEFINER）：白名单表按公司范围收敛后置 deleted_at=now()；应用角色软删除经本闸口（PG15+ 新行可见性检查下直 UPDATE 不可达）';
 
--- 4.2 版本化变体，核销撤销/冲销乐观锁，返回受影响行数，0 = 版本冲突/不存在/已删除，
+-- 版本化变体，核销撤销/冲销乐观锁，返回受影响行数，0 = 版本冲突/不存在/已删除，
 --     ar/ap 核销明细撤销经此出口（Mapper softDeleteWithVersion 转交 auth.fn_soft_delete_v）
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete_v(p_schema text, p_table text, p_id uuid, p_old_version int)
 RETURNS int

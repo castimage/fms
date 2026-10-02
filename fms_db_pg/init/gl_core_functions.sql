@@ -1,17 +1,17 @@
--- FMS 财务系统（核心函数补齐，执行库，fms），D.0 凭证不可变触发器（POSTED 转 REVERSED 受控放行）+ 防重复冲销唯一索引，D.1 分录行级借贷平衡校验 + 凭证头总额同步，D.2 过账，D.3 红字冲销，D.4 期间结账/反结账，D.5 资金日报，表 updated_at 触发器挂载，D.6 EXECUTE 授权矩阵 + 6 角色权限矩阵核对查询
+-- FMS 财务系统（核心函数补齐，执行库，fms），凭证不可变触发器（POSTED 转 REVERSED 受控放行）+ 防重复冲销唯一索引，分录行级借贷平衡校验 + 凭证头总额同步，过账，红字冲销，期间结账/反结账，资金日报，表 updated_at 触发器挂载，EXECUTE 授权矩阵 + 6 角色权限矩阵核对查询
 
 -- 文件末尾段，均幂等重定义，
---   per-company 取号序列（fn_get_voucher_no，与 gl_base 6.1 同函数）
---   fn_post_voucher SoD（审核人≠制单人，与上文 D.2 同函数）
+--   per-company 取号序列（fn_get_voucher_no，与 init/gl_base.sql 同函数）
+--   fn_post_voucher SoD（审核人≠制单人，与上文过账同函数）
 --   fn_fx_adjustment uuid 签名 + 权限闸口（最终实现由 init/gl_fx_rates.sql 覆盖，签名与闸口一致）
 
 -- 全部幂等可重跑（CREATE OR REPLACE / DROP TRIGGER IF EXISTS / 唯一索引 IF NOT EXISTS / DO 块判存）
--- a) D.3 反向凭证在同事务内经 DRAFT 转 POSTED：D.1 行级平衡触发器逐行执行，POSTED 逐行插分录中间态必然不平衡（RAISE），且总额同步 UPDATE 会被 trg_voucher_immutable 拒绝，DRAFT 中间态事务内原子不可见，最终语义不变。b) D.1 的 DELETE 分支不访问 NEW（DELETE 时 NEW 未赋值），按 TG_OP 分支取值。c) fn_reopen_period 读 fms.force_reopen 加 COALESCE 兜底，guc 缺失时 NULL <> 'on' 恒为 NULL（IF 不触发）则 fail-open，兜底后按默认 off 拒绝
+-- 反向凭证在同事务内经 DRAFT 转 POSTED，分录行级平衡触发器逐行执行，POSTED 逐行插分录中间态必然不平衡（RAISE），且总额同步 UPDATE 会被 trg_voucher_immutable 拒绝，DRAFT 中间态事务内原子不可见，最终语义不变。分录平衡触发器的 DELETE 分支不访问 NEW（DELETE 时 NEW 未赋值），按 TG_OP 分支取值。fn_reopen_period 读 fms.force_reopen 加 COALESCE 兜底，guc 缺失时 NULL <> 'on' 恒为 NULL（IF 不触发）则 fail-open，兜底后按默认 off 拒绝
 
 SET ROLE fms_admin;
 
--- D.0 前置，gl.fn_voucher_immutable + 防重复冲销唯一索引
--- 放行受控冲销路径 POSTED 转 REVERSED，① 普通角色被 gl_vouchers_update 策略 WITH CHECK 拦截，② 放行仅当存在一个 POSTED 且反向互指本凭证的冲销凭证，该凭证只能经 fn_reverse_voucher，权限闸口创建，③ 触发器对超级用户同样生效，fms_admin 直连也不能绕过
+-- 前置对象，gl.fn_voucher_immutable + 防重复冲销唯一索引
+-- 放行受控冲销路径 POSTED 转 REVERSED，普通角色被 gl_vouchers_update 策略 WITH CHECK 拦截，放行仅当存在一个 POSTED 且反向互指本凭证的冲销凭证，该凭证只能经 fn_reverse_voucher，权限闸口创建，触发器对超级用户同样生效，fms_admin 直连也不能绕过
 CREATE OR REPLACE FUNCTION gl.fn_voucher_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -47,9 +47,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_voucher_reversal
     ON gl.vouchers (company_id, reversal_of_voucher_id)
     WHERE reversal_of_voucher_id IS NOT NULL AND deleted_at IS NULL;
 
--- D.1 gl.fn_voucher_line_balance，触发器函数，供触发器复用
+-- gl.fn_voucher_line_balance，触发器函数，供触发器复用
 
--- BEFORE INSERT OR UPDATE OR DELETE ON gl.voucher_lines，① 非 DRAFT 凭证强制借贷平衡，跨行校验，CHECK 无法表达，② 同步凭证头 total_debit/total_credit，DELETE 时 NEW 未赋值，v_vid 按 TG_OP 分支取自 OLD/NEW
+-- BEFORE INSERT OR UPDATE OR DELETE ON gl.voucher_lines，非 DRAFT 凭证强制借贷平衡，跨行校验，CHECK 无法表达，同步凭证头 total_debit/total_credit，DELETE 时 NEW 未赋值，v_vid 按 TG_OP 分支取自 OLD/NEW
 
 -- 行为，按 TG_OP 重算余额并排除被替换行（INSERT 加 NEW / DELETE 减 OLD / UPDATE 换 OLD 为 NEW），非 DRAFT 凭证借贷不等则 RAISE，DRAFT 豁免，草稿可暂存不平衡，随后同步凭证头 total_debit/total_credit，仅总额列，不触发状态机触发器，updated_at 正常刷新
 
@@ -110,7 +110,7 @@ CREATE TRIGGER trg_voucher_line_balance
     BEFORE INSERT OR UPDATE OR DELETE ON gl.voucher_lines
     FOR EACH ROW EXECUTE FUNCTION gl.fn_voucher_line_balance();
 
--- D.2 gl.fn_post_voucher，过账，状态校验 + 凭证号分配 + 状态历史 + 审计
+-- gl.fn_post_voucher，过账，状态校验 + 凭证号分配 + 状态历史 + 审计
 
 -- 行为，APPROVED 转 POSTED，凭证号由既有 trg_voucher_submit_check（gl_base.sql）分配（期间内连续 + uk_voucher 兜底），状态历史由 trg_voucher_status_history（gl_voucher_reject.sql）记录，审计双通道（显式 audit.record + 捕获触发器）
 
@@ -171,13 +171,13 @@ END $$;
 COMMENT ON FUNCTION gl.fn_post_voucher(uuid)
     IS '凭证过账：APPROVED->POSTED（期间 OPEN/借贷平衡校验 + 触发器取号 + 状态历史 + 审计）';
 
--- D.3 gl.fn_reverse_voucher（冲销，红字反向凭证 + 原凭证置 REVERSED）
+-- gl.fn_reverse_voucher（冲销，红字反向凭证 + 原凭证置 REVERSED）
 
--- 行为，① 建反向凭证（借贷互换=红字，状态历史记录创建 + DRAFT 转 POSTED）② 复制分录（debit↔credit 互换）③ 反向凭证升 POSTED ④ 原凭证置 REVERSED（fn_voucher_immutable 放行 + 互指校验），审计双通道
+-- 行为，建反向凭证（借贷互换=红字，状态历史记录创建 + DRAFT 转 POSTED），复制分录（debit 与 credit 互换），反向凭证升 POSTED，原凭证置 REVERSED（fn_voucher_immutable 放行 + 互指校验），审计双通道
 
 -- 约束，原期间与冲销期间均须 OPEN（既有 submit_check 校验原期间，已结账期间需先 fn_reopen_period）
 
--- 反向凭证不直接以 POSTED 插入：D.1 行级平衡触发器对 POSTED 逐行强制平衡，直接 POSTED 时逐行插入分录的中间态必然借贷不平衡（RAISE），且 D.1 总额同步 UPDATE 会被 trg_voucher_immutable 拒绝，故同事务内 DRAFT，建头+逐行复制，平衡校验豁免后转 POSTED（submit_check 校验平衡/期间并取号），事务内原子，对外等价于"直接生成已过账反向凭证"
+-- 反向凭证不直接以 POSTED 插入，分录行级平衡触发器对 POSTED 逐行强制平衡，直接 POSTED 时逐行插入分录的中间态必然借贷不平衡（RAISE），且分录总额同步 UPDATE 会被 trg_voucher_immutable 拒绝，故同事务内 DRAFT，建头+逐行复制，平衡校验豁免后转 POSTED（submit_check 校验平衡/期间并取号），事务内原子，对外等价于"直接生成已过账反向凭证"
 
 -- 参数，p_voucher_id 原凭证（须 POSTED），p_reverse_date 冲销日期，决定冲销期间，默认当天，p_reason 冲销原因（写入反向凭证 note 与审计 jsonb）
 
@@ -232,7 +232,7 @@ BEGIN
             v_v.id, 0, 0, p_reason)
     RETURNING id INTO v_new_id;
 
-    --分录复制，借贷互换，红字冲销，D.1 行级触发器逐行同步凭证头总额
+    -- 分录复制，借贷互换，红字冲销，分录行级触发器逐行同步凭证头总额
 
     INSERT INTO gl.voucher_lines (voucher_id, line_no, account_id, summary, debit, credit,
                                   currency, dept_id, partner_id, company_id)
@@ -270,7 +270,7 @@ END $$;
 COMMENT ON FUNCTION gl.fn_reverse_voucher(uuid, date, text)
     IS '红字冲销：生成借贷互换的反向凭证（POSTED）并互引，原凭证置 REVERSED；返回反向凭证 id';
 
--- D.3b gl.fn_reject_voucher（驳回，SUBMITTED 转 REJECTED，原因必填，状态历史 remark + 审计）
+-- gl.fn_reject_voucher（驳回，SUBMITTED 转 REJECTED，原因必填，状态历史 remark + 审计）
 
 -- 行为，状态校验 + 原因必填 + SoD（驳回人≠制单人）+ UPDATE 置 REJECTED（状态历史由
 --   trg_voucher_status_history 记录，原因经事务级 guc fms.voucher_remark 透传到 remark）+ audit.record
@@ -329,7 +329,7 @@ END $$;
 COMMENT ON FUNCTION gl.fn_reject_voucher(uuid, text)
     IS '凭证驳回：SUBMITTED->REJECTED（原因必填，状态历史 remark + 审计留痕；SoD 驳回人≠制单人）';
 
--- D.4 gl.fn_close_period / gl.fn_reopen_period，期间开关
+-- gl.fn_close_period / gl.fn_reopen_period，期间开关
 
 -- 结账，检查（未完成凭证/断号，p_force 可跳过）后置 CLOSED 并审计
 
@@ -424,7 +424,7 @@ END $$;
 COMMENT ON FUNCTION gl.fn_reopen_period(uuid, text, text)
     IS '期间反结账：原因必填 + fms.force_reopen 二次确认 + 仅可反开最晚期间 -> OPEN -> 审计留痕';
 
--- D.5 cash.fn_daily_report，资金日报聚合
+-- cash.fn_daily_report，资金日报聚合
 
 -- 输出，期初/当日收/付/净额/期末 + 分账户明细（jsonb 文档），SECURITY DEFINER 内显式校验公司数据范围，绕过 rls 的代价，维护会话直通
 CREATE OR REPLACE FUNCTION cash.fn_daily_report(p_company_id uuid, p_date date)
@@ -484,7 +484,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- D.6 EXECUTE 授权矩阵（沙箱模型，经 SET ROLE 注入职责角色后执行，函数内显式鉴权 auth.require_permission / can_access_org 收敛行级边界），签名随函数参数为 uuid，GRANT 同步
+-- EXECUTE 授权矩阵（沙箱模型，经 SET ROLE 注入职责角色后执行，函数内显式鉴权 auth.require_permission / can_access_org 收敛行级边界），签名随函数参数为 uuid，GRANT 同步
 GRANT EXECUTE ON FUNCTION gl.fn_post_voucher(uuid)                     TO fms_operator;
 GRANT EXECUTE ON FUNCTION gl.fn_reverse_voucher(uuid, date, text)      TO fms_operator;
 GRANT EXECUTE ON FUNCTION gl.fn_reject_voucher(uuid, text)             TO fms_operator;
@@ -497,7 +497,7 @@ GRANT EXECUTE ON FUNCTION cash.fn_daily_report(uuid, date)
 
 -- 6 角色权限矩阵核对查询，验证阶段使用，仅查询，不修改任何对象
 -- 预期要点，fms_admin 超级用户全 true（NOLOGIN 仅管理会话），fms_app 直连零表级权限（沙箱，仅 CONNECT + schema USAGE + 闸口函数），fms_operator 业务表 DML 与 post/reverse/close/reopen EXECUTE，viewer/auditor/report 仅 SELECT（report 无敏感列），auditor 独有 audit.audit_log / log.access_logs 读取，触发器函数无 EXECUTE
--- 9.1 表级权限矩阵（6 角色 × 关键表，to_regclass 判存兼容基表未创建的场景）
+-- 表级权限矩阵（6 角色 × 关键表，to_regclass 判存兼容基表未创建的场景）
 WITH roles AS (
     SELECT rolname FROM pg_roles
      WHERE rolname IN ('fms_admin','fms_app','fms_operator','fms_viewer','fms_auditor','fms_report')
@@ -526,7 +526,7 @@ SELECT r.rolname                                                       AS role,
  CROSS JOIN objs o
  ORDER BY r.rolname, o.obj;
 
--- 9.2 函数 EXECUTE 矩阵（核心函数 8 个 + auth 权限闸口 3 个）
+-- 函数 EXECUTE 矩阵（核心函数 8 个 + auth 权限闸口 3 个）
 SELECT r.rolname                                                   AS role,
        n.nspname || '.' || p.proname                               AS function,
        has_function_privilege(r.rolname, p.oid, 'EXECUTE')         AS can_execute
@@ -542,7 +542,7 @@ SELECT r.rolname                                                   AS role,
          AND p.proname IN ('require_permission','has_permission','user_permissions')))
  ORDER BY r.rolname, n.nspname, p.proname;
 
--- 9.3 schema USAGE 矩阵
+-- schema USAGE 矩阵
 SELECT r.rolname AS role, s.nspname AS schema,
        has_schema_privilege(r.rolname, s.nspname, 'USAGE') AS can_usage
   FROM pg_roles r
@@ -552,7 +552,7 @@ SELECT r.rolname AS role, s.nspname AS schema,
  ORDER BY r.rolname, s.nspname;
 
 -- per-company 取号序列（nextval 串行取号，替代 MAX+1 无行锁并发同号，
--- 与 gl_base 6.1 同函数幂等重定义，序列首值 = 该公司现有最大凭证号 + 1）
+-- 与 init/gl_base.sql 同函数幂等重定义，序列首值 = 该公司现有最大凭证号 + 1）
 CREATE OR REPLACE FUNCTION gl.fn_get_voucher_no(p_company_id uuid, p_period text)
 RETURNS integer
 LANGUAGE plpgsql
@@ -577,7 +577,7 @@ BEGIN
 END $$;
 
 -- fn_post_voucher SoD（过账前审核人必须存在且与制单人不同，
--- 与上文 D.2 同函数幂等重定义，逻辑一致）
+-- 与上文过账同函数幂等重定义，逻辑一致）
 CREATE OR REPLACE FUNCTION gl.fn_post_voucher(p_voucher_id uuid)
 RETURNS void
 LANGUAGE plpgsql

@@ -1,4 +1,4 @@
-//! 环境变量覆盖`FMS_RGW_*`仅覆盖非空变量-> yaml配置加载-> 默认值
+//! 环境变量覆盖`FMS_RGW_*`仅覆盖非空变量，其次 yaml配置加载，最后默认值
 //!
 //! 全部结构体使用#[serde，default]确保缺段缺字段回退默认值
 //!
@@ -362,15 +362,15 @@ pub struct AuthCfg {
     ///
     /// 与pg角色映射，
     ///
-    /// `operator`->`fms_operator`
+    /// `operator` 映射 `fms_operator`
     ///
-    /// `viewer`->`fms_viewer`
+    /// `viewer` 映射 `fms_viewer`
     ///
-    /// `auditor`->`fms_auditor`
+    /// `auditor` 映射 `fms_auditor`
     ///
-    /// `report`->`fms_report`
+    /// `report` 映射 `fms_report`
     ///
-    /// `admin`->`fms_operator`
+    /// `admin` 映射 `fms_operator`
     pub allowed_roles: Vec<String>,
     /// 登出黑名单回退ttl
     ///
