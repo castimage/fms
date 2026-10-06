@@ -1,5 +1,7 @@
 -- verify/fix_behavior_verify.sql，修复项行为级验证，只读 + 事务包裹
 -- 以 postgres 执行，每个检查独立事务（BEGIN/ROLLBACK），结果经 RAISE NOTICE 输出 PASS/FAIL。
+-- CHK12 经 dblink 以 fms_app 自连本机 unix socket，socket 在 pg_hba 里为 trust，不校验口令，
+-- 故连接串不含任何凭据，本文件不存口令
 
 \set ON_ERROR_STOP 0
 
@@ -225,12 +227,12 @@ SELECT 'CHK11b' AS chk, count(*) AS app_log_rows FROM log.app_logs WHERE message
 SELECT 'CHK11c' AS chk, count(*) AS access_log_rows FROM log.access_logs WHERE path = '/chk';
 ROLLBACK;
 
--- fms_app 连接登录校验，新强口令，经 dblink 本机自连，沙箱连接面可用性
+-- fms_app 连接登录校验，经 dblink 自连本机 unix socket，校验沙箱连接面可用性
 
 -- 硬编码异机 ip 测试机会使校验实际连到另一台库、结果误导，
--- 故用本机 unix socket（/var/run/postgresql，容器内 postgres 属主，peer 认证直通）
+-- 故用本机 unix socket（/var/run/postgresql，pg_hba 对 local 为 trust，认证不涉口令）
 SELECT 'CHK12' AS chk, t.c AS app_login_ok FROM dblink(
-    'host=/var/run/postgresql dbname=fms user=fms_app password=FmsApp_2026_r7Xk#9mQ2vLpZ4sD',
+    'host=/var/run/postgresql dbname=fms user=fms_app',
     'SELECT 1') AS t(c int);
 
 -- 公司级凭证取号序列惰性创建

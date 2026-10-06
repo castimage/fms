@@ -253,7 +253,6 @@ async fn missing_cert_fallback_false_serve_returns_err() {
 /// drop，不进入服务。用明文模式避免8192次tls握手开销。
 /// 【断言】1) 8192个保持连接全部被受理，第1个仍可正常请求200，未误伤存量连接，
 ///满员后的新连接立即被关闭，raw请求0字节无响应，status=0，
-
 ///连续8个新连接一致被拒，上限稳定。
 
 #[tokio::test]
@@ -527,7 +526,6 @@ async fn h2_concurrent_10_requests_single_connection() {
 /// tls fatal alert后关闭连接，或直接断开，服务器不panic，继续服务正常tls请求。
 /// 【断言】1) 垃圾字节连接只得到tls alert，首字节0x15/EOF/错误，绝不得到http响应，
 ///连续3个垃圾连接同样被拒，重复攻击不击穿，
-
 ///之后h2 `/healthz`仍200，服务器存活且未panic。
 
 #[tokio::test]

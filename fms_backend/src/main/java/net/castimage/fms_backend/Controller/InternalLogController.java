@@ -128,7 +128,7 @@ public class InternalLogController {
         o.put("path", truncate(item.path(), fmsProperties.getLog().getPathMaxLen()));
         o.put("status", item.status());
 
-        // latency 必须为整数，消费链取 jsonb 文本再 NULLIF(...,'')::int，浮点文本 cast 报错整条跳过
+        // latency 必须为整数，消费链 NULLIF(->>'latency','')::int，浮点文本 cast 报错整条跳过
         o.put("latency", item.latencyMs() == null ? null : Math.round(item.latencyMs()));
         o.put("ip", item.ip());
         o.put("ts", item.ts());
