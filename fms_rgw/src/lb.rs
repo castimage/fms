@@ -19,7 +19,6 @@ use crate::types::BufferedBody;
 use axum::body::Body;
 use axum::http::{Method, Request, Response};
 use bytes::Bytes;
-use rand::Rng;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing::{info, warn};
@@ -228,7 +227,7 @@ impl UpstreamPool {
                 None => self.round_robin(),
             },
             LbMode::Random => {
-                let start = rand::rng().random_range(0..self.entries.len());
+                let start = rand::random_range(0..self.entries.len());
                 self.probe_from(start)
             }
             LbMode::LeastConn | LbMode::Auto => self.least_conn(),

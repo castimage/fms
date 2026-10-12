@@ -486,12 +486,12 @@ mod tests {
             aud: None,
         };
         let token = sign_token(&claims, secret);
-        // 篡改payload最后一个字符，不影响base64长度
+        // 篡改签名段中部字符，长度不变且base64仍规范，解出不同字节即命中签名不符
         let mut tampered = token.clone();
         let len = tampered.len();
-        let last = tampered.as_bytes()[len - 1];
-        let repl = if last == b'a' { b'b' } else { b'a' };
-        tampered.replace_range(len - 1..len, &(repl as char).to_string());
+        let idx = len - 5;
+        let repl = if tampered.as_bytes()[idx] == b'a' { b'b' } else { b'a' };
+        tampered.replace_range(idx..idx + 1, &repl.to_string());
         let err = verify_jwt(Some(&format!("Bearer {tampered}")), secret, None, None, 60)
             .expect_err("篡改签名必须拒绝");
         // 签名不符显式映射为InvalidSignature
