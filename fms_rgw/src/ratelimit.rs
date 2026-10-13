@@ -247,7 +247,7 @@ impl RateLimitBackend for RedisRateLimiter {
             return Err(RateLimitError::Exceeded { retry_after_secs: 1 });
         }
 
-        let conn = self
+        let mut conn = self
             .client
             .get_connection()
             .map_err(|_| RateLimitError::Backend)?;
@@ -256,12 +256,12 @@ impl RateLimitBackend for RedisRateLimiter {
         // 计数偏严不偏松，与CachePort increment同取舍)
         let count: i64 = redis::cmd("INCR")
             .arg(key)
-            .query(&conn)
+            .query(&mut conn)
             .unwrap_or(0);
         let _: Result<(), _> = redis::cmd("EXPIRE")
             .arg(key)
             .arg(window.as_secs())
-            .query(&conn);
+            .query(&mut conn);
 
         if count > limit as i64 {
             return Err(RateLimitError::Exceeded {

@@ -43,21 +43,21 @@ impl RedisDenyRemote {
 
 impl DenyRemote for RedisDenyRemote {
     fn set(&self, key: &str, expire_secs: i64) -> Result<(), String> {
-        let conn = self.client.get_connection().map_err(|e| e.to_string())?;
+        let mut conn = self.client.get_connection().map_err(|e| e.to_string())?;
         redis::cmd("SET")
             .arg(key)
             .arg("1")
             .arg("EX")
             .arg(expire_secs.max(1))
-            .query(&conn)
+            .query(&mut conn)
             .map_err(|e| e.to_string())
     }
 
     fn get(&self, key: &str) -> Result<bool, String> {
-        let conn = self.client.get_connection().map_err(|e| e.to_string())?;
+        let mut conn = self.client.get_connection().map_err(|e| e.to_string())?;
         let v: Option<String> = redis::cmd("GET")
             .arg(key)
-            .query(&conn)
+            .query(&mut conn)
             .map_err(|e| e.to_string())?;
         Ok(v.is_some())
     }

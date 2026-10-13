@@ -8,7 +8,7 @@ rust-version = "1.94"
 axum = "0.8"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "signal", "sync", "io-util", "fs"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["fs", "cors", "compression-gzip", "compression-deflate", "compression-br", "compression-zstd"] }
+tower-http = { version = "0.7", features = ["fs", "cors", "compression-gzip", "compression-deflate", "compression-br", "compression-zstd"] }
 hyper = { version = "1", features = ["http1", "http2", "server", "client"] }
 hyper-util = { version = "0.1", features = ["server-auto", "client-legacy", "tokio", "http1", "http2", "service"] }
 http-body-util = "0.1"
@@ -16,29 +16,29 @@ bytes = "1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
 rustls-pemfile = "2"
-jsonwebtoken = "9"
+jsonwebtoken = { version = "11", features = ["rust_crypto"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 hex = "0.4"
 chrono = "0.4"
 dashmap = "6"
 serde_yml = "0.0.13"
-redis = "0.9"
+redis = "1"
 thiserror = "2.0.20"
-base64 = "0.22"
+base64 = "0.23"
 fnv = "1"
 ipnet = "2"
 percent-encoding = "2"
-rand = "0.9"
+rand = "0.10"
 
 [dev-dependencies]
 h2 = "0.4"
-rcgen = "0.13"
+rcgen = "0.14"
 futures-util = "0.3"
 
 [lints.rust]

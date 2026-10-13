@@ -228,7 +228,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let compression_layer = if state.cfg.server.compression.enabled {
         use tower_http::compression::predicate::{NotForContentType, Predicate, SizeAbove};
         use tower_http::compression::CompressionLevel;
-        let min = state.cfg.server.compression.min_length.min(u16::MAX as usize) as u16;
+        let min = state.cfg.server.compression.min_length.min(u16::MAX as usize) as u64;
         let predicate = SizeAbove::new(min)
             .and(NotForContentType::GRPC)
             .and(NotForContentType::IMAGES)
