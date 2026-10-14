@@ -107,8 +107,8 @@ const startTs = computed(() => (form.startDate ? dayjs(form.startDate).valueOf()
 const rules: FormRules = {
   assetCode: [{ required: true, message: '资产编码必填', trigger: 'blur' }],
   category: [{ required: true, message: '资产类别必填', trigger: 'blur' }],
-  originalValue: [{ required: true, message: '原值必填', trigger: ['blur', 'change'] }],
-  lifeMonths: [{ required: true, message: '使用月数必填', trigger: ['blur', 'change'] }],
+  originalValue: [{ required: true, type: 'number', message: '原值必填', trigger: ['blur', 'change'] }],
+  lifeMonths: [{ required: true, type: 'number', message: '使用月数必填', trigger: ['blur', 'change'] }],
 }
 
 function resetForm() {

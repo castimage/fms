@@ -134,7 +134,7 @@ const dueDateTs = computed(() => (form.value.dueDate ? dayjs(form.value.dueDate)
 const rules: FormRules = {
   supplierId: [{ required: true, message: '请选择供应商', trigger: ['blur', 'change'] }],
   invoiceNo: [{ required: true, message: '发票号必填', trigger: ['blur'] }],
-  total: [{ required: true, message: '发票总额必填', trigger: ['blur', 'change'] }],
+  total: [{ required: true, type: 'number', message: '发票总额必填', trigger: ['blur', 'change'] }],
 }
 
 function openCreate() {

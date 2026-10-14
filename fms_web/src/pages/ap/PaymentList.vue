@@ -105,7 +105,7 @@ const paymentDateTs = computed(() => (form.value.paymentDate ? dayjs(form.value.
 
 const rules: FormRules = {
   supplierId: [{ required: true, message: '请选择供应商', trigger: ['blur', 'change'] }],
-  amount: [{ required: true, message: '付款金额必填', trigger: ['blur', 'change'] }],
+  amount: [{ required: true, type: 'number', message: '付款金额必填', trigger: ['blur', 'change'] }],
 }
 
 function openCreate() {
