@@ -156,7 +156,6 @@ function backToPassword() {
     <aside v-if="isDesktop" class="login__brand">
       <div class="login__logo">FMS</div>
       <h1 class="login__title">FMS 财务管理系统</h1>
-      <p class="login__slogan">安全底座：五层数据库强制访问控制<br />全链路审计 · 记账与审核分离 · 金额分运算零误差</p>
     </aside>
 
     <!-- 表单卡片 -->
@@ -310,13 +309,6 @@ function backToPassword() {
   font-size: 30px;
   margin: 0 0 12px;
   letter-spacing: 1px;
-}
-
-.login__slogan {
-  font-size: 14px;
-  line-height: 1.9;
-  color: var(--fms-text-secondary);
-  margin: 0;
 }
 
 /* 表单卡片 */
