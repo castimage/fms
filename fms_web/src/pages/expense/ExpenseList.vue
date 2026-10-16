@@ -166,7 +166,7 @@ const columns: FmsColumn<ReimbursementView>[] = [
       :loading="loading"
       :total="total"
       :scroll-x="1000"
-      :on-row-click="goDetail"
+      :on-row-click="(row: ReimbursementView) => goDetail(row.id)"
     >
       <template #empty>
         <span>暂无报销单数据</span>

@@ -1,7 +1,10 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends Record<string, any> = any">
 /**
  * DataTable 响应式表格封装，hideBelow 按断点裁剪列，手机只留核心列，展开详情兜底，
  * v-model:page / v-model:size 双绑定服务端分页，手机端且有 rowDetail 插槽时追加 expand 列。
+ *
+ * 行类型 T 由 data 推导，rowKey 与 onRowClick 随之受检，故 onRowClick 拿到的是整行对象而非标量，
+ * 需要行内 id 时写 `(row) => goDetail(row.id)`，直接把 goDetail 传进来会把整个行对象拼进 URL。
  */
 import { computed, useSlots } from 'vue'
 import type { VNode } from 'vue'
@@ -22,19 +25,27 @@ export interface FmsColumn<T> {
 
 const props = withDefaults(
   defineProps<{
+    /** 列定义只关乎呈现，不必参与行类型推导 */
     columns: FmsColumn<any>[]
-    data: any[]
+    data: T[]
     loading?: boolean
     total?: number
-    rowKey?: (r: any) => string | number
+    rowKey?: (r: T) => string | number
     scrollX?: number
     bordered?: boolean
-    onRowClick?: (row: any) => void
+    onRowClick?: (row: T) => void
     /** 本地分页，data 为全量，n-data-table 内置分页自动切片，页面无需手动 slice，同服务端页外观 */
     localPagination?: boolean
   }>(),
   { loading: false, total: 0, scrollX: 900, bordered: false, localPagination: false },
 )
+
+// empty 为空态插槽，rowDetail 为手机端展开行，只有 isMobile 且传入该插槽时才追加 expand 列
+defineSlots<{
+  empty?: () => any
+  rowDetail?: (props: { row: T }) => any
+}>()
+
 const { columns, loading, scrollX, bordered, onRowClick } = props // total 经 props.total 响应式读取，见 itemCount
 
 const configStore = useConfigStore()

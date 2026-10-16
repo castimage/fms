@@ -51,6 +51,13 @@ const adjRows = ref<BudgetAdjustmentView[]>([])
 const total = ref(0)
 const loading = ref(false)
 
+/**
+ * 预算编制与预算调整共用同一张表，两 Tab 行类型不同，直接写三目表达式只会推到第一个分支的类型，
+ * 故先按联合类型收口再交给 DataTable，其行类型由 data 推导。
+ */
+type BudgetRow = BudgetPlanView | BudgetAdjustmentView
+const tableRows = computed<BudgetRow[]>(() => (activeTab.value === 'plans' ? planRows.value : adjRows.value))
+
 const PLAN_STATUS_OPTIONS = [
   { label: '全部', value: '' },
   { label: '草稿', value: 'DRAFT' },
@@ -411,7 +418,7 @@ onMounted(() => {
       v-model:page="page"
       v-model:size="size"
       :columns="activeTab === 'plans' ? planColumns : adjColumns"
-      :data="activeTab === 'plans' ? planRows : adjRows"
+      :data="tableRows"
       :loading="loading"
       :total="total"
       :scroll-x="1000"
