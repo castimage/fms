@@ -552,6 +552,29 @@ body.fms-has-bg .n-cascader-menu,
 body.fms-has-bg .n-auto-complete-menu {
   --n-color: color-mix(in srgb, var(--fms-bg-card) calc(var(--fms-content-opacity) * 100%), transparent) !important;
 }
+/* 纯文字菜单类弹层（下拉菜单/选择/级联/自动补全/日期面板）：底色设不透明下限、
+   文字钉成主题实色。否则底色随背景图透出后，文字与框的界线分不清
+   （浅色模式 + 背景图时尤其明显）。 */
+body.fms-has-bg .n-popover,
+body.fms-has-bg .n-dropdown,
+body.fms-has-bg .n-dropdown-menu,
+body.fms-has-bg .n-select-menu,
+body.fms-has-bg .n-base-select-menu,
+body.fms-has-bg .n-cascader-menu,
+body.fms-has-bg .n-auto-complete-menu,
+body.fms-has-bg .n-date-panel {
+  --n-color: color-mix(
+    in srgb,
+    var(--fms-bg-card) max(calc(var(--fms-content-opacity) * 100%), 92%),
+    transparent
+  ) !important;
+  --n-text-color: var(--fms-text) !important;
+  --n-option-text-color: var(--fms-text) !important;
+  --n-option-text-color-hover: var(--fms-text) !important;
+  --n-option-text-color-active: var(--fms-text) !important;
+  --n-option-text-color-pressed: var(--fms-text) !important;
+  --n-option-text-color-disabled: var(--fms-text-muted) !important;
+}
 /* 弹层内的表单控件跟随半透明 */
 body.fms-has-bg .n-popover .n-input,
 body.fms-has-bg .n-popover .n-select,
