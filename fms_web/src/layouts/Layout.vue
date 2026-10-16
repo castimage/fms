@@ -75,6 +75,7 @@ const pageTitle = computed(() => (route.meta.title as string | undefined) ?? 'FM
 // 用户下拉，安全中心在管理后台菜单内
 const userOptions = [
   { label: '外观设置', key: 'appearance' },
+  { label: '两步验证', key: 'totp' },
   { label: '退出登录', key: 'logout' },
 ]
 
@@ -84,6 +85,8 @@ const appearanceOpen = ref(false)
 function onUserSelect(key: string | number) {
   if (key === 'appearance') {
     appearanceOpen.value = true
+  } else if (key === 'totp') {
+    void router.push('/totp/setup')
   } else if (key === 'logout') {
     void auth.logout().then(() => router.replace('/login'))
   }

@@ -3,6 +3,7 @@ package net.castimage.fms_backend.Service;
 import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.dto.CompanyRequest;
 import net.castimage.fms_backend.Model.dto.DepartmentRequest;
+import net.castimage.fms_backend.Model.dto.ResetMfaRequest;
 import net.castimage.fms_backend.Model.dto.ResetPasswordRequest;
 import net.castimage.fms_backend.Model.dto.RolePermRequest;
 import net.castimage.fms_backend.Model.dto.RoleRequest;
@@ -126,6 +127,11 @@ public interface OrgService {
      * 重置密码（auth.set_password + must_change_pwd=true）。
      */
     void resetPassword(UUID id, ResetPasswordRequest req);
+
+    /**
+     * 吊销他人双因子（auth.admin_reset_mfa，只吊销不接管，原因必填并留审计）。
+     */
+    void resetUserMfa(UUID id, ResetMfaRequest req);
 
     /**
      * 用户权限编码集合（user_role、role_perm、permissions 联查；RLS 收敛）。

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * 用户管理，关键词/状态筛选 + 服务端分页，新建，初始密码，companyId 取顶栏当前公司、
- * 禁用/启用，status 白名单 ACTIVE/LOCKED/DISABLED、重置密码、分配角色，按 roleId 幂等、
- * 数据范围全量替换，邮箱列由后端按身份下发，管理员见全部，其余账号仅见本人。
+ * 禁用/启用，status 白名单 ACTIVE/LOCKED/DISABLED、重置密码、重置双因子（只吊销不接管，
+ * 原因必填并留审计）、分配角色，按 roleId 幂等、数据范围全量替换，邮箱列由后端按身份
+ * 下发，管理员见全部，其余账号仅见本人。
  */
 import { computed, h, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { NButton, NPopconfirm, NTag, useMessage } from 'naive-ui'
@@ -176,6 +177,37 @@ async function submitResetPwd() {
   }
 }
 
+// 重置双因子弹窗，只吊销不接管，吊销后本人下次登录须重新扫码登记，原因必填
+const showResetMfa = ref(false)
+const mfaUser = ref<UserView | null>(null)
+const mfaReason = ref('')
+const mfaLoading = ref(false)
+
+function openResetMfa(r: UserView) {
+  mfaUser.value = r
+  mfaReason.value = ''
+  showResetMfa.value = true
+}
+
+async function submitResetMfa() {
+  if (!mfaUser.value) return
+  if (!mfaReason.value.trim()) {
+    message.warning('请填写重置原因')
+    return
+  }
+  mfaLoading.value = true
+  try {
+    await adminApi.resetUserMfa(mfaUser.value.id, mfaReason.value.trim())
+    message.success('双因子已重置（下次登录须重新登记）')
+    showResetMfa.value = false
+    await load()
+  } catch (e) {
+    if (e instanceof Error) message.error(e.message)
+  } finally {
+    mfaLoading.value = false
+  }
+}
+
 // 分配角色弹窗
 const showAssign = ref(false)
 const assignUser = ref<UserView | null>(null)
@@ -280,8 +312,8 @@ const columns: FmsColumn<UserView>[] = [
   { key: 'status', title: '状态', width: 90, render: (r) => renderStatus(r.status as UserStatus) },
   {
     key: 'mfaEnabled',
-    title: 'MFA',
-    width: 70,
+    title: '双因子',
+    width: 80,
     hideBelow: 'md',
     render: (r) => h('span', r.mfaEnabled ? '已启用' : '未启用'),
   },
@@ -297,7 +329,7 @@ const columns: FmsColumn<UserView>[] = [
   {
     key: 'actions',
     title: '操作',
-    width: 170,
+    width: 240,
     align: 'center',
     render: (r) =>
       h(
@@ -305,6 +337,17 @@ const columns: FmsColumn<UserView>[] = [
         { style: 'display:inline-flex;gap:8px' },
         [
           h(NButton, { text: true, size: 'small', onClick: () => openResetPwd(r) }, { default: () => '重置密码' }),
+          h(
+            NButton,
+            {
+              text: true,
+              type: 'warning',
+              size: 'small',
+              disabled: !r.mfaEnabled,
+              onClick: () => openResetMfa(r),
+            },
+            { default: () => '重置双因子' },
+          ),
           h(NButton, { text: true, size: 'small', onClick: () => openAssign(r) }, { default: () => '分配角色' }),
           h(NButton, { text: true, size: 'small', onClick: () => openScope(r) }, { default: () => '数据范围' }),
           h(
@@ -402,6 +445,19 @@ onMounted(async () => {
       <template #action>
         <n-button size="small" @click="showResetPwd = false">取消</n-button>
         <n-button size="small" type="primary" :loading="resetLoading" @click="submitResetPwd">重置</n-button>
+      </template>
+    </n-modal>
+
+    <!-- 重置双因子 -->
+    <n-modal v-model:show="showResetMfa" preset="card" :title="`重置双因子 - ${mfaUser?.loginName ?? ''}`" style="width: min(440px, calc(100vw - 32px))" :bordered="false">
+      <n-form label-placement="top" size="small">
+        <n-form-item label="重置原因（必填，留审计）">
+          <n-input v-model:value="mfaReason" type="textarea" maxlength="200" :rows="2" placeholder="吊销该用户现有验证器，本人下次登录须重新扫码登记" />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-button size="small" @click="showResetMfa = false">取消</n-button>
+        <n-button size="small" type="primary" :loading="mfaLoading" :disabled="!mfaReason.trim()" @click="submitResetMfa">重置</n-button>
       </template>
     </n-modal>
 

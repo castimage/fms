@@ -121,6 +121,15 @@ public interface AuthFunctionMapper {
     String getMfaSecret(@Param("userId") UUID userId);
 
     /**
+     * 管理员吊销他人双因子，SECURITY DEFINER 闸口 auth.admin_reset_mfa，函数内校验 um.user.mfa_reset 权限，
+     * 仅清 mfa_enabled 与 mfa_secret_enc，不写新密钥，本人下次登录须重新登记，原因必填并留审计 user_mfa_reset
+     */
+    @Select("""
+            SELECT auth.admin_reset_mfa(#{userId}::uuid, #{reason})
+            """)
+    Object adminResetMfa(@Param("userId") UUID userId, @Param("reason") String reason);
+
+    /**
      * 用户邮箱解密出口，SECURITY DEFINER 函数 auth.get_user_email，pgp_sym_decrypt(aes256) 解出明文，
      * 函数内判定系统管理员或本人，其余返 null
      *

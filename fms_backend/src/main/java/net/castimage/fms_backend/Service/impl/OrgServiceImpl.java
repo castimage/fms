@@ -20,6 +20,7 @@ import net.castimage.fms_backend.Mapper.UserMapper;
 import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.dto.CompanyRequest;
 import net.castimage.fms_backend.Model.dto.DepartmentRequest;
+import net.castimage.fms_backend.Model.dto.ResetMfaRequest;
 import net.castimage.fms_backend.Model.dto.ResetPasswordRequest;
 import net.castimage.fms_backend.Model.dto.RolePermRequest;
 import net.castimage.fms_backend.Model.dto.RoleRequest;
@@ -434,6 +435,25 @@ public class OrgServiceImpl implements OrgService {
         // set_password + must_change_pwd=true，重置后强制改密
         authFunctionMapper.setPassword(id, PasswordUtils.encode(req.newPassword()));
         authFunctionMapper.updateUser(id, "{\"must_change_pwd\": true}");
+    }
+
+    /**
+     * 管理员吊销目标用户双因子，rbac 写预检 40300，预检目标用户存在后经 auth.admin_reset_mfa
+     * 清空 mfa_enabled 与 mfa_secret_enc，库内闸口再校验 um.user.mfa_reset 权限、原因非空，
+     * 只吊销不接管，不读密钥不代绑，目标用户下次登录须重新扫码登记，吊销动作留审计。
+     *
+     * @param id  目标用户 id
+     * @param req 含原因（reason）的重置请求
+     * @throws NotFoundException 目标用户不存在，40400
+     */
+    @Override
+    @Transactional
+    public void resetUserMfa(UUID id, ResetMfaRequest req) {
+        RequestContext.requireAdminRole();
+        if (userMapper.selectById(id) == null) {
+            throw new NotFoundException("用户不存在");
+        }
+        authFunctionMapper.adminResetMfa(id, req.reason());
     }
 
     @Override

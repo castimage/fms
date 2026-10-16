@@ -81,6 +81,10 @@ export const adminApi = {
   resetPassword(id: string, newPassword: string): Promise<void> {
     return request<void>({ url: `/org/users/${id}/password`, method: 'post', data: { newPassword } })
   },
+  /** 重置双因子（auth.admin_reset_mfa，只吊销不接管，吊销后本人下次登录须重新登记，原因必填并留审计） */
+  resetUserMfa(id: string, reason: string): Promise<void> {
+    return request<void>({ url: `/admin/users/${id}/mfa/reset`, method: 'post', data: { reason } })
+  },
 
   // 角色与权限（/api/org）
   listRoles(): Promise<RoleView[]> {
