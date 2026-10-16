@@ -382,6 +382,44 @@ COMMENT ON FUNCTION auth.get_mfa_secret(uuid)
     IS 'TOTP 校验读密钥（pgp_sym_decrypt_bytea + convert_from UTF8 返回 base32，与 set_mfa 的 bytea 加密配对；仅本人/维护会话可调，越权 42501）';
 GRANT EXECUTE ON FUNCTION auth.get_mfa_secret(uuid) TO fms_operator;
 
+-- auth.admin_reset_mfa，管理员对他人双因子的受控管理，只吊销不接管，
+-- 先过 auth.require_permission('um.user.mfa_reset') 闸口，未授权或未注入上下文时 RAISE，
+-- 仅吊销目标用户现有密钥，令 mfa_enabled 归 false、mfa_secret_enc 归 NULL，
+-- 不写入任何新密钥，不代绑验证器，本人下次登录必须重新扫码登记，
+-- 原因去空白后为空则 RAISE，吊销动作经 audit.record 留痕
+CREATE OR REPLACE FUNCTION auth.admin_reset_mfa(p_user_id uuid, p_reason text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = um, public, pg_catalog
+AS $$
+DECLARE
+    v_old_enabled boolean;
+BEGIN
+    PERFORM auth.require_permission('um.user.mfa_reset');
+    IF btrim(COALESCE(p_reason, '')) = '' THEN
+        RAISE EXCEPTION '重置双因子原因不能为空' USING ERRCODE = 'P0001';
+    END IF;
+    SELECT mfa_enabled INTO v_old_enabled
+      FROM um.users
+     WHERE id = p_user_id AND deleted_at IS NULL;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION '用户不存在或已删除' USING ERRCODE = 'P0001';
+    END IF;
+    UPDATE um.users
+       SET mfa_enabled = false,
+           mfa_secret_enc = NULL
+     WHERE id = p_user_id AND deleted_at IS NULL;
+    PERFORM audit.record('user_mfa_reset', 'um.users', p_user_id,
+                         jsonb_build_object('mfa_enabled', v_old_enabled),
+                         jsonb_build_object('mfa_enabled', false, 'reason', p_reason),
+                         NULL, NULL);
+END
+$$;
+COMMENT ON FUNCTION auth.admin_reset_mfa(uuid,text)
+    IS '管理员吊销他人双因子（只吊销不接管，仅清 mfa_enabled 与 mfa_secret_enc，不写新密钥，本人下次登录须重新登记；原因必填空则拒绝，缺少权限或上下文则拒绝，审计留痕 user_mfa_reset）';
+GRANT EXECUTE ON FUNCTION auth.admin_reset_mfa(uuid,text) TO fms_operator;
+
 -- 契约 7/8，auth.assign_role / auth.revoke_role， 角色分配/回收（um.user_role 写唯一入口），
 --   assign_role 公司一致性 + ON CONFLICT 幂等重授，revoke_role 软删幂等，未命中静默
 CREATE OR REPLACE FUNCTION auth.assign_role(p_user_id uuid, p_role_code text)
@@ -642,6 +680,7 @@ REVOKE EXECUTE ON FUNCTION auth.update_user(uuid,jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.set_password(uuid,text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.set_mfa(uuid,bytea,boolean) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.get_mfa_secret(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION auth.admin_reset_mfa(uuid,text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.assign_role(uuid,text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.revoke_role(uuid,text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth.upsert_role(text,text,boolean) FROM PUBLIC;
@@ -880,7 +919,7 @@ AS $$
 DECLARE
     v_key text;
 BEGIN
-    IF auth.current_uid() IS NOT NULL AND NOT auth.is_self(p_user_id) AND NOT auth.is_admin() THEN
+    IF auth.current_uid() IS NOT NULL AND NOT auth.is_self(p_user_id) THEN
         RAISE EXCEPTION '无权操作他人 2FA' USING ERRCODE = '42501';
     END IF;
     SELECT value->>'v' INTO v_key FROM sec.app_secrets WHERE code = 'pgcrypto.master_key';
@@ -904,7 +943,7 @@ BEGIN
 END
 $$;
 COMMENT ON FUNCTION auth.set_mfa(uuid,bytea,boolean)
-    IS '启用/禁用 2FA（mfa_secret_enc 列级不可直写）；非本人须系统管理员（42501）';
+    IS '启用/禁用 2FA（mfa_secret_enc 列级不可直写）；仅本人或维护会话可调（42501）';
 REVOKE EXECUTE ON FUNCTION auth.set_mfa(uuid,bytea,boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth.set_mfa(uuid,bytea,boolean) TO fms_operator;
 
@@ -921,7 +960,7 @@ DECLARE
     v_key    text;
     v_uid    uuid := auth.current_uid();
 BEGIN
-    IF v_uid IS NOT NULL AND NOT auth.is_self(p_user_id) AND NOT auth.is_admin() THEN
+    IF v_uid IS NOT NULL AND NOT auth.is_self(p_user_id) THEN
         RAISE EXCEPTION '无权读取他人 TOTP 密钥' USING ERRCODE = '42501';
     END IF;
     SELECT mfa_secret_enc INTO v_secret
@@ -934,7 +973,7 @@ BEGIN
 END
 $$;
 COMMENT ON FUNCTION auth.get_mfa_secret(uuid)
-    IS 'TOTP 校验读密钥（pgp_sym_decrypt_bytea + convert_from UTF8 返回 base32）；非本人须系统管理员（42501）';
+    IS 'TOTP 校验读密钥（pgp_sym_decrypt_bytea + convert_from UTF8 返回 base32）；仅本人或维护会话可调（42501）';
 REVOKE EXECUTE ON FUNCTION auth.get_mfa_secret(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth.get_mfa_secret(uuid) TO fms_operator;
 

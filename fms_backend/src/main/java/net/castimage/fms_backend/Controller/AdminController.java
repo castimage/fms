@@ -5,6 +5,7 @@ import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.dto.ApiKeyIssueRequest;
 import net.castimage.fms_backend.Model.dto.ParamUpdateRequest;
+import net.castimage.fms_backend.Model.dto.ResetMfaRequest;
 import net.castimage.fms_backend.Model.vo.ApiKeyIssueResult;
 import net.castimage.fms_backend.Model.vo.ApiKeyView;
 import net.castimage.fms_backend.Model.vo.AppLogView;
@@ -165,6 +166,17 @@ public class AdminController {
             @RequestParam(required = false) String status) {
         RequestContext.requireAdminRole();
         return ApiResponse.ok(orgService.pageUsers(page, size, companyId, keyword, status));
+    }
+
+    /**
+     * 重置用户双因子（auth.admin_reset_mfa，只吊销不接管）：吊销目标用户现有 TOTP 密钥，
+     * 管理员无读密钥或代绑能力，本人下次登录须重新登记，原因必填并留审计。
+     */
+    @PostMapping("/users/{id}/mfa/reset")
+    public ApiResponse<Void> resetUserMfa(@PathVariable UUID id,
+                                          @RequestBody @Valid ResetMfaRequest req) {
+        orgService.resetUserMfa(id, req);
+        return ApiResponse.ok(null);
     }
 
     /**

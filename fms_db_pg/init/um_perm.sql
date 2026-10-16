@@ -744,6 +744,25 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
    AND p.deleted_at IS NULL AND p.is_enabled
 ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
+-- 权限点 um.user.mfa_reset，挂 admin.user 模块，管理员吊销他人双因子闸口 auth.admin_reset_mfa 的判定标识，
+-- 与 admin.user.grant 同族，授予系统管理员角色，仅授予吊销能力，不含任何读密钥或代绑能力
+INSERT INTO um.permissions (company_id, module_id, code, identifier, name,
+                            resource_type, action, permission_type, is_enabled, is_system)
+SELECT '00000000-0000-7000-0000-000000000010', m.id, 'um.user.mfa_reset', 'um.user.mfa_reset',
+       '用户管理：重置双因子', 'admin', 'mfa_reset', 'ACTION', true, false
+  FROM um.modules m
+ WHERE m.identifier = 'admin.user' AND m.deleted_at IS NULL
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
+SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
+       (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()
+  FROM um.roles r CROSS JOIN um.permissions p
+ WHERE r.code IN ('fms_admin_role', 'sys_admin')
+   AND p.identifier = 'um.user.mfa_reset'
+   AND p.deleted_at IS NULL AND p.is_enabled
+ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
+
 -- 数据范围读取，返回 {orgIds:[...], depts:[{deptId, includeSubtree}]}，供配置界面回显
 CREATE OR REPLACE FUNCTION auth.list_user_scopes(p_user_id uuid)
 RETURNS jsonb
