@@ -9,7 +9,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/** traceId 透传/生成过滤器，order=1 过滤链最外层，与网关 mw_trace 同构，合法 X-Trace-Id 复用，canonical 小写否则生成 v4，写回响应头，finally 清理 MDC/RequestContext 防泄漏 */
+/** traceId 透传/生成过滤器，order=1 过滤链最外层，与网关 mw_trace 同构，合法 X-Trace-Id 复用，canonical 小写否则生成 v4，写回响应头，同时提取客户端 ip 供审计回退取用，finally 清理 MDC/RequestContext/ClientIpContext 防泄漏 */
 public class TraceIdFilter extends OncePerRequestFilter {
 
     /**
@@ -42,6 +42,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
         // 先注入仅含 traceId 的上下文，供下游填充身份与异常兜底取用
         RequestContext.set(new RequestContext(null, null, null, null, traceId));
+        ClientIpContext.set(RequestUtil.sanitizeIp(RequestUtil.getClientIp(request)));
         MDC.put(TraceIdUtil.MDC_KEY, traceId);
 
         // 响应头在链前写回，保证下游，含 4xx/5xx 响应恒携带，
@@ -51,6 +52,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             RequestContext.clear();
+            ClientIpContext.clear();
             MDC.remove(TraceIdUtil.MDC_KEY);
         }
     }

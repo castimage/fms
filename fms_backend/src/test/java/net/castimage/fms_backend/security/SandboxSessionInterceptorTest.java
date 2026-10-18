@@ -1,6 +1,7 @@
 package net.castimage.fms_backend.security;
 
 import net.castimage.fms_backend.Security.SandboxSessionInterceptor;
+import net.castimage.fms_backend.Utils.ClientIpContext;
 import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
@@ -39,8 +40,13 @@ import static org.mockito.Mockito.when;
  */
 class SandboxSessionInterceptorTest {
 
+    private static final String AUDIT_CTX_SQL =
+            "SELECT set_config('fms.client_ip', ?, ?), set_config('fms.request_id', ?, ?)";
+
     private static final List<String> RESET_SQL = List.of(
-            "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids");
+            "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids",
+            "SELECT set_config('fms.client_ip', '', false)",
+            "SELECT set_config('fms.request_id', '', false)");
 
     private SandboxSessionInterceptor interceptor;
     private Executor executor;
@@ -66,6 +72,7 @@ class SandboxSessionInterceptorTest {
     void tearDown() {
         RequestContext.clear();
         SandboxRoleHint.clear();
+        ClientIpContext.clear();
     }
 
     /** 拦截器在连接上执行过的 sql 序列，按调用顺序 */
@@ -93,6 +100,8 @@ class SandboxSessionInterceptorTest {
         inject();
         assertThat(executedSql()).containsExactly(
                 "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids",
+                "SELECT set_config('fms.client_ip', '', false)",
+                "SELECT set_config('fms.request_id', '', false)",
                 "SET ROLE fms_public");
     }
 
@@ -102,15 +111,19 @@ class SandboxSessionInterceptorTest {
         inject();
         assertThat(executedSql()).containsExactly(
                 "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids",
+                "SELECT set_config('fms.client_ip', '', false)",
+                "SELECT set_config('fms.request_id', '', false)",
                 "SET ROLE fms_operator");
     }
 
     @Test
     void anonymousWithoutHintLeavesSessionStateUntouched() throws SQLException {
-        // 登录等认证路径依赖 AuthServiceImpl 手动 SET ROLE fms_operator，拦截器必须全然不碰连接
+        // 登录等认证路径依赖 AuthServiceImpl 手动 SET ROLE fms_operator，拦截器不得复位或改角色，
+        // 只补审计上下文，使登录触发的 um.users 审计行也带 ip 与请求号
         inject();
         assertThat(executedSql()).isEmpty();
         verify(conn, never()).createStatement();
+        verify(conn).prepareStatement(AUDIT_CTX_SQL);
     }
 
     @Test
@@ -129,7 +142,9 @@ class SandboxSessionInterceptorTest {
         inject();
         verify(conn, times(1)).rollback();
         assertThat(executedSql()).containsExactly(
-                "RESET ROLE", "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids");
+                "RESET ROLE", "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids",
+                "SELECT set_config('fms.client_ip', '', false)",
+                "SELECT set_config('fms.request_id', '', false)");
     }
 
     @Test
@@ -139,8 +154,9 @@ class SandboxSessionInterceptorTest {
         when(conn.getAutoCommit()).thenReturn(false);
         inject();
         verify(conn).prepareStatement("SELECT auth.set_session(?::uuid, ?::uuid[], ?::uuid[])");
+        verify(conn).prepareStatement(AUDIT_CTX_SQL);
         verify(ps).setObject(1, uid);
-        verify(ps).execute();
+        verify(ps, times(2)).execute();
         assertThat(executedSql()).containsExactly("RESET ROLE", "SET ROLE fms_operator");
     }
 
@@ -156,6 +172,20 @@ class SandboxSessionInterceptorTest {
                 "SET fms.org_ids = ''",
                 "SET fms.dept_ids = ''",
                 "SET ROLE fms_viewer");
-        verify(conn, never()).prepareStatement(anyString());
+        verify(conn).prepareStatement(AUDIT_CTX_SQL);
+    }
+
+    @Test
+    void identifiedQueryInjectsAuditContextFromRequest() throws SQLException {
+        UUID uid = UuidV7.next();
+        RequestContext.set(new RequestContext(uid, JwtRole.OPERATOR, null, null, "trace-abc"));
+        ClientIpContext.set("10.1.2.3");
+        when(conn.getAutoCommit()).thenReturn(false);
+        inject();
+        verify(conn).prepareStatement(AUDIT_CTX_SQL);
+        verify(ps).setString(1, "10.1.2.3");
+        verify(ps).setBoolean(2, true);
+        verify(ps).setString(3, "trace-abc");
+        verify(ps).setBoolean(4, true);
     }
 }

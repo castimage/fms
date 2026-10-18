@@ -1,6 +1,7 @@
 package net.castimage.fms_backend.Security;
 
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
+import net.castimage.fms_backend.Utils.ClientIpContext;
 import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
@@ -62,7 +63,8 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      * 以 bind 参数注入，orgIds/deptIds 显式传快照，null 则由函数从 scope 表预载，
      * guc 随提交/回滚自动清空，无跨事务残留，事务外即 autoCommit=true 时 SET LOCAL 无效，
      * 退化为会话级 SET 三个 guc 与 SET ROLE，残留由连接池归还时的 RESET ALL 兜底。
-     * 每语句重复注入幂等，天然覆盖同一连接上的事务边界切换。
+     * 每语句重复注入幂等，天然覆盖同一连接上的事务边界切换。身份注入之后紧接注入审计
+     * 上下文 fms.client_ip 与 fms.request_id，供库侧 audit.record 在实参为空时回退取用。
      *
      * @param executor 当前 MyBatis 执行器，其事务持有目标数据库连接
      * @throws SQLException 注入 sql 执行失败，向 MyBatis 传播，本语句不执行
@@ -97,6 +99,12 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
                 try (Statement st = conn.createStatement()) {
                     st.execute("SET ROLE " + anonRole);
                 }
+                // 匿名写路径同样留审计 ip 与请求号，公开读无写操作，注入无副作用
+                injectAuditContext(conn, false);
+            } else {
+                // 登录等认证路径刻意不复位会话态，只补审计上下文，不动角色与身份 guc，
+                // 使登录过程触发的 um.users 审计行同样带上客户端 ip 与请求号
+                injectAuditContext(conn, false);
             }
             return;
         }
@@ -174,6 +182,32 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
         try (Statement st = conn.createStatement()) {
             st.execute("SET ROLE " + pgRole);
         }
+
+        injectAuditContext(conn, true);
+    }
+
+    /**
+     * 注入审计上下文 fms.client_ip 与 fms.request_id，供库侧 audit.record 在实参为空时
+     * 回退取用，使业务审计行带上客户端 ip 与全链路 traceId。两值均来自服务端，ip 由网关
+     * 剥离伪造后经 RequestUtil 清洗，请求号取 TraceIdUtil 规范化后的 traceId，统一走
+     * set_config 绑定参数，无拼接注入面。事务内 local 语义随事务结束，事务外为会话级，
+     * 由连接归还时的 RESET ALL 兜底。
+     *
+     * @param conn  当前连接
+     * @param local true 为事务内局部生效，false 为会话级
+     * @throws SQLException 注入语句执行失败
+     */
+    private void injectAuditContext(Connection conn, boolean local) throws SQLException {
+        String ip = ClientIpContext.get();
+        String requestId = RequestContext.traceId();
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT set_config('fms.client_ip', ?, ?), set_config('fms.request_id', ?, ?)")) {
+            ps.setString(1, ip == null ? "" : ip);
+            ps.setBoolean(2, local);
+            ps.setString(3, requestId == null ? "" : requestId);
+            ps.setBoolean(4, local);
+            ps.execute();
+        }
     }
 
     /**
@@ -197,6 +231,8 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
             st.execute("SET fms.dept_ids = '" + (deptIds == null ? "" : joinCsv(deptIds)) + "'");
             st.execute("SET ROLE " + pgRole);
         }
+
+        injectAuditContext(conn, false);
     }
 
     /** List<uuid> 转 pg uuid[] 数组参数，null/空返回 NULL（auth.set_session 从 scope 表预载） */
@@ -229,6 +265,9 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
             st.execute("RESET fms.user_id");
             st.execute("RESET fms.org_ids");
             st.execute("RESET fms.dept_ids");
+            // 审计两参数改用 set_config 置空，RESET 对从未定义过的自定义参数会报 unrecognized
+            st.execute("SELECT set_config('fms.client_ip', '', false)");
+            st.execute("SELECT set_config('fms.request_id', '', false)");
         }
     }
 }

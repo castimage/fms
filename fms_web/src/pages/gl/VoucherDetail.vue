@@ -105,6 +105,12 @@ function shortId(v?: string | null): string {
   return v && v.length > 8 ? `${v.slice(0, 8)}…` : (v ?? '—')
 }
 
+/** 审计行摘要，ip 缺省时只显示时间，不拼出 undefined */
+function auditLine(l: AuditLogView): string {
+  const at = formatDateTime(l.occurredAt)
+  return l.ip ? `${at} · IP ${l.ip}` : at
+}
+
 async function loadAudit() {
   if (!id.value || !canViewAudit.value) return
   auditLoading.value = true
@@ -329,7 +335,7 @@ async function onReverse() {
               :key="i"
               :type="auditType(l.action)"
               :title="`${l.action} · ${shortId(l.actorId)}`"
-              :content="`${formatDateTime(l.occurredAt)} · IP ${l.ip}`"
+              :content="auditLine(l)"
             />
           </n-timeline>
         </n-collapse-item>

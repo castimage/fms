@@ -108,7 +108,7 @@ END $$;
 
 -- 显式记录函数，SECURITY DEFINER，应用角色无 audit_log 表权限，审计写入统一经此函数与触发器完成
 
--- 参数，p_action 动作类型（INSERT/UPDATE/DELETE 或业务动作如 voucher_post/period_close），p_table_name 目标表，p_record_id 目标记录 id，p_old_values/p_new_values 变更前后快照 jsonb，p_ip/p_request_id 来源信息（空串则 NULL 入库）
+-- 参数，p_action 动作类型（INSERT/UPDATE/DELETE 或业务动作如 voucher_post/period_close），p_table_name 目标表，p_record_id 目标记录 id，p_old_values/p_new_values 变更前后快照 jsonb，p_ip/p_request_id 来源信息，实参为空串或 NULL 时回退取会话 guc fms.client_ip/fms.request_id，两处皆空则 NULL 入库
 -- 行为，actor_id 从 fms.user_id guc 取（未注入则 NULL），INSERT 由 trg_audit_log_hash 自动补 prev_hash/row_hash 构成哈希链，返回新行 id
 
 -- 表级无 INSERT 授权 + FORCE rls 无写策略 + 不可变触发器硬拒 UPDATE/DELETE，写入仅经本函数与捕获触发器可达，应用角色不可直插伪造审计条目，本文件末与 grants_base.sql 均已 REVOKE PUBLIC EXECUTE，仅 fms_admin 与内部触发器（SECURITY DEFINER 自动提升）可调
@@ -135,7 +135,8 @@ BEGIN
     VALUES
         (NULLIF(current_setting('fms.user_id', true), '')::uuid,
          p_action, p_table_name, p_record_id, p_old_values, p_new_values,
-         NULLIF(p_ip, '')::inet, NULLIF(p_request_id, ''))
+         NULLIF(COALESCE(NULLIF(p_ip, ''), current_setting('fms.client_ip', true)), '')::inet,
+         NULLIF(COALESCE(NULLIF(p_request_id, ''), current_setting('fms.request_id', true)), ''))
     RETURNING id INTO v_id;
     RETURN v_id;
 END $$;

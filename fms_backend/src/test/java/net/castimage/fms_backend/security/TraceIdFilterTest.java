@@ -1,6 +1,7 @@
 package net.castimage.fms_backend.security;
 
 import jakarta.servlet.FilterChain;
+import net.castimage.fms_backend.Utils.ClientIpContext;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.TraceIdFilter;
 import org.junit.jupiter.api.Test;
@@ -74,7 +75,22 @@ class TraceIdFilterTest {
         new TraceIdFilter().doFilter(req, resp, chain(new AtomicReference<>()));
 
         assertNull(RequestContext.get(), "RequestContext 必须在线程结束时清理");
+        assertNull(ClientIpContext.get(), "ClientIpContext 必须在线程结束时清理");
         assertNull(MDC.get("traceId"), "MDC 必须在线程结束时清理");
+    }
+
+    @Test
+    void clientIpIsCapturedFromForwardedForFirstSegment() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/org/companies");
+        req.addHeader("X-Forwarded-For", "203.0.113.9, 10.0.0.1");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+        AtomicReference<String> seen = new AtomicReference<>();
+
+        new TraceIdFilter().doFilter(req, resp, (servletRequest, servletResponse) ->
+                seen.set(ClientIpContext.get()));
+
+        assertEquals("203.0.113.9", seen.get());
+        assertNull(ClientIpContext.get(), "请求结束后必须清理");
     }
 
     /** 最小 FilterChain，记录链内 RequestContext.traceId */

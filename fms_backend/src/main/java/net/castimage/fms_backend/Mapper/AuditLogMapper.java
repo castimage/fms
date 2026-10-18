@@ -21,12 +21,12 @@ public interface AuditLogMapper extends BaseMapper<AuditLog> {
 
     /**
      * 审计日志分页（actorId/tableName/recordId/action/时间范围可选过滤，排序白名单 occurred_at DESC, id DESC）：
-     * ip inet 列经 ::text 转字符串映射（实体组件为 String）；jsonb 快照列以文本形式映射。
+     * ip inet 列经 host() 取纯地址映射为字符串，不带 /32 掩码，前端直接展示；jsonb 快照列以文本形式映射。
      */
     @Select("""
             SELECT id, actor_id, action, table_name, record_id,
                    old_values, new_values,
-                   ip::text AS ip, request_id, occurred_at, prev_hash, row_hash
+                   host(ip) AS ip, request_id, occurred_at, prev_hash, row_hash
               FROM audit.audit_log
              WHERE (#{actorId}::uuid IS NULL OR actor_id = #{actorId}::uuid)
                AND (#{tableName, jdbcType=VARCHAR} IS NULL OR #{tableName, jdbcType=VARCHAR} = ''
