@@ -355,9 +355,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cash TO fms_operato
 GRANT SELECT ON ALL TABLES IN SCHEMA ar, ap TO fms_viewer, fms_auditor;
 GRANT SELECT ON ALL TABLES IN SCHEMA ar, ap TO fms_report;
 -- cash 只读角色按表授，bank_accounts 密文账号列不授予任何角色（与 auth_org_functions.sql 的 fn_create_bank_account/decrypt_bank_account 对偶，
--- 全表 GRANT 会绕过列级收紧，故 bank_accounts 单独 REVOKE 兜底）
+-- 全表 GRANT 会绕过列级收紧，故 bank_accounts 先回收整表再按列重授）
 GRANT SELECT ON ALL TABLES IN SCHEMA cash TO fms_viewer, fms_auditor, fms_report;
 REVOKE SELECT ON cash.bank_accounts FROM fms_viewer, fms_auditor, fms_report;
+-- 按列重授非敏感列，account_no_enc 与 account_no_hash 两列仍不授予任何职责角色，
+-- 明文账号只能经 auth.decrypt_bank_account 闸口取得；其余列供付款单联查银行名与账户列表展示
+GRANT SELECT (id, company_id, bank_name, account_type, currency, is_active, status,
+              created_at, updated_at, deleted_at)
+    ON cash.bank_accounts TO fms_viewer, fms_auditor, fms_report;
 
 -- pgaudit 对象审计标记，cash.bank_accounts 密文账号的 SELECT 入 pgaudit 审计日志，fms_pgaudit_role 为 NOLOGIN 标记角色，不改变业务授权面，GRANT ALL TABLES 已含对职责角色的 SELECT，本授权仅作用于 pgaudit 标记
 GRANT SELECT ON cash.bank_accounts TO fms_pgaudit_role;

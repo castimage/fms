@@ -19,7 +19,7 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
                    r.dept_id, d.name AS dept_name, r.title, r.amount, r.currency,
                    r.status, r.wf_instance_id, r.voucher_id, r.created_at, r.updated_at
               FROM expense.reimbursements r
-              LEFT JOIN um.users u ON u.id = r.applicant_id
+              LEFT JOIN um.v_user_names u ON u.id = r.applicant_id
               LEFT JOIN org.departments d ON d.id = r.dept_id
              WHERE r.deleted_at IS NULL
                AND (#{companyId}::uuid IS NULL OR r.company_id = #{companyId}::uuid)
@@ -40,7 +40,7 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
                    r.dept_id, d.name AS dept_name, r.title, r.amount, r.currency,
                    r.status, r.wf_instance_id, r.voucher_id, r.created_at, r.updated_at
               FROM expense.reimbursements r
-              LEFT JOIN um.users u ON u.id = r.applicant_id
+              LEFT JOIN um.v_user_names u ON u.id = r.applicant_id
               LEFT JOIN org.departments d ON d.id = r.dept_id
              WHERE r.applicant_id = #{applicantId}::uuid
                AND r.deleted_at IS NULL
@@ -61,7 +61,7 @@ public interface ReimbursementMapper extends BaseMapper<Reimbursement> {
                    r.dept_id, d.name AS dept_name, r.title, r.amount, r.currency,
                    r.status, r.wf_instance_id, r.voucher_id, r.created_at, r.updated_at
               FROM expense.reimbursements r
-              LEFT JOIN um.users u ON u.id = r.applicant_id
+              LEFT JOIN um.v_user_names u ON u.id = r.applicant_id
               LEFT JOIN org.departments d ON d.id = r.dept_id
              WHERE r.id = #{id} AND r.deleted_at IS NULL
             """)

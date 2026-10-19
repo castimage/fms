@@ -265,9 +265,16 @@ CREATE POLICY wf_definitions_update ON wf.definitions FOR UPDATE
 ALTER TABLE wf.instances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wf.instances FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS wf_instances_select ON wf.instances;
+-- 发起人、已终态实例、以及持有该实例待办任务的指派人可见：待办查询以 INNER JOIN 关联实例，
+-- 若仅发起人可见，被指派的审批人看不到自己名下任务的实例，整条待办会被 join 吞掉
 CREATE POLICY wf_instances_select ON wf.instances FOR SELECT
     USING (auth.can_access_org(company_id) AND deleted_at IS NULL
-           AND (auth.is_self(initiator_id) OR status IN ('APPROVED','REJECTED')));
+           AND (auth.is_self(initiator_id)
+                OR status IN ('APPROVED','REJECTED')
+                OR EXISTS (SELECT 1 FROM wf.tasks t
+                            WHERE t.instance_id = wf.instances.id
+                              AND t.deleted_at IS NULL
+                              AND auth.is_self(t.assignee_id))));
 DROP POLICY IF EXISTS wf_instances_insert ON wf.instances;
 CREATE POLICY wf_instances_insert ON wf.instances FOR INSERT
     WITH CHECK (auth.can_access_org(company_id));

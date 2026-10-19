@@ -18,7 +18,7 @@ public interface WfTaskEventMapper extends BaseMapper<WfTaskEvent> {
                    u.login_name AS operator_name, e.from_node, e.to_node, e.remark,
                    e.occurred_at
               FROM wf.task_events e
-              LEFT JOIN um.users u ON u.id = e.operator_id
+              LEFT JOIN um.v_user_names u ON u.id = e.operator_id
              WHERE e.task_id = #{taskId}
              ORDER BY e.occurred_at, e.id
             """)

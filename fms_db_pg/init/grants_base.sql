@@ -44,9 +44,10 @@ GRANT SELECT ON ALL TABLES IN SCHEMA log TO fms_auditor, fms_operator;   -- fms_
 
 -- rpt.*（operator/viewer/auditor/report 只读，视图已 security_invoker=on，行级按调用者 guc 收敛，init/rpt_log_base.sql文件 2.6 节）
 -- report 侧 gl 基表列级授权补齐，security_invoker 下视图以调用者身份访问基表，fms_report 须持 gl.vouchers/voucher_lines 非敏感列 SELECT，cost_amount 敏感列不授
-GRANT SELECT (id, company_id, period, voucher_no, voucher_date, status, source_type,
-              created_by, approved_by, approved_at, total_debit, total_credit,
-              note, created_at, updated_at, deleted_at)
+GRANT SELECT (id, company_id, period, voucher_no, voucher_date, status, source_type, source_id,
+              created_by, approved_by, approved_at, posted_by, posted_at, dept_id, is_private,
+              total_debit, total_credit, note, idem_key, reversal_of_voucher_id,
+              reversed_by_voucher_id, created_at, updated_at, deleted_at)
     ON gl.vouchers TO fms_report;
 GRANT SELECT (id, voucher_id, line_no, account_id, summary, debit, credit, currency,
               dept_id, partner_id, company_id, created_at, updated_at, deleted_at)

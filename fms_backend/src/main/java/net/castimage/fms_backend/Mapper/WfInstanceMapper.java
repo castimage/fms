@@ -21,7 +21,7 @@ public interface WfInstanceMapper extends BaseMapper<WfInstance> {
                    i.current_node, i.status, i.created_at
               FROM wf.instances i
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = i.initiator_id
+              LEFT JOIN um.v_user_names u ON u.id = i.initiator_id
              WHERE i.deleted_at IS NULL
                AND (#{companyId}::uuid IS NULL OR i.company_id = #{companyId}::uuid)
                AND (#{status, jdbcType=VARCHAR} IS NULL OR #{status, jdbcType=VARCHAR} = ''
@@ -43,7 +43,7 @@ public interface WfInstanceMapper extends BaseMapper<WfInstance> {
                    i.current_node, i.status, i.created_at
               FROM wf.instances i
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = i.initiator_id
+              LEFT JOIN um.v_user_names u ON u.id = i.initiator_id
              WHERE i.id = #{id} AND i.deleted_at IS NULL
             """)
     WfInstanceView selectInstanceDetail(@Param("id") UUID id);
@@ -56,7 +56,7 @@ public interface WfInstanceMapper extends BaseMapper<WfInstance> {
                    i.current_node, i.status, i.created_at
               FROM wf.instances i
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = i.initiator_id
+              LEFT JOIN um.v_user_names u ON u.id = i.initiator_id
              WHERE i.initiator_id = #{initiatorId}::uuid
                AND i.deleted_at IS NULL
                AND (#{status, jdbcType=VARCHAR} IS NULL OR #{status, jdbcType=VARCHAR} = ''

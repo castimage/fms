@@ -9,6 +9,7 @@ import { useDebounceFn } from '@vueuse/core'
 import dayjs from 'dayjs'
 import { cashApi } from '@/api/cash'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import FormGrid from '@/components/common/FormGrid.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import MoneyText from '@/components/common/MoneyText.vue'
@@ -21,9 +22,16 @@ import { useCanWrite } from '@/utils/perm'
 
 const message = useMessage()
 const appStore = useAppStore()
+const auth = useAuthStore()
 
 /** 写操作仅 admin/operator 可见，其余角色只读，统一语义见 utils/perm */
 const canWrite = useCanWrite()
+
+/** 资金日报函数只授权 operator/viewer/report（admin 映射 operator），审计员无该函数执行权，前端不再发起请求 */
+const canViewDaily = computed(() => {
+  const role = auth.user?.role
+  return role === 'admin' || role === 'operator' || role === 'viewer' || role === 'report'
+})
 
 const keyword = ref('')
 const page = ref(1)
@@ -175,7 +183,7 @@ const daily = ref<DailyReportView | null>(null)
 const dailyLoading = ref(false)
 
 async function loadDaily() {
-  if (!appStore.companyId) {
+  if (!canViewDaily.value || !appStore.companyId) {
     daily.value = null
     return
   }
@@ -270,7 +278,7 @@ onMounted(() => {
       </template>
     </DataTable>
 
-    <PageCard title="资金日报" :loading="dailyLoading">
+    <PageCard v-if="canViewDaily" title="资金日报" :loading="dailyLoading">
       <template #extra>
         <n-date-picker v-model:value="dailyDate" type="date" size="small" style="width: 160px" />
       </template>

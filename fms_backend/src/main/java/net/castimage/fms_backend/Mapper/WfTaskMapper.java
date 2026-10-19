@@ -27,7 +27,7 @@ public interface WfTaskMapper extends BaseMapper<WfTask> {
               FROM wf.tasks t
               JOIN wf.instances i ON i.id = t.instance_id AND i.deleted_at IS NULL
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = t.assignee_id
+              LEFT JOIN um.v_user_names u ON u.id = t.assignee_id
              WHERE t.assignee_id = #{assigneeId}::uuid
                AND t.status IN ('PENDING', 'CLAIMED')
                AND t.deleted_at IS NULL
@@ -44,7 +44,7 @@ public interface WfTaskMapper extends BaseMapper<WfTask> {
               FROM wf.tasks t
               JOIN wf.instances i ON i.id = t.instance_id AND i.deleted_at IS NULL
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = t.assignee_id
+              LEFT JOIN um.v_user_names u ON u.id = t.assignee_id
              WHERE t.instance_id = #{instanceId} AND t.deleted_at IS NULL
              ORDER BY t.created_at, t.id
             """)
@@ -59,7 +59,7 @@ public interface WfTaskMapper extends BaseMapper<WfTask> {
               FROM wf.tasks t
               JOIN wf.instances i ON i.id = t.instance_id AND i.deleted_at IS NULL
               LEFT JOIN wf.definitions d ON d.id = i.definition_id AND d.deleted_at IS NULL
-              LEFT JOIN um.users u ON u.id = t.assignee_id
+              LEFT JOIN um.v_user_names u ON u.id = t.assignee_id
              WHERE t.id = #{id} AND t.deleted_at IS NULL
             """)
     WfTaskView selectTaskDetail(@Param("id") UUID id);

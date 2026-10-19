@@ -62,7 +62,7 @@ public interface VoucherMapper extends BaseMapper<Voucher> {
                    v.approved_by, v.approved_at, v.posted_by, v.posted_at,
                    v.total_debit, v.total_credit, v.note, v.created_at
               FROM gl.vouchers v
-              LEFT JOIN um.users u ON u.id = v.created_by
+              LEFT JOIN um.v_user_names u ON u.id = v.created_by
              WHERE v.deleted_at IS NULL
                AND (#{period, jdbcType=VARCHAR} IS NULL OR #{period, jdbcType=VARCHAR} = ''
                     OR v.period = #{period, jdbcType=VARCHAR})
