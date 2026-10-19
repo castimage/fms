@@ -382,9 +382,20 @@ CREATE POLICY expense_reimbursement_lines_update ON expense.reimbursement_lines 
 ALTER TABLE budget.budget_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget.budget_plans FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS budget_budget_plans_select ON budget.budget_plans;
+-- 末项 current_user = fms_admin 供 fms_admin 属主的视图按全量读取（看板预算执行口径），
+-- 直连的 fms_app 会话 current_user 恒为自身，不受影响
 CREATE POLICY budget_budget_plans_select ON budget.budget_plans FOR SELECT
     USING (auth.can_access_org(company_id) AND deleted_at IS NULL
-           AND (auth.can_access_dept(dept_id) OR auth.is_self(created_by)));
+           AND (auth.can_access_dept(dept_id) OR auth.is_self(created_by)
+                OR CURRENT_USER = 'fms_admin'));
+-- 计划金额安全视图：看板以全公司口径统计实际数，计划侧若按部门 rls 收敛，
+-- 同一行会对不同观看者显示不同计划额与执行率，故以 fms_admin 属主视图只暴露金额键列
+CREATE OR REPLACE VIEW budget.v_plan_amount AS
+    SELECT company_id, period, account_id, dept_id, amount
+      FROM budget.budget_plans
+     WHERE deleted_at IS NULL AND status = 'APPROVED';
+ALTER VIEW budget.v_plan_amount OWNER TO fms_admin;
+GRANT SELECT ON budget.v_plan_amount TO fms_operator, fms_viewer, fms_auditor, fms_report;
 DROP POLICY IF EXISTS budget_budget_plans_insert ON budget.budget_plans;
 CREATE POLICY budget_budget_plans_insert ON budget.budget_plans FOR INSERT
     WITH CHECK (auth.can_access_org(company_id));

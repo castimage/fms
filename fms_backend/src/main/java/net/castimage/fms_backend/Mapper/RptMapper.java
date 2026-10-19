@@ -148,22 +148,23 @@ public interface RptMapper {
                                                               @Param("to") LocalDate to);
 
     /**
-     * 看板-预算执行 top（rpt.budget_actual IMMV 对键 LEFT JOIN 最新 APPROVED budget_plans）：
-     * 执行比例 ratio = actual/plan（百分比，无计划行为 0），按实际数倒序取 top N。
+     * 看板-预算执行 top（rpt.budget_actual IMMV 对键 LEFT JOIN 计划金额安全视图）：
+     * 计划侧走 budget.v_plan_amount（fms_admin 属主、全公司口径），避免实际数公司口径
+     * 与计划按部门 rls 收敛造成同一行在不同观看者下计划额与执行率不一致；
+     * 无计划行 plan_amount 与 ratio 返回 NULL，由前端显示为无计划，而非伪装成 0。
      * 对键用 IS NOT DISTINCT FROM（IMMV 中 dept_id 可为 NULL，普通等值连接会漏配）。
      */
     @Select("""
             SELECT a.period, dep.name AS dept_name,
                    ca.code AS account_code, ca.name AS account_name,
-                   COALESCE(bp.amount, 0)::numeric(18,2) AS plan_amount,
+                   bp.amount AS plan_amount,
                    a.actual_amount,
-                   CASE WHEN COALESCE(bp.amount, 0) > 0
-                        THEN round((a.actual_amount / bp.amount) * 100, 2) ELSE 0 END AS ratio
+                   CASE WHEN bp.amount IS NOT NULL AND bp.amount > 0
+                        THEN round((a.actual_amount / bp.amount) * 100, 2) ELSE NULL END AS ratio
               FROM rpt.budget_actual a
-              LEFT JOIN budget.budget_plans bp ON bp.company_id = a.company_id
+              LEFT JOIN budget.v_plan_amount bp ON bp.company_id = a.company_id
                    AND bp.period = a.period AND bp.account_id = a.account_id
                    AND bp.dept_id IS NOT DISTINCT FROM a.dept_id
-                   AND bp.status = 'APPROVED'
               LEFT JOIN org.departments dep ON dep.id = a.dept_id AND dep.deleted_at IS NULL
               LEFT JOIN gl.chart_accounts ca ON ca.id = a.account_id
              WHERE a.company_id = #{companyId}::uuid

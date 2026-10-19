@@ -89,7 +89,7 @@ const trendOption = computed<EChartOption>(() => {
   }
 })
 
-/** 预算执行 top10，ratio 为后端百分比 0-100，无计划行恒 0 防除零 */
+/** 预算执行 top10，ratio 为后端百分比 0-100；无计划行 plan/ratio 为 null，展示为无计划而非 0% */
 const budgetTop = computed(() =>
   (data.value?.budgetTop ?? []).map((b) => ({
     name: `${b.deptName ?? ''} ${b.accountName ?? b.accountCode ?? ''}`.trim() || b.accountCode,
@@ -177,16 +177,16 @@ onMounted(() => void load())
             <div v-for="b in budgetTop" :key="b.name" class="budget-item">
               <div class="budget-head">
                 <span>{{ b.name }}</span>
-                <span class="budget-ratio">{{ Math.round(b.ratio) }}%</span>
+                <span class="budget-ratio">{{ b.ratio == null ? '无计划' : `${Math.round(b.ratio)}%` }}</span>
               </div>
               <n-progress
                 type="line"
-                :percentage="Math.min(Math.round(b.ratio), 100)"
+                :percentage="b.ratio == null ? 0 : Math.min(Math.round(b.ratio), 100)"
                 :height="8"
                 :show-indicator="false"
               />
               <div class="budget-amounts">
-                <span>预算 {{ formatAmount(b.plan) }}</span>
+                <span>预算 {{ b.plan == null ? '—' : formatAmount(b.plan) }}</span>
                 <span>实际 {{ formatAmount(b.actual) }}</span>
               </div>
             </div>
