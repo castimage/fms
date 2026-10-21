@@ -267,16 +267,14 @@ services:
   # 占位覆盖并受 profiles 门控，双后端实例不会启动。
   # 本文件单独部署即单机形态时，这两者同样不启动，无任何影响。
   fms-backend-1:
-    image: busybox:stable
+    image: hello-world:latest
     profiles: ["fms-merge-guard"]
     restart: "no"
-    command: ["true"]
 
   fms-backend-2:
-    image: busybox:stable
+    image: hello-world:latest
     profiles: ["fms-merge-guard"]
     restart: "no"
-    command: ["true"]
 
   # fms-web-build，前端构建一次性服务，方案 A 的产物交付
   # 仅执行构建，即 npm ci 与 npm run build，并把 /app/dist 拷贝进命名卷 fms-static；

@@ -296,10 +296,9 @@ services:
   # 不启动也不构建，合并栈因此只剩集群形态的 7 个运行容器，多余的单实例后端无法被拉起。
   # 纯集群部署即只带本文件时，本服务同样不启动，无任何影响。
   fms-backend:
-    image: busybox:stable
+    image: hello-world:latest
     profiles: ["fms-merge-guard"]
     restart: "no"
-    command: ["true"]
 
   # fms-web-build， 前端构建一次性服务（与 docker-compose.yml 完全一致）
   fms-web-build:
