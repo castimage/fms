@@ -157,7 +157,8 @@ const currencyOptions = [{ label: 'CNY', value: 'CNY' }]
       </table>
     </div>
     <div class="entry-footer">
-      <n-button size="small" type="primary" secondary :disabled="readonly" @click="addLine">
+      <!-- 不用 secondary：其背景与文字均取主题色，在自定义底栏上会与容器同色 -->
+      <n-button size="small" type="primary" :disabled="readonly" @click="addLine">
         + 添加分录
       </n-button>
       <span class="entry-footer-sums" v-if="!isMobile">
@@ -243,7 +244,7 @@ html.dark .sticky-col {
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  background: var(--n-color, #fff);
+  background: var(--fms-bg-card);
   border-top: 1px solid var(--n-border-color, #f0f0f0);
 }
 .entry-footer-sums {

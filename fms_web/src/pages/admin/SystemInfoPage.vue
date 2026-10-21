@@ -86,7 +86,7 @@ function nodeTagType(role: string): 'error' | 'warning' | 'info' | 'success' {
     <!-- 运行时修改入口提示 -->
     <n-alert type="info" :bordered="false" class="sysinfo__tip">
       运行时修改运行配置请使用「系统参数」页（Web CRUD，保存后实时生效）；本页为模块运行状态与关键配置只读预览。
-      <n-button size="small" type="primary" secondary style="margin-left: 12px" @click="router.push('/admin/params')">
+      <n-button size="small" type="primary" style="margin-left: 12px" @click="router.push('/admin/params')">
         前往系统参数
       </n-button>
     </n-alert>
