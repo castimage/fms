@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Controller;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.config.FmsProperties;
@@ -10,8 +12,6 @@ import net.castimage.fms_backend.Mapper.ParamMapper;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.vo.PublicDocumentMeta;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -33,9 +33,8 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/public")
+@Slf4j
 public class PublicController {
-
-    private static final Logger log = LoggerFactory.getLogger(PublicController.class);
 
     /** 登录页背景参数 code（与 init/seed_data.sql 种子键一致） */
     private static final String LOGIN_BACKGROUND_PARAM = "ui.login.background";

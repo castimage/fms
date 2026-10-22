@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.RequiredArgsConstructor;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONException;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
  * 两种形态均兼容读取分支），应用日志/任务监控两表仅追加只读（FORCE rls）。
  */
 @Service
+@RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
     /** 敏感键前缀/子串白名单，sec 之外的业务参数可写，密钥收敛防误写回 um.params */
@@ -45,14 +48,6 @@ public class AdminServiceImpl implements AdminService {
     private final AppLogMapper appLogMapper;
     private final TaskRunMapper taskRunMapper;
     private final LoginLogMapper loginLogMapper;
-
-    public AdminServiceImpl(ParamMapper paramMapper, AppLogMapper appLogMapper,
-                            TaskRunMapper taskRunMapper, LoginLogMapper loginLogMapper) {
-        this.paramMapper = paramMapper;
-        this.appLogMapper = appLogMapper;
-        this.taskRunMapper = taskRunMapper;
-        this.loginLogMapper = loginLogMapper;
-    }
 
     /** {@inheritDoc} */
     @Override

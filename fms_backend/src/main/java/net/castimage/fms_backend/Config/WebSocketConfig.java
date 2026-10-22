@@ -1,5 +1,7 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
+
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.ServletContext;
 import jakarta.websocket.DeploymentException;
 import jakarta.websocket.server.ServerContainer;
@@ -7,8 +9,6 @@ import jakarta.websocket.server.ServerEndpointConfig;
 import net.castimage.fms_backend.Controller.NotifyEndpointConfigurator;
 import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
 import net.castimage.fms_backend.Service.NotifyService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.server.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -28,9 +28,8 @@ import org.springframework.web.context.WebApplicationContext;
  * WebServerInitializedEvent 在 Web 服务器启动完成之后触发，容器属性必已建立。
  */
 @Configuration
+@Slf4j
 public class WebSocketConfig {
-
-    private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
 
     /** 通知端点路径，与网关的升级判定路径一致 */
     private static final String NOTIFY_WS_PATH = "/api/nt/ws";

@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.castimage.fms_backend.config.FmsProperties;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.InternalServerException;
@@ -14,8 +18,6 @@ import net.castimage.fms_backend.Model.vo.DocumentView;
 import net.castimage.fms_backend.Service.FileService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -42,9 +44,9 @@ import java.io.OutputStream;
  * 落盘在事务外（字节 IO 不占长事务），入库失败回滚时同步清理孤儿文件。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class FileServiceImpl implements FileService {
-
-    private static final Logger log = LoggerFactory.getLogger(FileServiceImpl.class);
 
     /** 业务类型白名单（与 docs.documents CHECK 同构：单据附件 + 登录页/用户级背景图两类） */
     private static final Set<String> BUSINESS_TYPES = Set.of(
@@ -58,16 +60,6 @@ public class FileServiceImpl implements FileService {
     private final ReimbursementLineMapper reimbursementLineMapper;
     private final VoucherMapper voucherMapper;
     private final UserMapper userMapper; // 背景图类型推导 company（um.users 本人行查询）
-
-    public FileServiceImpl(FmsProperties fmsProperties, DocumentMapper documentMapper,
-                           ReimbursementLineMapper reimbursementLineMapper, VoucherMapper voucherMapper,
-                           UserMapper userMapper) {
-        this.fmsProperties = fmsProperties;
-        this.documentMapper = documentMapper;
-        this.reimbursementLineMapper = reimbursementLineMapper;
-        this.voucherMapper = voucherMapper;
-        this.userMapper = userMapper;
-    }
 
     /** {@inheritDoc} */
     @Override

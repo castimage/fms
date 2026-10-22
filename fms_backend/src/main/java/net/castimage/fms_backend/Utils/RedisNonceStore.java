@@ -1,7 +1,7 @@
 package net.castimage.fms_backend.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Duration;
@@ -18,9 +18,8 @@ import java.time.Duration;
  * 水位监控口径（usageRatio 分母）。拒绝语义不变：TTL 内同 nonce 恒拒绝，仅
  * 极端内存压力下由 Redis 逐出旧键兜底，方向安全。
  */
+@Slf4j
 public class RedisNonceStore implements NonceStore {
-
-    private static final Logger log = LoggerFactory.getLogger(RedisNonceStore.class);
 
     /** 共享存储访问端口（构造注入，由 WebConfig 按 fms.session-store 装配） */
     private final CachePort cache;

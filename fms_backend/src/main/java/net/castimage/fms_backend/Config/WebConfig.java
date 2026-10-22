@@ -1,5 +1,7 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
+
+import lombok.RequiredArgsConstructor;
 import jakarta.annotation.PostConstruct;
 import net.castimage.fms_backend.Service.ApiKeyService;
 import net.castimage.fms_backend.Utils.ApiKeyFilter;
@@ -30,13 +32,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 装配（in-memory 单实例缺省 | redis 多实例共享存储），NonceStore 挂 @Scheduled 兜底清理。
  */
 @Configuration
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
     private final FmsProperties fmsProperties;
-
-    public WebConfig(FmsProperties fmsProperties) {
-        this.fmsProperties = fmsProperties;
-    }
 
     /** 启动期按 fms.security.bcrypt-strength 幂等配置 BCrypt 强度（默认 10，与 SQL 种子对齐；首次生效） */
     @PostConstruct

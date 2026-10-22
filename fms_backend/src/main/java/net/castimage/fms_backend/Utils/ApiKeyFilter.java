@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Utils;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -7,8 +9,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.Service.ApiKeyService;
 import net.castimage.fms_backend.Model.vo.ApiKeyIdentity;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import lombok.RequiredArgsConstructor;
@@ -36,9 +36,8 @@ import java.util.Map;
  * 不泄露失败原因，防枚举。
  */
 @RequiredArgsConstructor
+@Slf4j
 public class ApiKeyFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(ApiKeyFilter.class);
 
     /**
      * 匿名端点，与 GatewaySignatureFilter.ANONYMOUS_PATHS 同列表，登录发生在身份建立

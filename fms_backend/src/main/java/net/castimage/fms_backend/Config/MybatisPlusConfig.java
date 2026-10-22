@@ -1,4 +1,4 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;

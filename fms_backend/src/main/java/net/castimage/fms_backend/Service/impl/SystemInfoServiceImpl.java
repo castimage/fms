@@ -1,10 +1,10 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import net.castimage.fms_backend.Model.vo.SystemInfoView;
 import net.castimage.fms_backend.Service.SystemInfoService;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,9 +38,8 @@ import java.util.concurrent.TimeUnit;
  * 不影响主流程，与告警检测（AlertService fail-closed）语义区分，展示信息无安全裁决作用。
  */
 @Service
+@Slf4j
 public class SystemInfoServiceImpl implements SystemInfoService {
-
-    private static final Logger log = LoggerFactory.getLogger(SystemInfoServiceImpl.class);
 
     /** 进程启动时刻，首次访问时近似，用于 uptime 展示 */
     private final Instant startedAt = Instant.now();

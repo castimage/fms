@@ -1,10 +1,13 @@
 package net.castimage.fms_backend.Exception;
 
+import lombok.Getter;
+
 /**
  * FMS 业务异常基类：错误码 40001~50000，HTTP 状态码由错误码前三位推导
  * （40001 映射 400、40100 映射 401、40300 映射 403、40400 映射 404、40900 映射 409、42900 映射 429、50000 映射 500），
  * 子类按错误码逐一定义，供 GlobalExceptionHandler 统一映射。
  */
+@Getter
 public class FmsBaseException extends RuntimeException {
 
     /** 参数/业务校验失败 */
@@ -49,13 +52,5 @@ public class FmsBaseException extends RuntimeException {
         super(message, cause);
         this.code = code;
         this.httpStatus = code / 100;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    public int getHttpStatus() {
-        return httpStatus;
     }
 }

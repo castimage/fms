@@ -1,13 +1,13 @@
 package net.castimage.fms_backend.Utils;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import lombok.RequiredArgsConstructor;
@@ -31,9 +31,8 @@ import java.util.Map;
  * 未签名垃圾请求先被签名闸拒绝，限流闸聚焦"签名合法但高频"的直连流量。
  */
 @RequiredArgsConstructor
+@Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
 
     /** 滑动窗口时长，秒，与 RedisCachePort ttl 对齐，ttl 过期自动归零 */
     private static final Duration WINDOW = Duration.ofSeconds(60);

@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -49,8 +53,6 @@ import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
 import net.castimage.fms_backend.Utils.WeakPasswordFilter;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,9 +65,9 @@ import java.time.LocalDate;
 
 /** 组织架构服务实现，公司/部门/用户/角色/权限树/SoD，公司经 org.fn_upsert_company 闸口、用户/角色/分配经闸口，敏感列不对 operator 开放、部门直接 sql 写（path 经 ::ltree 转换，code/path/parent/level 不可变），软删统一 auth.fn_soft_delete，写操作 rbac 预检 40300 */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class OrgServiceImpl implements OrgService {
-
-    private static final Logger log = LoggerFactory.getLogger(OrgServiceImpl.class);
 
     private final CompanyMapper companyMapper;
     private final DepartmentMapper departmentMapper;
@@ -76,22 +78,6 @@ public class OrgServiceImpl implements OrgService {
     private final AuthFunctionMapper authFunctionMapper;
     private final WeakPasswordFilter weakPasswordFilter;
     private final FmsProperties fmsProperties;
-
-    public OrgServiceImpl(CompanyMapper companyMapper, DepartmentMapper departmentMapper,
-                          UserMapper userMapper, RoleMapper roleMapper,
-                          PermissionMapper permissionMapper, ModuleMapper moduleMapper,
-                          AuthFunctionMapper authFunctionMapper, WeakPasswordFilter weakPasswordFilter,
-                          FmsProperties fmsProperties) {
-        this.companyMapper = companyMapper;
-        this.departmentMapper = departmentMapper;
-        this.userMapper = userMapper;
-        this.roleMapper = roleMapper;
-        this.permissionMapper = permissionMapper;
-        this.moduleMapper = moduleMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.weakPasswordFilter = weakPasswordFilter;
-        this.fmsProperties = fmsProperties;
-    }
 
     /** SoD 互斥对，内置常量表，后续可迁移 um.params，按权限 code 前缀匹配 */
     private static final List<String[]> SOD_PAIRS = List.of(

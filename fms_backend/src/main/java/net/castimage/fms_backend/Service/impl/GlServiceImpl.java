@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.ConflictException;
@@ -41,8 +45,6 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,9 +67,9 @@ import java.util.UUID;
 
 /** 总账模块业务实现，submit/approve 为 Service 事务，Java 预检 + db 触发器终审，post/reverse 调 pg SECURITY DEFINER 函数，取号/状态推进/审计原子完成，规避 rls 与不可变触发器拒绝顺序，平衡校验双层，异常统一 40900 */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class GlServiceImpl implements GlService {
-
-    private static final Logger log = LoggerFactory.getLogger(GlServiceImpl.class);
 
     /** 金额标度，NUMERIC(18,2) 对齐 */
     private static final int MONEY_SCALE = 2;
@@ -94,19 +96,6 @@ public class GlServiceImpl implements GlService {
     private final UserMapper userMapper;
     private final AuthFunctionMapper authFunctionMapper;
     private final ParamMapper paramMapper;
-
-    public GlServiceImpl(ChartAccountMapper chartAccountMapper, VoucherMapper voucherMapper,
-                         VoucherLineMapper voucherLineMapper, PeriodMapper periodMapper,
-                         UserMapper userMapper,
-                         AuthFunctionMapper authFunctionMapper, ParamMapper paramMapper) {
-        this.chartAccountMapper = chartAccountMapper;
-        this.voucherMapper = voucherMapper;
-        this.voucherLineMapper = voucherLineMapper;
-        this.periodMapper = periodMapper;
-        this.userMapper = userMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.paramMapper = paramMapper;
-    }
 
     // 科目
 

@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Utils;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
@@ -9,8 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.Part;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.crypto.Mac;
@@ -66,9 +66,8 @@ import java.security.InvalidKeyException;
  * 本过滤器之后、身份采信之前）校验 um.api_keys 后按 key.user_id + scope 注入身份，
  * 任何失败在 ApiKeyFilter 侧一律 40100 fail-closed。
  */
+@Slf4j
 public class GatewaySignatureFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(GatewaySignatureFilter.class);
 
     /** 空 body 的 SHA-256 hex（fms_rgw compute_body_hash 同构） */
     private static final String EMPTY_BODY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";

@@ -1,5 +1,7 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
@@ -26,6 +28,7 @@ import java.util.UUID;
  * in-memory 模式装配 no-op 广播器，单实例语义，零开销。
  */
 @Configuration
+@Slf4j
 public class WsNotifyRedisBridge {
 
     /** 广播 channel（与 CachePort key 命名空间同风格 fms:*） */
@@ -90,8 +93,7 @@ public class WsNotifyRedisBridge {
                 }
             } catch (RuntimeException e) {
                 // 广播消息解析失败仅 WARN，通知推送属尽力而为，不影响订阅与业务
-                org.slf4j.LoggerFactory.getLogger(WsNotifyRedisBridge.class)
-                        .warn("WS 广播消息解析失败（丢弃）: {}", e.getMessage());
+                log.warn("WS 广播消息解析失败（丢弃）: {}", e.getMessage());
             }
         }, new ChannelTopic(CHANNEL));
         return container;

@@ -1,12 +1,12 @@
 package net.castimage.fms_backend.Controller;
 
+
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import net.castimage.fms_backend.Exception.FmsBaseException;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Utils.TraceIdUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -28,9 +28,8 @@ import java.util.List;
  * （42501 映射 40300、23505/23503/23514/23502 映射 40900、22P02 映射 40001、P0001 按消息关键词映射 40900、其余 50000）。
  */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /** 业务异常，http 状态码取 FmsBaseException.httpStatus，错误码前三位 */
     @ExceptionHandler(FmsBaseException.class)

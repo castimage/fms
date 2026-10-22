@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
@@ -9,8 +13,6 @@ import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -41,9 +43,9 @@ import java.util.UUID;
  * 用户（幂等：同 ref_type+ref_id+title 已存在整批跳过），成功后 WS 全量推送。
  */
 @Component
+@Slf4j
+@RequiredArgsConstructor
 public class NotifyQueueConsumer {
-
-    private static final Logger log = LoggerFactory.getLogger(NotifyQueueConsumer.class);
 
     /** pgmq.read 可见性超时（秒）：30s 内未 archive 自动回投重试 */
     private static final int VISIBILITY_TIMEOUT_SECS = 30;
@@ -54,14 +56,6 @@ public class NotifyQueueConsumer {
     private final NotificationMapper notificationMapper;
     private final NotifyService notifyService;
     private final FmsProperties fmsProperties;
-
-    public NotifyQueueConsumer(NotificationMapper notificationMapper,
-                               NotifyService notifyService,
-                               FmsProperties fmsProperties) {
-        this.notificationMapper = notificationMapper;
-        this.notifyService = notifyService;
-        this.fmsProperties = fmsProperties;
-    }
 
     /** 轮询两条队列（固定延迟：上一轮完成后再等 interval，防堆叠） */
     @Scheduled(fixedDelayString = "${fms.pgmq.notify-consumer-interval-ms:30000}")

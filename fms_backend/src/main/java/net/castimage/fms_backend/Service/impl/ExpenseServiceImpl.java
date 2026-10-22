@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -27,8 +31,6 @@ import net.castimage.fms_backend.Service.FileService;
 import net.castimage.fms_backend.Service.VoucherLinkService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,9 +56,9 @@ import java.util.UUID;
  * 回填 wf_instance_id，审批/驳回时同步实例状态（记录型；失败仅 WARN 不阻断报销主流程）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ExpenseServiceImpl implements ExpenseService {
-
-    private static final Logger log = LoggerFactory.getLogger(ExpenseServiceImpl.class);
 
     /** 金额标度（NUMERIC(18,2) 对齐） */
     private static final int MONEY_SCALE = 2;
@@ -75,19 +77,6 @@ public class ExpenseServiceImpl implements ExpenseService {
     private final WfDefinitionMapper wfDefinitionMapper;
     private final WfInstanceMapper wfInstanceMapper;
     private final VoucherLinkService voucherLinkService;
-
-    public ExpenseServiceImpl(ReimbursementMapper reimbursementMapper, ReimbursementLineMapper lineMapper,
-                              AuthFunctionMapper authFunctionMapper, FileService fileService,
-                              WfDefinitionMapper wfDefinitionMapper, WfInstanceMapper wfInstanceMapper,
-                              VoucherLinkService voucherLinkService) {
-        this.reimbursementMapper = reimbursementMapper;
-        this.lineMapper = lineMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.fileService = fileService;
-        this.wfDefinitionMapper = wfDefinitionMapper;
-        this.wfInstanceMapper = wfInstanceMapper;
-        this.voucherLinkService = voucherLinkService;
-    }
 
     /** {@inheritDoc} */
     @Override

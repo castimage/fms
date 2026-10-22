@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -22,8 +26,6 @@ import net.castimage.fms_backend.Model.vo.BudgetPlanView;
 import net.castimage.fms_backend.Service.BudgetService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,9 +48,9 @@ import java.util.UUID;
  * （gl.voucher_lines BEFORE INSERT/UPDATE，RAISE P0001 含"预算超支"则 40900），本类零实现。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class BudgetServiceImpl implements BudgetService {
-
-    private static final Logger log = LoggerFactory.getLogger(BudgetServiceImpl.class);
 
     /** 金额标度，NUMERIC(18,2) 对齐 */
     private static final int MONEY_SCALE = 2;
@@ -73,15 +75,6 @@ public class BudgetServiceImpl implements BudgetService {
     private final BudgetAdjustmentMapper adjustmentMapper;
     private final ChartAccountMapper chartAccountMapper;
     private final AuthFunctionMapper authFunctionMapper;
-
-    public BudgetServiceImpl(BudgetPlanMapper planMapper, BudgetAdjustmentMapper adjustmentMapper,
-                             ChartAccountMapper chartAccountMapper,
-                             AuthFunctionMapper authFunctionMapper) {
-        this.planMapper = planMapper;
-        this.adjustmentMapper = adjustmentMapper;
-        this.chartAccountMapper = chartAccountMapper;
-        this.authFunctionMapper = authFunctionMapper;
-    }
 
     /** {@inheritDoc} */
     @Override

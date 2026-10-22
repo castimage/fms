@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -44,8 +48,6 @@ import net.castimage.fms_backend.Utils.UuidV7;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -81,9 +83,9 @@ import java.util.UUID;
  * 对端挂清算过渡科目）并回填 voucher_line_id（银行科目分录 id，失败 WARN + 留空）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class CashServiceImpl implements CashService {
-
-    private static final Logger log = LoggerFactory.getLogger(CashServiceImpl.class);
 
     /** 金额标度，NUMERIC(18,2) 对齐 */
     private static final int MONEY_SCALE = 2;
@@ -113,20 +115,6 @@ public class CashServiceImpl implements CashService {
     private final ReconcileRunMapper reconcileRunMapper;
     private final AuthFunctionMapper authFunctionMapper;
     private final VoucherLinkService voucherLinkService;
-
-    public CashServiceImpl(BankAccountMapper bankAccountMapper, CashTransactionMapper cashTransactionMapper,
-                           BankStatementMapper bankStatementMapper, BankStatementLineMapper bankStatementLineMapper,
-                           ReconcileRunMapper reconcileRunMapper,
-                           AuthFunctionMapper authFunctionMapper,
-                           VoucherLinkService voucherLinkService) {
-        this.bankAccountMapper = bankAccountMapper;
-        this.cashTransactionMapper = cashTransactionMapper;
-        this.bankStatementMapper = bankStatementMapper;
-        this.bankStatementLineMapper = bankStatementLineMapper;
-        this.reconcileRunMapper = reconcileRunMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.voucherLinkService = voucherLinkService;
-    }
 
     // 银行账户
 

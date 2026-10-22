@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.config.FmsProperties;
 import net.castimage.fms_backend.Mapper.AuditLogMapper;
@@ -11,8 +13,6 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,9 +31,8 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuditServiceImpl implements AuditService {
-
-    private static final Logger log = LoggerFactory.getLogger(AuditServiceImpl.class);
 
     /** CSV 导出文件名时间戳 */
     private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");

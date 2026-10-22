@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Controller;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Exception.BadRequestException;
@@ -9,8 +11,6 @@ import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.dto.AccessLogItem;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -44,9 +44,8 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/internal")
+@Slf4j
 public class InternalLogController {
-
-    private static final Logger log = LoggerFactory.getLogger(InternalLogController.class);
 
     /** 内部端点 token 请求头，与网关内部中转约定一致 */
     private static final String HEADER_INT_TOKEN = "X-FMS-Int-Token";

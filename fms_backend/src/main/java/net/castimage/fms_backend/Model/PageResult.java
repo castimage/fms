@@ -2,7 +2,9 @@ package net.castimage.fms_backend.Model;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.util.List;
 import java.util.function.Function;
@@ -14,6 +16,8 @@ import java.util.function.Function;
  */
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class PageResult<T> {
 
     /** 当前页数据 */
@@ -27,17 +31,6 @@ public class PageResult<T> {
 
     /** 每页大小 */
     private long size;
-
-    public PageResult() {
-    }
-
-    public PageResult(List<T> items, long total, long page, long size) {
-        this.items = items;
-        this.total = total;
-        this.page = page;
-        this.size = size;
-    }
-
     /**
      * 由 MyBatis-Plus 分页结果组装。
      *
@@ -62,12 +55,5 @@ public class PageResult<T> {
         return new PageResult<>(page.getRecords().stream().map(mapper).toList(),
                 page.getTotal(), page.getCurrent(), page.getSize()); // 总行数取过滤后口径，
     }
-
-
-
-
-
-
-
 
 }

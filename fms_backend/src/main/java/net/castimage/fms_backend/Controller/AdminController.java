@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Controller;
 
+
+import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.PageResult;
@@ -42,20 +44,13 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/admin")
+@RequiredArgsConstructor
 public class AdminController {
 
     private final AdminService adminService;
     private final ApiKeyService apiKeyService;
     private final OrgService orgService;
     private final SystemInfoService systemInfoService;
-
-    public AdminController(AdminService adminService, ApiKeyService apiKeyService, OrgService orgService,
-                           SystemInfoService systemInfoService) {
-        this.adminService = adminService;
-        this.apiKeyService = apiKeyService;
-        this.orgService = orgService;
-        this.systemInfoService = systemInfoService;
-    }
 
     /**
      * 系统信息（管理端「系统管理」页）：运行时模块状态（JVM/OS/Spring Boot/数据库/Redis）

@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Security;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
 import net.castimage.fms_backend.Utils.ClientIpContext;
 import net.castimage.fms_backend.Utils.JwtRole;
@@ -10,8 +12,6 @@ import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.sql.Array;
 import java.sql.Connection;
@@ -23,9 +23,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /** 沙箱会话注入拦截器 MyBatis-Plus InnerInterceptor，每语句执行前向连接注入沙箱上下文，事务内 auth.set_session 与 SET ROLE，无事务退化为会话级 SET 与 SET ROLE，每语句注入幂等防事务边界失效，匿名按端点标记注入最小职责角色或复位回空壳角色，rls 缺身份时 fail-closed */
+@Slf4j
 public class SandboxSessionInterceptor implements InnerInterceptor {
-
-    private static final Logger log = LoggerFactory.getLogger(SandboxSessionInterceptor.class);
 
     @Override
     public boolean willDoQuery(Executor executor, MappedStatement ms, Object parameter,

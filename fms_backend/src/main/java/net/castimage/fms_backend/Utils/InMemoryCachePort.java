@@ -1,7 +1,7 @@
 package net.castimage.fms_backend.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Duration;
@@ -17,9 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 线程安全性，所有写路径走 CHM 原子方法（putIfAbsent/compute/computeIfPresent），
  * 并发下不丢写、不覆盖并发先行的新窗口，与 Redis 原子命令（SETNX/INCR/LPOP）语义对齐。
  */
+@Slf4j
 public class InMemoryCachePort implements CachePort {
-
-    private static final Logger log = LoggerFactory.getLogger(InMemoryCachePort.class);
 
     /** 条目，值 + 过期时刻，epoch millis，超过即视为不存在 */
     private record Entry(String value, long expireAtMillis) {

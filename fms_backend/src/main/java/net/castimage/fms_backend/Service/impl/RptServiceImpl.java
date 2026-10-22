@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -26,8 +28,6 @@ import net.castimage.fms_backend.Model.vo.IncomeStatementRow;
 import net.castimage.fms_backend.Model.vo.TrialBalanceRow;
 import net.castimage.fms_backend.Model.vo.TrialBalanceView;
 import net.castimage.fms_backend.Service.RptService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,9 +49,8 @@ import java.util.UUID;
  * 应收账龄分桶在 Java 侧组合，导出为 utf-8 BOM csv（无 POI 依赖）。
  */
 @Service
+@Slf4j
 public class RptServiceImpl implements RptService {
-
-    private static final Logger log = LoggerFactory.getLogger(RptServiceImpl.class);
 
     /** 金额标度，NUMERIC(18,2) 对齐 */
     private static final int MONEY_SCALE = 2;

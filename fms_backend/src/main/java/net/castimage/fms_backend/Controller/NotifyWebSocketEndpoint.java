@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Controller;
 
+
+import lombok.extern.slf4j.Slf4j;
 import jakarta.websocket.OnClose;
 import jakarta.websocket.OnError;
 import jakarta.websocket.OnMessage;
@@ -10,8 +12,6 @@ import net.castimage.fms_backend.Service.NotifyService;
 import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.WsNotifyBroadcaster;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Map;
@@ -37,9 +37,8 @@ import java.util.concurrent.CopyOnWriteArraySet;
  * 断线（OnClose/OnError）自动注销防会话泄漏。
  */
 @ServerEndpoint("/api/nt/ws")
+@Slf4j
 public class NotifyWebSocketEndpoint {
-
-    private static final Logger log = LoggerFactory.getLogger(NotifyWebSocketEndpoint.class);
 
     /** 在线会话表（uid 到会话集合，同用户多端并发在线） */
     private static final Map<UUID, Set<Session>> SESSIONS = new ConcurrentHashMap<>();

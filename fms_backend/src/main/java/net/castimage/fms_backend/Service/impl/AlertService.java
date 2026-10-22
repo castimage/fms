@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -7,8 +9,6 @@ import net.castimage.fms_backend.Mapper.AlertMapper;
 import net.castimage.fms_backend.Utils.CachePort;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,9 +31,8 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AlertService {
-
-    private static final Logger log = LoggerFactory.getLogger(AlertService.class);
 
     /** 暴力破解告警去重窗口，同 ip 30 分钟内不重复告警 */
     private static final Duration LOGIN_ALERT_COOLDOWN = Duration.ofMinutes(30);

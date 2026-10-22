@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -37,8 +39,6 @@ import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.RequestUtil;
 import net.castimage.fms_backend.Utils.TotpUtils;
 import net.castimage.fms_backend.Utils.WeakPasswordFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,9 +54,8 @@ import java.sql.SQLException;
 
 /** 认证服务实现，登录/刷新/登出/2fa/找回/会话，匿名端点先 SET ROLE fms_operator 再查 um.users（当前 users_select 对匿名恒空集，闭环依赖登录闸口），jwt 由 pg auth.jwt_sign 签发，密钥 sec.app_secrets 权威，2fa 票据/黑名单等会话态经 CachePort 收敛，in-memory|redis 双实现，fms.session-store 切换，任意实例写入全局可见 */
 @Service
+@Slf4j
 public class AuthServiceImpl implements AuthService {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     /** last_login_at 写入格式，与 Jackson date-format 一致，pg timestamptz 隐式识别 */
     private static final DateTimeFormatter LOGIN_TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

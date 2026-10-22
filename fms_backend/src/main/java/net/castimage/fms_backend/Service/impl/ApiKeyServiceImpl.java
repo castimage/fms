@@ -1,5 +1,7 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Exception.BadRequestException;
@@ -11,8 +13,6 @@ import net.castimage.fms_backend.Model.vo.ApiKeyIssueResult;
 import net.castimage.fms_backend.Model.vo.ApiKeyView;
 import net.castimage.fms_backend.Service.ApiKeyService;
 import net.castimage.fms_backend.Utils.RequestContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,9 +29,8 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ApiKeyServiceImpl implements ApiKeyService {
-
-    private static final Logger log = LoggerFactory.getLogger(ApiKeyServiceImpl.class);
 
     /** scope 白名单（read 映射 fms_viewer、read_write 映射 fms_operator） */
     private static final String SCOPE_READ = "read";

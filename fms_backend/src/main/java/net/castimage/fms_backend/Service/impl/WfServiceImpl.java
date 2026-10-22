@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -25,8 +29,6 @@ import net.castimage.fms_backend.Model.vo.WfTaskView;
 import net.castimage.fms_backend.Service.WfService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,9 +46,9 @@ import java.util.UUID;
  * 异常映射预检；实例/任务为只读查询（RLS 收敛可见集合）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class WfServiceImpl implements WfService {
-
-    private static final Logger log = LoggerFactory.getLogger(WfServiceImpl.class);
 
     /** 定义状态机合法状态（DB CHECK 同构） */
     private static final Set<String> DEFINITION_STATUSES = Set.of("DRAFT", "ACTIVE", "DISABLED");
@@ -56,16 +58,6 @@ public class WfServiceImpl implements WfService {
     private final WfTaskMapper taskMapper;
     private final WfTaskEventMapper taskEventMapper;
     private final AuthFunctionMapper authFunctionMapper;
-
-    public WfServiceImpl(WfDefinitionMapper definitionMapper, WfInstanceMapper instanceMapper,
-                         WfTaskMapper taskMapper, WfTaskEventMapper taskEventMapper,
-                         AuthFunctionMapper authFunctionMapper) {
-        this.definitionMapper = definitionMapper;
-        this.instanceMapper = instanceMapper;
-        this.taskMapper = taskMapper;
-        this.taskEventMapper = taskEventMapper;
-        this.authFunctionMapper = authFunctionMapper;
-    }
 
     // 流程定义
 

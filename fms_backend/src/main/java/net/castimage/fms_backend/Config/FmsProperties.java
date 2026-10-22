@@ -1,5 +1,7 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +19,8 @@ import java.nio.file.Path;
  */
 @Component
 @ConfigurationProperties(prefix = "fms")
+@Getter
+@Setter
 public class FmsProperties {
 
     /** 网关签名校验配置（fms.security.*） */
@@ -74,6 +78,8 @@ public class FmsProperties {
      * 网关签名校验配置，sign_secret 与 fms_rgw sign.sign_secret 共享（≥32 字符），防重放窗口默认 ±300s，
      * nonce 去重表容量上限 fail-closed（显式 nonce-capacity 配置优先，未配置时按 nonce-peak-qps × replay-window-secs 动态计算）。
      */
+    @Getter
+    @Setter
     public static class Security {
 
         /** 与 fms_rgw sign.sign_secret 共享（≥32 字符，签名过滤器构造时 fail-fast） */
@@ -118,99 +124,14 @@ public class FmsProperties {
         /** 弱密码布隆过滤器预检配置（fms.security.weak-password.*） */
         private WeakPassword weakPassword = new WeakPassword();
 
-        public String getSignSecret() {
-            return signSecret;
-        }
-
-        public void setSignSecret(String signSecret) {
-            this.signSecret = signSecret;
-        }
-
-        public long getReplayWindowSecs() {
-            return replayWindowSecs;
-        }
-
-        public void setReplayWindowSecs(long replayWindowSecs) {
-            this.replayWindowSecs = replayWindowSecs;
-        }
-
-        public int getNonceCapacity() {
-            return nonceCapacity;
-        }
-
-        public void setNonceCapacity(int nonceCapacity) {
-            this.nonceCapacity = nonceCapacity;
-        }
-
-        public int getNoncePeakQps() {
-            return noncePeakQps;
-        }
-
-        public void setNoncePeakQps(int noncePeakQps) {
-            this.noncePeakQps = noncePeakQps;
-        }
-
-        public boolean isBypassGateway() {
-            return bypassGateway;
-        }
-
-        public void setBypassGateway(boolean bypassGateway) {
-            this.bypassGateway = bypassGateway;
-        }
-
-        public int getMaxBodyBytes() {
-            return maxBodyBytes;
-        }
-
-        public void setMaxBodyBytes(int maxBodyBytes) {
-            this.maxBodyBytes = maxBodyBytes;
-        }
-
-        public String getInternalToken() {
-            return internalToken;
-        }
-
-        public void setInternalToken(String internalToken) {
-            this.internalToken = internalToken;
-        }
-
-        public int getPasswordMinLength() {
-            return passwordMinLength;
-        }
-
-        public void setPasswordMinLength(int passwordMinLength) {
-            this.passwordMinLength = passwordMinLength;
-        }
-
-        public int getPasswordMaxLength() {
-            return passwordMaxLength;
-        }
-
-        public void setPasswordMaxLength(int passwordMaxLength) {
-            this.passwordMaxLength = passwordMaxLength;
-        }
-
-        public int getBcryptStrength() {
-            return bcryptStrength;
-        }
-
-        public void setBcryptStrength(int bcryptStrength) {
-            this.bcryptStrength = bcryptStrength;
-        }
-
-        public WeakPassword getWeakPassword() {
-            return weakPassword;
-        }
-
-        public void setWeakPassword(WeakPassword weakPassword) {
-            this.weakPassword = weakPassword;
-        }
     }
 
     /**
      * 弱密码预检配置，布隆预期元素数/误判率推导位数组（默认 1024/0.01 得 m≈9816、k=7），
      * 登录成功弱密码标记默认关，响应契约不变，产品确认后开启。
      */
+    @Getter
+    @Setter
     public static class WeakPassword {
 
         /** 总开关，默认开启，预检纯只读、零误伤，可安全默认开 */
@@ -225,42 +146,13 @@ public class FmsProperties {
         /** 登录成功弱密码标记 requirePasswordChange，默认开，命中弱密码集合即提示改密 */
         private boolean markOnLogin = true;
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public int getExpectedInsertions() {
-            return expectedInsertions;
-        }
-
-        public void setExpectedInsertions(int expectedInsertions) {
-            this.expectedInsertions = expectedInsertions;
-        }
-
-        public double getFalsePositiveRate() {
-            return falsePositiveRate;
-        }
-
-        public void setFalsePositiveRate(double falsePositiveRate) {
-            this.falsePositiveRate = falsePositiveRate;
-        }
-
-        public boolean isMarkOnLogin() {
-            return markOnLogin;
-        }
-
-        public void setMarkOnLogin(boolean markOnLogin) {
-            this.markOnLogin = markOnLogin;
-        }
     }
 
     /**
      * jwt 配置，secret 与网关 auth.jwt_secret 及 pg um.params['jwt.secret'] 三方一致，access 2h / refresh 7d。
      */
+    @Getter
+    @Setter
     public static class Jwt {
 
         /** 与网关 jwt_secret 及 pg sec.app_secrets.jwt.secret 一致 */
@@ -281,59 +173,14 @@ public class FmsProperties {
         /** db 侧 auth.jwt_sign 兜底签发有效期期望值（默认 24h，与 init/um_org_base.sql 缺省 interval '24 hours' 一致，非协议值，后端签发恒显式注入 exp，db 兜底缺省按本配置保留） */
         private Duration expiry = Duration.ofHours(24);
 
-        public String getSecret() {
-            return secret;
-        }
-
-        public void setSecret(String secret) {
-            this.secret = secret;
-        }
-
-        public String getIssuer() {
-            return issuer;
-        }
-
-        public void setIssuer(String issuer) {
-            this.issuer = issuer;
-        }
-
-        public String getAudience() {
-            return audience;
-        }
-
-        public void setAudience(String audience) {
-            this.audience = audience;
-        }
-
-        public Duration getAccessTtl() {
-            return accessTtl;
-        }
-
-        public void setAccessTtl(Duration accessTtl) {
-            this.accessTtl = accessTtl;
-        }
-
-        public Duration getRefreshTtl() {
-            return refreshTtl;
-        }
-
-        public void setRefreshTtl(Duration refreshTtl) {
-            this.refreshTtl = refreshTtl;
-        }
-
-        public Duration getExpiry() {
-            return expiry;
-        }
-
-        public void setExpiry(Duration expiry) {
-            this.expiry = expiry;
-        }
     }
 
     /**
      * 2fa 配置，totp otpauth uri issuer，两步登录票据 5 分钟，找回重置票据 30 分钟，
      * totp 失败计数/时钟偏移/票据与备用码参数全部收敛于此，原硬编码常量。
      */
+    @Getter
+    @Setter
     public static class Mfa {
 
         /** totp otpauth uri issuer */
@@ -366,90 +213,13 @@ public class FmsProperties {
         /** 2fa 备用恢复码有效期，默认 30 天，db 盲索引落盘，过期行保留供审计 */
         private int backupCodeValidDays = 30;
 
-        public String getIssuer() {
-            return issuer;
-        }
-
-        public void setIssuer(String issuer) {
-            this.issuer = issuer;
-        }
-
-        public Duration getTicketTtl() {
-            return ticketTtl;
-        }
-
-        public void setTicketTtl(Duration ticketTtl) {
-            this.ticketTtl = ticketTtl;
-        }
-
-        public Duration getRecoveryTicketTtl() {
-            return recoveryTicketTtl;
-        }
-
-        public void setRecoveryTicketTtl(Duration recoveryTicketTtl) {
-            this.recoveryTicketTtl = recoveryTicketTtl;
-        }
-
-        public int getTotpMaxFails() {
-            return totpMaxFails;
-        }
-
-        public void setTotpMaxFails(int totpMaxFails) {
-            this.totpMaxFails = totpMaxFails;
-        }
-
-        public Duration getTotpFailWindow() {
-            return totpFailWindow;
-        }
-
-        public void setTotpFailWindow(Duration totpFailWindow) {
-            this.totpFailWindow = totpFailWindow;
-        }
-
-        public int getTotpWindow() {
-            return totpWindow;
-        }
-
-        public void setTotpWindow(int totpWindow) {
-            this.totpWindow = totpWindow;
-        }
-
-        public Duration getPendingSecretTtl() {
-            return pendingSecretTtl;
-        }
-
-        public void setPendingSecretTtl(Duration pendingSecretTtl) {
-            this.pendingSecretTtl = pendingSecretTtl;
-        }
-
-        public int getBackupCodeCount() {
-            return backupCodeCount;
-        }
-
-        public void setBackupCodeCount(int backupCodeCount) {
-            this.backupCodeCount = backupCodeCount;
-        }
-
-        public int getBackupCodeLength() {
-            return backupCodeLength;
-        }
-
-        public void setBackupCodeLength(int backupCodeLength) {
-            this.backupCodeLength = backupCodeLength;
-        }
-
-        public int getBackupCodeValidDays() {
-            return backupCodeValidDays;
-        }
-
-        public void setBackupCodeValidDays(int backupCodeValidDays) {
-            this.backupCodeValidDays = backupCodeValidDays;
-        }
     }
 
     /**
      * 登录锁定策略，连续失败 6 次锁定 15 分钟。
      */
+    @Getter
+    @Setter
     public static class Login {
 
         /** 连续失败锁定阈值，默认 6 */
@@ -458,21 +228,6 @@ public class FmsProperties {
         /** 锁定时长，默认 15 分钟，yaml 中 Duration 绑定必须带单位 */
         private Duration lockMinutes = Duration.ofMinutes(15);
 
-        public int getMaxFailures() {
-            return maxFailures;
-        }
-
-        public void setMaxFailures(int maxFailures) {
-            this.maxFailures = maxFailures;
-        }
-
-        public Duration getLockMinutes() {
-            return lockMinutes;
-        }
-
-        public void setLockMinutes(Duration lockMinutes) {
-            this.lockMinutes = lockMinutes;
-        }
     }
 
     /**
@@ -481,6 +236,8 @@ public class FmsProperties {
      * 调大后不得超过本上限，否则 40001 拒绝），path/ua 兜底截断与网关侧
      * log.path_max_len / ua_max_len 收敛同值，网关已截断，此处防异常体撑爆 pgmq 消息。
      */
+    @Getter
+    @Setter
     public static class Log {
 
         /** 单批上限，默认 1000 条，超限 40001 拒绝 */
@@ -492,29 +249,6 @@ public class FmsProperties {
         /** ua 字段兜底截断长度，默认 256，与网关 log.ua_max_len 同值，防异常体 */
         private int uaMaxLen = 256;
 
-        public int getBatchMaxItems() {
-            return batchMaxItems;
-        }
-
-        public void setBatchMaxItems(int batchMaxItems) {
-            this.batchMaxItems = batchMaxItems;
-        }
-
-        public int getPathMaxLen() {
-            return pathMaxLen;
-        }
-
-        public void setPathMaxLen(int pathMaxLen) {
-            this.pathMaxLen = pathMaxLen;
-        }
-
-        public int getUaMaxLen() {
-            return uaMaxLen;
-        }
-
-        public void setUaMaxLen(int uaMaxLen) {
-            this.uaMaxLen = uaMaxLen;
-        }
     }
 
     /**
@@ -523,6 +257,8 @@ public class FmsProperties {
      * 大小上限默认 8MB，低于网关 10MB 请求体上限（fms_rgw filter.rs MAX_BODY_BYTES），
      * 为 multipart 边界/字段开销留余量，扩展名白名单为上传唯一类型裁决，mime 仅记录元数据。
      */
+    @Getter
+    @Setter
     public static class File {
 
         /** 本地存储根目录（默认 ./data/files，容器内 /app/data/files + compose fms-files 命名卷持久化） */
@@ -535,58 +271,32 @@ public class FmsProperties {
         private List<String> allowedExtensions = List.of(
                 "pdf", "jpg", "jpeg", "png", "gif", "doc", "docx", "xls", "xlsx", "csv", "txt", "tsv");
 
-        public String getStorageDir() {
-            return storageDir;
-        }
-
-        public void setStorageDir(String storageDir) {
-            this.storageDir = storageDir;
-        }
-
         /** 存储根目录，Path 形态，FileServiceImpl 解析相对路径用 */
         public Path getStorageDirPath() {
             return Path.of(storageDir);
         }
 
-        public long getMaxSizeBytes() {
-            return maxSizeBytes;
-        }
-
-        public void setMaxSizeBytes(long maxSizeBytes) {
-            this.maxSizeBytes = maxSizeBytes;
-        }
-
-        public List<String> getAllowedExtensions() {
-            return allowedExtensions;
-        }
-
-        public void setAllowedExtensions(List<String> allowedExtensions) {
-            this.allowedExtensions = allowedExtensions;
-        }
     }
 
     /**
      * 审计导出配置（fms.audit.*），csv 导出游标循环每页取数行数，运维级性能/内存旋钮，
      * 控制单次结果集与连接占用，大审计表下不同部署规模需不同值，默认 2000。
      */
+    @Getter
+    @Setter
     public static class Audit {
 
         /** 导出游标每页行数，默认 2000 */
         private long exportPageSize = 2000;
 
-        public long getExportPageSize() {
-            return exportPageSize;
-        }
-
-        public void setExportPageSize(long exportPageSize) {
-            this.exportPageSize = exportPageSize;
-        }
     }
 
     /**
      * 数据库部署参数期望值，fms.db.*，db 环境级，yaml 为期望值单一来源，
      * 运维按环境经 ALTER DATABASE / ALTER ROLE 生效，本类仅承载登记，后端运行不依赖其生效。
      */
+    @Getter
+    @Setter
     public static class Db {
 
         /** pg_trgm.similarity_threshold guc 期望值，默认 0.3，对账候选集 % 运算符相似度下界过滤依赖，init/bootstrap_base.sql ALTER DATABASE 登记 */
@@ -595,27 +305,14 @@ public class FmsProperties {
         /** 运行时连接角色 fms_app 的 CONNECTION LIMIT 期望值，默认 100，与 Hikari 池上限联动，init/bootstrap_base.sql 角色重建生效 */
         private int connectionLimit = 100;
 
-        public double getTrgmSimilarityThreshold() {
-            return trgmSimilarityThreshold;
-        }
-
-        public void setTrgmSimilarityThreshold(double trgmSimilarityThreshold) {
-            this.trgmSimilarityThreshold = trgmSimilarityThreshold;
-        }
-
-        public int getConnectionLimit() {
-            return connectionLimit;
-        }
-
-        public void setConnectionLimit(int connectionLimit) {
-            this.connectionLimit = connectionLimit;
-        }
     }
 
     /**
      * pgmq 消费配置（fms.pgmq.*），消费失败重试阈值，read_ct 超限转死信队列 q_sys_retry，后端 pgmq 消费逻辑读取，db 侧无硬编码 + 通知生成源消费者
      * （q_notify_task/q_budget_warning 投 notify.notifications，NotifyQueueConsumer 轮询）。
      */
+    @Getter
+    @Setter
     public static class Pgmq {
 
         /** 消费失败重试阈值，默认 5 次，read_ct 超限转死信 */
@@ -630,29 +327,6 @@ public class FmsProperties {
         /** 通知消费者轮询周期，毫秒，默认 30s，@Scheduled 占位符读取，独立于 cache-cleanup */
         private long notifyConsumerIntervalMs = 30_000;
 
-        public int getRetryThreshold() {
-            return retryThreshold;
-        }
-
-        public void setRetryThreshold(int retryThreshold) {
-            this.retryThreshold = retryThreshold;
-        }
-
-        public boolean isNotifyConsumerEnabled() {
-            return notifyConsumerEnabled;
-        }
-
-        public void setNotifyConsumerEnabled(boolean notifyConsumerEnabled) {
-            this.notifyConsumerEnabled = notifyConsumerEnabled;
-        }
-
-        public long getNotifyConsumerIntervalMs() {
-            return notifyConsumerIntervalMs;
-        }
-
-        public void setNotifyConsumerIntervalMs(long notifyConsumerIntervalMs) {
-            this.notifyConsumerIntervalMs = notifyConsumerIntervalMs;
-        }
     }
 
     /**
@@ -661,6 +335,8 @@ public class FmsProperties {
      * spring.mail.* 同源占位，MailService 优先取 Spring 自动装配的 JavaMailSender，
      * 缺 bean 时按本段自建兜底，from/主题/正文模板为发信内容来源。
      */
+    @Getter
+    @Setter
     public static class Mail {
 
         /** 总开关，默认关，开启后 recovery 命中真实用户即发重置邮件，发送失败仅 WARN */
@@ -688,69 +364,6 @@ public class FmsProperties {
         private String resetBodyTemplate =
                 "您好 {loginName}：\n您正在找回 FMS 财务系统登录密码。\n重置票据：{ticket}\n有效期至：{expiresAt}\n请妥善保管，勿转发他人。";
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public String getHost() {
-            return host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-        public void setPort(int port) {
-            this.port = port;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
-        }
-
-        public String getPassword() {
-            return password;
-        }
-
-        public void setPassword(String password) {
-            this.password = password;
-        }
-
-        public String getFrom() {
-            return from;
-        }
-
-        public void setFrom(String from) {
-            this.from = from;
-        }
-
-        public String getResetSubject() {
-            return resetSubject;
-        }
-
-        public void setResetSubject(String resetSubject) {
-            this.resetSubject = resetSubject;
-        }
-
-        public String getResetBodyTemplate() {
-            return resetBodyTemplate;
-        }
-
-        public void setResetBodyTemplate(String resetBodyTemplate) {
-            this.resetBodyTemplate = resetBodyTemplate;
-        }
     }
 
     /**
@@ -759,6 +372,8 @@ public class FmsProperties {
      * 防日志注入泛滥，不重复限流业务 /api/** 全量，避免与网关双倍影响。滑动窗口
      * 计数经 CachePort（fms:ratelimit:{type}:{ip}，increment+ttl=60s）。
      */
+    @Getter
+    @Setter
     public static class RateLimit {
 
         /** /internal/log-batch 每 ip 每分钟上限，默认 600，宽松，正常网关批量上报远低于此 */
@@ -770,72 +385,41 @@ public class FmsProperties {
         /** /api/auth/recovery 每 ip 每分钟上限，默认 10，防找回接口被当邮件轰炸器 */
         private int recoveryPerMin = 10;
 
-        public int getInternalBatchPerMin() {
-            return internalBatchPerMin;
-        }
-
-        public void setInternalBatchPerMin(int internalBatchPerMin) {
-            this.internalBatchPerMin = internalBatchPerMin;
-        }
-
-        public int getLoginPerMin() {
-            return loginPerMin;
-        }
-
-        public void setLoginPerMin(int loginPerMin) {
-            this.loginPerMin = loginPerMin;
-        }
-
-        public int getRecoveryPerMin() {
-            return recoveryPerMin;
-        }
-
-        public void setRecoveryPerMin(int recoveryPerMin) {
-            this.recoveryPerMin = recoveryPerMin;
-        }
     }
 
     /**
      * 前端 ui 配置（fms.ui.*），列表分页每页条数选项，经 /api/config 下发收敛
      * DataTable/Pager 两处硬编码，默认 10/20/50。
      */
+    @Getter
+    @Setter
     public static class Ui {
 
         /** 分页每页条数选项，默认 [10, 20, 50] */
         private List<Integer> pageSizes = List.of(10, 20, 50);
 
-        public List<Integer> getPageSizes() {
-            return pageSizes;
-        }
-
-        public void setPageSizes(List<Integer> pageSizes) {
-            this.pageSizes = pageSizes;
-        }
     }
 
     /**
      * 报表导出白名单（fms.report.*），后端 RptServiceImpl 校验，未知值 40001 +
      * 前端导出选项经 /api/config 下发收敛，默认六类报表。
      */
+    @Getter
+    @Setter
     public static class Report {
 
         /** 导出报表白名单，默认六类，trial-balance/income-statement/balance-sheet/cash-flow/ar-aging/dept-expense */
         private List<String> enabledTypes = List.of(
                 "trial-balance", "income-statement", "balance-sheet", "cash-flow", "ar-aging", "dept-expense");
 
-        public List<String> getEnabledTypes() {
-            return enabledTypes;
-        }
-
-        public void setEnabledTypes(List<String> enabledTypes) {
-            this.enabledTypes = enabledTypes;
-        }
     }
 
     /**
      * pg_cron 调度周期期望值登记（fms.schedule.cron），运维/部署级调度配置，
      * yaml 为环境期望值单一来源，值含时区随部署环境差异，init/queues_cron.sql 登记值保持与 yaml 一致。
      */
+    @Getter
+    @Setter
     public static class Schedule {
 
         /** 9 个 pg_cron 任务 cron 表达式（job_name 对应 cron） */
@@ -850,163 +434,14 @@ public class FmsProperties {
                 "audit-chain-check", "0 5 * * *",
                 "log-consumer", "* * * * *");
 
-        public Map<String, String> getCron() {
-            return cron;
-        }
-
-        public void setCron(Map<String, String> cron) {
-            this.cron = cron;
-        }
-    }
-
-    public Security getSecurity() {
-        return security;
-    }
-
-    public void setSecurity(Security security) {
-        this.security = security;
-    }
-
-    public Jwt getJwt() {
-        return jwt;
-    }
-
-    public void setJwt(Jwt jwt) {
-        this.jwt = jwt;
-    }
-
-    public Mfa getMfa() {
-        return mfa;
-    }
-
-    public void setMfa(Mfa mfa) {
-        this.mfa = mfa;
-    }
-
-    public Login getLogin() {
-        return login;
-    }
-
-    public void setLogin(Login login) {
-        this.login = login;
-    }
-
-    public Log getLog() {
-        return log;
-    }
-
-    public void setLog(Log log) {
-        this.log = log;
-    }
-
-    public File getFile() {
-        return file;
-    }
-
-    public void setFile(File file) {
-        this.file = file;
-    }
-
-    public Audit getAudit() {
-        return audit;
-    }
-
-    public void setAudit(Audit audit) {
-        this.audit = audit;
-    }
-
-    public Db getDb() {
-        return db;
-    }
-
-    public void setDb(Db db) {
-        this.db = db;
-    }
-
-    public Pgmq getPgmq() {
-        return pgmq;
-    }
-
-    public void setPgmq(Pgmq pgmq) {
-        this.pgmq = pgmq;
-    }
-
-    public Ui getUi() {
-        return ui;
-    }
-
-    public void setUi(Ui ui) {
-        this.ui = ui;
-    }
-
-    public Report getReport() {
-        return report;
-    }
-
-    public void setReport(Report report) {
-        this.report = report;
-    }
-
-    public Mail getMail() {
-        return mail;
-    }
-
-    public void setMail(Mail mail) {
-        this.mail = mail;
-    }
-
-    public RateLimit getRateLimit() {
-        return rateLimit;
-    }
-
-    public void setRateLimit(RateLimit rateLimit) {
-        this.rateLimit = rateLimit;
-    }
-
-    public Schedule getSchedule() {
-        return schedule;
-    }
-
-    public void setSchedule(Schedule schedule) {
-        this.schedule = schedule;
-    }
-
-    public String getSessionStore() {
-        return sessionStore;
-    }
-
-    public void setSessionStore(String sessionStore) {
-        this.sessionStore = sessionStore;
-    }
-
-    public Map<String, String> getRoleMap() {
-        return roleMap;
-    }
-
-    public void setRoleMap(Map<String, String> roleMap) {
-        this.roleMap = roleMap;
-    }
-
-    public long getCacheCleanupIntervalMs() {
-        return cacheCleanupIntervalMs;
-    }
-
-    public void setCacheCleanupIntervalMs(long cacheCleanupIntervalMs) {
-        this.cacheCleanupIntervalMs = cacheCleanupIntervalMs;
     }
 
     /** 安全告警配置，fms.alert.*，AlertService 定时检测 */
     private Alert alert = new Alert();
 
-    public Alert getAlert() {
-        return alert;
-    }
-
-    public void setAlert(Alert alert) {
-        this.alert = alert;
-    }
-
     /** 安全告警检测参数，暴力破解聚合/审计链/nonce 水位 */
+    @Getter
+    @Setter
     public static class Alert {
 
         /** 检测周期，毫秒，@Scheduled 占位符读取 */
@@ -1021,71 +456,16 @@ public class FmsProperties {
         /** nonce 水位告警比率，近似条目数/期望容量，超过即 WARN */
         private double nonceWatermarkRatio = 0.7;
 
-        public long getIntervalMs() {
-            return intervalMs;
-        }
-
-        public void setIntervalMs(long intervalMs) {
-            this.intervalMs = intervalMs;
-        }
-
-        public int getLoginFailThreshold() {
-            return loginFailThreshold;
-        }
-
-        public void setLoginFailThreshold(int loginFailThreshold) {
-            this.loginFailThreshold = loginFailThreshold;
-        }
-
-        public int getLoginFailWindowMin() {
-            return loginFailWindowMin;
-        }
-
-        public void setLoginFailWindowMin(int loginFailWindowMin) {
-            this.loginFailWindowMin = loginFailWindowMin;
-        }
-
-        public double getNonceWatermarkRatio() {
-            return nonceWatermarkRatio;
-        }
-
-        public void setNonceWatermarkRatio(double nonceWatermarkRatio) {
-            this.nonceWatermarkRatio = nonceWatermarkRatio;
-        }
-
         /** 期望从库数（0=未启用主从监控，集群形态填实际从库数，实际 < 期望即告警"从库缺失"） */
         private int replicaExpected = 0;
 
         /** 从库复制延迟告警阈值，毫秒，streaming 最大 replay_lag 超过即告警 */
         private long replicaLagThresholdMs = 5_000;
 
-        public int getReplicaExpected() {
-            return replicaExpected;
-        }
-
-        public void setReplicaExpected(int replicaExpected) {
-            this.replicaExpected = replicaExpected;
-        }
-
-        public long getReplicaLagThresholdMs() {
-            return replicaLagThresholdMs;
-        }
-
-        public void setReplicaLagThresholdMs(long replicaLagThresholdMs) {
-            this.replicaLagThresholdMs = replicaLagThresholdMs;
-        }
     }
 
     /** 只读数据源配置，fms.datasource-ro.*，从库只读分流，默认禁用 = 单源直连主库 */
     private DatasourceRo datasourceRo = new DatasourceRo();
-
-    public DatasourceRo getDatasourceRo() {
-        return datasourceRo;
-    }
-
-    public void setDatasourceRo(DatasourceRo datasourceRo) {
-        this.datasourceRo = datasourceRo;
-    }
 
     /**
      * 只读数据源，从库分流，enabled=true 时 RoutingDataSource 启用读写路由，
@@ -1093,6 +473,8 @@ public class FmsProperties {
      *
      * url 缺省回退主库 url，防配置疏漏，从库不可用时报表查询降级主库。
      */
+    @Getter
+    @Setter
     public static class DatasourceRo {
 
         /** 是否启用读写分离，单机/多机形态 false，集群形态 true */
@@ -1101,46 +483,18 @@ public class FmsProperties {
         /** 只读连接 url（如 jdbc:postgresql://fms-pgbouncer-ro:6433/fms?prepareThreshold=0），空 = 回退主库 url */
         private String url;
 
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public String getUrl() {
-            return url;
-        }
-
-        public void setUrl(String url) {
-            this.url = url;
-        }
     }
 
     /** 集群配置，fms.cluster.*，多实例综合信息展示 */
     private Cluster cluster = new Cluster();
 
-    public Cluster getCluster() {
-        return cluster;
-    }
-
-    public void setCluster(Cluster cluster) {
-        this.cluster = cluster;
-    }
-
     /** 集群配置，peers 为对等后端实例地址列表，多实例信息经内部端点聚合 */
+    @Getter
+    @Setter
     public static class Cluster {
 
         /** 对等后端实例 host:port 列表，FMS_CLUSTER_PEERS 逗号分隔注入，应含自身 */
         private List<String> peers = List.of();
 
-        public List<String> getPeers() {
-            return peers;
-        }
-
-        public void setPeers(List<String> peers) {
-            this.peers = peers;
-        }
     }
 }

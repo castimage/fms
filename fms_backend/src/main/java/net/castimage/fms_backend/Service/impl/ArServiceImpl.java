@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.ConflictException;
 import net.castimage.fms_backend.Exception.NotFoundException;
@@ -34,8 +38,6 @@ import net.castimage.fms_backend.Utils.UuidV7;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,9 +60,9 @@ import java.util.UUID;
  * 可经 POST /api/ar/invoices/{id}/link-voucher 补生成）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ArServiceImpl implements ArService {
-
-    private static final Logger log = LoggerFactory.getLogger(ArServiceImpl.class);
 
     /** 金额标度，NUMERIC(18,2) 对齐 */
     private static final int MONEY_SCALE = 2;
@@ -90,20 +92,6 @@ public class ArServiceImpl implements ArService {
     private final BadDebtProvisionMapper badDebtProvisionMapper;
     private final AuthFunctionMapper authFunctionMapper;
     private final VoucherLinkService voucherLinkService;
-
-    public ArServiceImpl(CustomerMapper customerMapper, ArInvoiceMapper arInvoiceMapper,
-                         ReceiptMapper receiptMapper, ReceiptAllocationMapper receiptAllocationMapper,
-                         BadDebtProvisionMapper badDebtProvisionMapper,
-                         AuthFunctionMapper authFunctionMapper,
-                         VoucherLinkService voucherLinkService) {
-        this.customerMapper = customerMapper;
-        this.arInvoiceMapper = arInvoiceMapper;
-        this.receiptMapper = receiptMapper;
-        this.receiptAllocationMapper = receiptAllocationMapper;
-        this.badDebtProvisionMapper = badDebtProvisionMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.voucherLinkService = voucherLinkService;
-    }
 
     // 客户
 

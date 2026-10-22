@@ -1,19 +1,18 @@
 package net.castimage.fms_backend.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 
 import java.util.Locale;
 import java.util.UUID;
 
 /** traceId 单一事实来源，MDC 键、头解析、兜底生成统一在本类（键名与 logging.pattern.console 的 %X{traceId} 对齐） */
+@Slf4j
 public final class TraceIdUtil {
 
     /** MDC 键名，日志 pattern 与 ApiResponse/异常处理共用 */
     public static final String MDC_KEY = "traceId";
-
-    private static final Logger log = LoggerFactory.getLogger(TraceIdUtil.class);
 
     private TraceIdUtil() {
     }

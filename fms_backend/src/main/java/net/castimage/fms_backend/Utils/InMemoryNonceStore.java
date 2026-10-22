@@ -1,7 +1,7 @@
 package net.castimage.fms_backend.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.util.Iterator;
@@ -13,9 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 同构，ttl=重放窗口，容量超限 fail-closed 拒绝，防内存耗尽，多实例部署需切
  * {@link RedisNonceStore}（fms.session-store=redis）。
  */
+@Slf4j
 public class InMemoryNonceStore implements NonceStore {
-
-    private static final Logger log = LoggerFactory.getLogger(InMemoryNonceStore.class);
 
     /** nonce 对应过期时刻（epoch millis），过期条目惰性清理 */
     private final Map<String, Long> nonces = new ConcurrentHashMap<>();

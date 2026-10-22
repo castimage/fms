@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -30,8 +34,6 @@ import net.castimage.fms_backend.Model.vo.DepreciationRunView;
 import net.castimage.fms_backend.Service.FaService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,9 +64,9 @@ import java.util.UUID;
  * （trg_asset_immutable 对处置/报废终审 RAISE 映射 40900 兜底）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class FaServiceImpl implements FaService {
-
-    private static final Logger log = LoggerFactory.getLogger(FaServiceImpl.class);
 
     /** 金额标度（NUMERIC(18,2) 对齐） */
     private static final int MONEY_SCALE = 2;
@@ -87,17 +89,6 @@ public class FaServiceImpl implements FaService {
     private final UserOrgScopeMapper userOrgScopeMapper;
     private final VoucherMapper voucherMapper;
     private final VoucherLineMapper voucherLineMapper;
-
-    public FaServiceImpl(AssetMapper assetMapper, DepreciationRunMapper depreciationRunMapper,
-                         AuthFunctionMapper authFunctionMapper, UserOrgScopeMapper userOrgScopeMapper,
-                         VoucherMapper voucherMapper, VoucherLineMapper voucherLineMapper) {
-        this.assetMapper = assetMapper;
-        this.depreciationRunMapper = depreciationRunMapper;
-        this.authFunctionMapper = authFunctionMapper;
-        this.userOrgScopeMapper = userOrgScopeMapper;
-        this.voucherMapper = voucherMapper;
-        this.voucherLineMapper = voucherLineMapper;
-    }
 
     // 资产卡片
 

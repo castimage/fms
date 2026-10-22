@@ -2,7 +2,10 @@ package net.castimage.fms_backend.Model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import net.castimage.fms_backend.Utils.TraceIdUtil;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
@@ -13,6 +16,8 @@ import lombok.Setter;
  */
 @Getter
 @Setter
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class ApiResponse<T> {
 
     /** 成功码 */
@@ -33,17 +38,6 @@ public class ApiResponse<T> {
     /** 链路追踪 ID（网关透传/后端生成；注解保证恒渲染） */
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private String traceId;
-
-    public ApiResponse() {
-    }
-
-    private ApiResponse(int code, String message, T data, String traceId) {
-        this.code = code;
-        this.message = message;
-        this.data = data;
-        this.traceId = traceId;
-    }
-
     /**
      * 成功响应。
      *

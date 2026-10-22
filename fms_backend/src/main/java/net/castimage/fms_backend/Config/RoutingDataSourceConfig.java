@@ -1,4 +1,4 @@
-package net.castimage.fms_backend.config;
+package net.castimage.fms_backend.Config;
 
 import com.zaxxer.hikari.HikariDataSource;
 import net.castimage.fms_backend.Utils.RoutingDataSource;

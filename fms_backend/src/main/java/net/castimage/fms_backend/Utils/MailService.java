@@ -1,9 +1,11 @@
 package net.castimage.fms_backend.Utils;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.castimage.fms_backend.Mapper.ParamMapper;
 import net.castimage.fms_backend.config.FmsProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
@@ -30,9 +32,9 @@ import java.util.Properties;
  * recovery_lookup 校验与盲索引一致才命中，防错发。
  */
 @Component
+@Slf4j
+@RequiredArgsConstructor
 public class MailService {
-
-    private static final Logger log = LoggerFactory.getLogger(MailService.class);
 
     /** 正文模板时间格式，与 api 时间口径一致 */
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -45,14 +47,6 @@ public class MailService {
     private final FmsProperties fmsProperties;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final ParamMapper paramMapper;
-
-    public MailService(FmsProperties fmsProperties,
-                       ObjectProvider<JavaMailSender> mailSenderProvider,
-                       ParamMapper paramMapper) {
-        this.fmsProperties = fmsProperties;
-        this.mailSenderProvider = mailSenderProvider;
-        this.paramMapper = paramMapper;
-    }
 
     /**
      * 发送密码重置邮件，票据 + 有效期，enabled=false / smtp 未配置 / 发送异常一律

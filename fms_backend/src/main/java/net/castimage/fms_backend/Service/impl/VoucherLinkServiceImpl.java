@@ -1,5 +1,9 @@
 package net.castimage.fms_backend.Service.impl;
 
+
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,8 +30,6 @@ import net.castimage.fms_backend.Model.entity.VoucherLine;
 import net.castimage.fms_backend.Service.VoucherLinkService;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,9 +55,9 @@ import java.util.UUID;
  * 调用方以"尽力生成"策略包裹（失败 WARN + 单据继续，voucher_id 留空可补生成）。
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class VoucherLinkServiceImpl implements VoucherLinkService {
-
-    private static final Logger log = LoggerFactory.getLogger(VoucherLinkServiceImpl.class);
 
     /** 金额标度（NUMERIC(18,2) 对齐） */
     private static final int MONEY_SCALE = 2;
@@ -80,22 +82,6 @@ public class VoucherLinkServiceImpl implements VoucherLinkService {
     private final PaymentMapper paymentMapper;
     private final CashTransactionMapper cashTransactionMapper;
     private final ReimbursementMapper reimbursementMapper;
-
-    public VoucherLinkServiceImpl(VoucherMapper voucherMapper, VoucherLineMapper voucherLineMapper,
-                                  ParamMapper paramMapper, ArInvoiceMapper arInvoiceMapper,
-                                  ApInvoiceMapper apInvoiceMapper, ReceiptMapper receiptMapper,
-                                  PaymentMapper paymentMapper, CashTransactionMapper cashTransactionMapper,
-                                  ReimbursementMapper reimbursementMapper) {
-        this.voucherMapper = voucherMapper;
-        this.voucherLineMapper = voucherLineMapper;
-        this.paramMapper = paramMapper;
-        this.arInvoiceMapper = arInvoiceMapper;
-        this.apInvoiceMapper = apInvoiceMapper;
-        this.receiptMapper = receiptMapper;
-        this.paymentMapper = paymentMapper;
-        this.cashTransactionMapper = cashTransactionMapper;
-        this.reimbursementMapper = reimbursementMapper;
-    }
 
     /** {@inheritDoc} */
     @Override
