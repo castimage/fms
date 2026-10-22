@@ -5,7 +5,7 @@ import net.castimage.fms_backend.Mapper.AlertMapper;
 import net.castimage.fms_backend.Service.impl.AlertService;
 import net.castimage.fms_backend.Utils.CachePort;
 import net.castimage.fms_backend.Utils.InMemoryCachePort;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

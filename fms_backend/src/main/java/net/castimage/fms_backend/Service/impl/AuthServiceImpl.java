@@ -6,7 +6,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import net.castimage.fms_backend.Utils.UuidV7;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.NotFoundException;
 import net.castimage.fms_backend.Exception.TokenExpiredException;

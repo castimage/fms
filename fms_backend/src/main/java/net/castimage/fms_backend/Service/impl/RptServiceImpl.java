@@ -6,7 +6,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import jakarta.servlet.http.HttpServletResponse;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import net.castimage.fms_backend.Exception.BadRequestException;

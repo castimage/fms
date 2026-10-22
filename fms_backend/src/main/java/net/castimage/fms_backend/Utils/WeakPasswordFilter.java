@@ -4,7 +4,7 @@ import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 import jakarta.annotation.PostConstruct;
 import net.castimage.fms_backend.Exception.BadRequestException;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

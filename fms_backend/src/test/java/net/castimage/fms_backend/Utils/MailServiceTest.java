@@ -2,7 +2,7 @@ package net.castimage.fms_backend.Utils;
 
 import jakarta.mail.internet.MimeMessage;
 import net.castimage.fms_backend.Mapper.ParamMapper;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;

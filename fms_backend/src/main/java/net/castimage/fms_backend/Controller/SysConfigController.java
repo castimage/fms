@@ -2,7 +2,7 @@ package net.castimage.fms_backend.Controller;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Mapper.ParamMapper;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.vo.UiConfigView;

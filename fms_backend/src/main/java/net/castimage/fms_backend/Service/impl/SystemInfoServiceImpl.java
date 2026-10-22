@@ -4,7 +4,7 @@ package net.castimage.fms_backend.Service.impl;
 import lombok.extern.slf4j.Slf4j;
 import net.castimage.fms_backend.Model.vo.SystemInfoView;
 import net.castimage.fms_backend.Service.SystemInfoService;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;

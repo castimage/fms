@@ -8,7 +8,7 @@ import com.alibaba.fastjson2.JSONObject;
 import net.castimage.fms_backend.Mapper.AlertMapper;
 import net.castimage.fms_backend.Utils.CachePort;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 

@@ -4,7 +4,7 @@ package net.castimage.fms_backend.Service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.InternalServerException;
 import net.castimage.fms_backend.Exception.NotFoundException;

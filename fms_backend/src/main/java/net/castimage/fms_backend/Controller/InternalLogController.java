@@ -10,7 +10,7 @@ import net.castimage.fms_backend.Mapper.LogQueueMapper;
 import net.castimage.fms_backend.Utils.SandboxRoleHint;
 import net.castimage.fms_backend.Model.ApiResponse;
 import net.castimage.fms_backend.Model.dto.AccessLogItem;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;

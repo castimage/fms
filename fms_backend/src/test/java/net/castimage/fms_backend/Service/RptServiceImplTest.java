@@ -6,7 +6,7 @@ import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Mapper.RptMapper;
 import net.castimage.fms_backend.Model.vo.TrialBalanceRow;
 import net.castimage.fms_backend.Service.impl.RptServiceImpl;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

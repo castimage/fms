@@ -3,7 +3,7 @@ package net.castimage.fms_backend.Service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletResponse;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Mapper.AuditLogMapper;
 import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.vo.AuditLogView;

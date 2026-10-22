@@ -4,7 +4,7 @@ package net.castimage.fms_backend.Controller;
 import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Exception.InternalServerException;
 import net.castimage.fms_backend.Exception.NotFoundException;
 import net.castimage.fms_backend.Mapper.DocumentMapper;

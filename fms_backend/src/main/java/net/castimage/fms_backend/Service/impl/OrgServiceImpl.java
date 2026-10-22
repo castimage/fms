@@ -52,7 +52,7 @@ import net.castimage.fms_backend.Utils.PasswordUtils;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
 import net.castimage.fms_backend.Utils.WeakPasswordFilter;
-import net.castimage.fms_backend.config.FmsProperties;
+import net.castimage.fms_backend.Config.FmsProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
