@@ -72,10 +72,10 @@ public enum JwtRole {
      */
     public String pgRole() {
         return switch (this) {
-            case OPERATOR, ADMIN -> "fms_operator";
+            case OPERATOR, ADMIN -> "fms_operator"; // admin 与 operator 共用 fms_operator，全量范围由 scope 注入保证
             case VIEWER -> "fms_viewer";
             case AUDITOR -> "fms_auditor";
-            case REPORT -> "fms_report"; // admin 与 operator 共用 fms_operator，全量范围由 scope 注入保证，
+            case REPORT -> "fms_report";
         };
     }
 }
