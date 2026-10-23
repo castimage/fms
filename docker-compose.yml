@@ -236,6 +236,7 @@ services:
       FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
       FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
       FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+      FMS_SMTP_FROM: ${FMS_SMTP_FROM:-}
     volumes:
       # 附件存储命名卷，文件存储模块，上传字节持久化，容器重建不丢
       - fms-files:/app/data/files

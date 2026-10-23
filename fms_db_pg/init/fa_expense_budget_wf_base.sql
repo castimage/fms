@@ -1614,7 +1614,7 @@ GRANT EXECUTE ON FUNCTION wf.fn_start_instance(uuid, uuid, text, uuid, uuid)
     TO fms_operator;
 
 
--- budget_plans UNIQUE(company_id,period,account_id,dept_id,version)，seed_data 的
+-- budget_plans UNIQUE(company_id,period,account_id,dept_id,version)，seed_demo 的
 -- ON CONFLICT 五列规范依赖该约束，幂等判存
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_budget_plans') THEN
@@ -1695,7 +1695,7 @@ SELECT 'fa_expense_budget_wf_base' AS file_name,
          WHERE schemaname IN ('fa','expense','budget','wf')
            AND rowsecurity)                                                AS rls_table_cnt;
 
--- reimbursement_lines UNIQUE(reimbursement_id,line_no)，seed_data 演示报销单段的
+-- reimbursement_lines UNIQUE(reimbursement_id,line_no)，seed_demo 演示报销单段的
 -- ON CONFLICT (reimbursement_id,line_no) 依赖该约束
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uk_reimbursement_line_no') THEN

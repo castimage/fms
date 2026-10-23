@@ -46,7 +46,7 @@ export interface ResolvedBackground {
   contentOpacity: number
 }
 
-/** 缺省配置，与后端 UserPrefController / init/seed_data.sql 默认值逐字一致 */
+/** 缺省配置，与后端 UserPrefController / init/seed_system.sql 默认值逐字一致 */
 export const DEFAULT_BG: BackgroundCfg = {
   enabled: false,
   imageUrl: null,

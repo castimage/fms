@@ -129,10 +129,10 @@ public class SystemInfoServiceImpl implements SystemInfoService {
         try {
             var conn = redisTemplate.getConnectionFactory().getConnection();
             try {
-                String version = conn.info("server").getProperty("redis_version");
-                String usedMem = conn.info("memory").getProperty("used_memory");
-                String maxMem = conn.info("memory").getProperty("maxmemory");
-                long keys = conn.dbSize();
+                String version = conn.serverCommands().info("server").getProperty("redis_version");
+                String usedMem = conn.serverCommands().info("memory").getProperty("used_memory");
+                String maxMem = conn.serverCommands().info("memory").getProperty("maxmemory");
+                long keys = conn.serverCommands().dbSize();
                 long usedBytes = usedMem == null ? -1 : Long.parseLong(usedMem);
                 double pct = 0;
                 long max = maxMem == null ? 0 : Long.parseLong(maxMem);
@@ -324,9 +324,9 @@ public class SystemInfoServiceImpl implements SystemInfoService {
         try {
             var conn = redisTemplate.getConnectionFactory().getConnection();
             try {
-                String role = conn.info("replication").getProperty("role");
-                String version = conn.info("server").getProperty("redis_version");
-                long keys = conn.dbSize();
+                String role = conn.serverCommands().info("replication").getProperty("role");
+                String version = conn.serverCommands().info("server").getProperty("redis_version");
+                long keys = conn.serverCommands().dbSize();
                 result.add(new SystemInfoView.RedisNodeInfo(
                         role == null ? "master" : role, "current", "localhost", 6379,
                         "reachable", version, keys, null));

@@ -21,7 +21,7 @@ public final class TotpUtils {
     /** 验证码位数 */
     private static final int DIGITS = 6;
 
-    /** 密钥字节数，hmac-SHA1 推荐 20 字节 = 160bit */
+    /** 密钥字节数，RFC 4226 推荐 160bit，SHA256 下仍高于 128bit 最低要求 */
     private static final int SECRET_BYTES = 20;
 
     /** RFC 4648 Base32，默认补 '='，20 字节恰为 32 字符整组无需补 */
@@ -35,21 +35,21 @@ public final class TotpUtils {
 
     /** 生成随机 totp 密钥，Base32 无填充编码（20 字节恰好 32 字符整组） */
     public static String generateSecret() {
-        byte[] bytes = new byte[SECRET_BYTES]; // 20 字节 = hmac-SHA1 推荐密钥长，
+        byte[] bytes = new byte[SECRET_BYTES]; // 20 字节 = 160bit 密钥，
         RANDOM.nextBytes(bytes);
         return BASE32.encodeToString(bytes);
     }
 
-    /** 生成 otpauth uri（2fa 扫码/手动录入用） */
+    /** 生成 otpauth uri（2fa 扫码/手动录入用），显式声明 SHA256，客户端需支持 algorithm 参数 */
     public static String otpauthUrl(String issuer, String accountName, String secretBase32) {
         return "otpauth://totp/" + encodePath(issuer + ":" + accountName)
                 + "?secret=" + secretBase32
                 + "&issuer=" + encodePath(issuer)
-                + "&period=" + STEP_SECONDS + "&digits=" + DIGITS;
+                + "&algorithm=SHA256&period=" + STEP_SECONDS + "&digits=" + DIGITS;
     }
 
     /**
-     * totp 校验，委托 otp-java（SHA1 / 6 位 / 30 秒步长），window 为时钟漂移容忍步数，
+     * totp 校验，委托 otp-java（SHA256 / 6 位 / 30 秒步长），window 为时钟漂移容忍步数，
      * 校验在 [-window, +window] 内逐步比对。任何输入不合法，secret 空白、code 非 6 位
      * 数字、Base32 解码失败一律返回 false 而不抛异常，调用方统一按验证失败处理，
      * 不泄露"密钥不符"还是"格式非法"。window=0 表示仅当前步严格校验，成功不消耗任何
@@ -80,7 +80,7 @@ public final class TotpUtils {
         // otp-java Builder 期望 base32 编码文本且内部会再解码，上方解码仅作输入合法性闸口，
         // 生成器必须用 secret 文本构建，传已解码字节会二次解码致产物非标准
         TOTPGenerator generator = new TOTPGenerator.Builder(secretBase32)
-                .withHOTPGenerator(h -> h.withAlgorithm(HMACAlgorithm.SHA1).withPasswordLength(DIGITS))
+                .withHOTPGenerator(h -> h.withAlgorithm(HMACAlgorithm.SHA256).withPasswordLength(DIGITS))
                 .withPeriod(Duration.ofSeconds(STEP_SECONDS))
                 .build();
         return generator.verify(code, window);

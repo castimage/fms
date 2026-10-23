@@ -62,7 +62,7 @@ public class RedisCachePort implements CachePort {
         // SCAN 统计，O(N)，仅水位监控与容量推导低频调用，非精确计数，
         // 与内存实现"含前缀条目数"同为近似口径。Cursor 用完即关防连接泄漏
         Long count = redisTemplate.execute((RedisCallback<Long>) conn -> {
-            try (Cursor<byte[]> cursor = conn.scan(
+            try (Cursor<byte[]> cursor = conn.keyCommands().scan(
                     ScanOptions.scanOptions().match(keyPrefix + "*").count(1000).build())) {
                 long n = 0;
                 while (cursor.hasNext()) {

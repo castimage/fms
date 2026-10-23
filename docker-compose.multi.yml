@@ -209,6 +209,7 @@ services:
       FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
       FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
       FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+      FMS_SMTP_FROM: ${FMS_SMTP_FROM:-}
     depends_on:
       # 依赖条件仅对同次启动的服务生效，应用主机 --profile app 不启动 fms-db。
       # required: false 必须显式声明，compose ≥2.20 默认 required: true，

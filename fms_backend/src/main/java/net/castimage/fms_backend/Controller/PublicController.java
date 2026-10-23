@@ -36,10 +36,10 @@ import java.util.UUID;
 @Slf4j
 public class PublicController {
 
-    /** 登录页背景参数 code（与 init/seed_data.sql 种子键一致） */
+    /** 登录页背景参数 code（与 init/seed_system.sql 种子键一致） */
     private static final String LOGIN_BACKGROUND_PARAM = "ui.login.background";
 
-    /** 缺省配置（与 init/seed_data.sql ui.login.background 种子值逐字一致，{"v":{...}} 包装） */
+    /** 缺省配置（与 init/seed_system.sql ui.login.background 种子值逐字一致，{"v":{...}} 包装） */
     private static final String DEFAULT_LOGIN_BACKGROUND =
             "{\"v\":{\"enabled\":false,\"fit\":\"cover\",\"blur\":6,\"darken\":0.25,\"desktop\":null,\"tablet\":null,\"mobile\":null}}";
 

@@ -6,7 +6,7 @@ import { request } from './http'
 import { adminApi } from './admin'
 import { DEFAULT_BG, type BackgroundCfg } from '@/types/background'
 
-/** 登录页背景系统参数 code，与 init/seed_data.sql / PublicController 键一致 */
+/** 登录页背景系统参数 code，与 init/seed_system.sql / PublicController 键一致 */
 export const LOGIN_BG_PARAM_CODE = 'ui.login.background'
 
 /** 背景图业务类型，与后端 FileServiceImpl.BUSINESS_TYPES 对齐 */

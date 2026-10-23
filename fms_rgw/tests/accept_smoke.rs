@@ -1,7 +1,7 @@
 //! `tests/accept_smoke.rs`，临时YAML配置冒烟
 //!
 //! 从验收专用临时YAML(`target-verify/smoke/smoke.yaml`，`allow_insecure_fallback`=true、
-//! 强密钥、cors白名单)经`config::load_from`(`serde_yml`解析路径)加载，
+//! 强密钥、cors白名单)经`config::load_from`(`noyalib`解析路径)加载，
 //! 真实tcp端口启动`fms_rgw::serve`，随后就绪轮询，再做断言，
 //!GET `/healthz` 应回 200
 
@@ -16,7 +16,7 @@ use common::*;
 
 #[tokio::test]
 async fn smoke_healthz_and_fake_jwt() {
-    //临时YAML配置(serde_yml解析，tls降级开、强密钥、cors白名单)
+    //临时YAML配置(noyalib解析，tls降级开、强密钥、cors白名单)
 
     //    路径以CARGO_MANIFEST_DIR为锚(跨机器可移植，本地Windows与服务器Linux
     //    均解析到仓库内target-verify/smoke/smoke.yaml)

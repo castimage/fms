@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/um_org_base），auth.* 策略函数族（SECURITY DEFINER 读 fms.* guc，fail-closed）+ um 9 表（含 um.modules）+ org 2 表（ltree）+ 全表 FORCE rls + 授权，主键 uuidv7（pg 18 原生，时间有序）
 -- 幂等，schema/表 CREATE IF NOT EXISTS，重放不清空既有数据，um.permissions 建表即含
--- module_id/identifier 等升级列，消除 seed_data 先于 um_perm 的列依赖
+-- module_id/identifier 等升级列，消除 seed_system 先于 um_perm 的列依赖
 -- 部署入口为 deploy/init/fms_init.sh，本文件由白名单调度执行
 -- 内容，存量重加密、密钥写入 sec.app_secrets、敏感参数移出 um.params、current_uid、
 -- um.users MFA/身份证敏感列、软删除统一出口，auth.is_admin 判定 + admin rls 策略
@@ -29,7 +29,7 @@ REVOKE ALL ON TABLE sec.app_secrets FROM PUBLIC;
 -- 盲索引用带密钥 hmac（encode(hmac(value, blind_key,'sha256'),'hex')），纯 digest 无防字典攻击能力，低熵卡面值可被持库只读者秒级离线爆破，密钥与密文同库存放属已知设计约束，生产可换外部 KMS 注入
 -- 本段 blind_key 仅首写（DO NOTHING），重放不覆盖已部署密钥，覆盖后旧密文
 -- （api_keys key_hash / id_card_hash / bank_accounts 等）全部失配不可解密，
--- 与 seed_data 对 jwt.secret 的防覆盖语义一致。
+-- 与 seed_system 对 jwt.secret 的防覆盖语义一致。
 -- 注，防覆盖仅限本首写段，的 master_key/blind_key 写入为 DO UPDATE（重放收敛回
 -- 本文件声明常量、仅 jwt.secret 被 WHERE 排除）
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
@@ -45,7 +45,7 @@ COMMENT ON SCHEMA um IS '用户、角色、权限、上下文预载数据源、�
 CREATE SCHEMA IF NOT EXISTS org AUTHORIZATION fms_admin;
 COMMENT ON SCHEMA org IS '公司、部门树（ltree）（2 表）';
 
--- um.modules 模块树（本文件建表/种子，先于 seed_data 执行，seed_data 的权限 INSERT
+-- um.modules 模块树（本文件建表/种子，先于 seed_system 执行，seed_system 的权限 INSERT
 -- 经 um.modules JOIN 解析 module_id，um_perm.sql 内同名建表/种子为幂等空操作
 -- （IF NOT EXISTS / ON CONFLICT DO NOTHING），存量库升级路径不受影响）
 CREATE TABLE IF NOT EXISTS um.modules (
@@ -404,7 +404,7 @@ BEGIN
     RETURN v_no;
 END $$;
 
--- um.params 系统参数（seed_data.sql 种子，ON CONFLICT (code)）
+-- um.params 系统参数（seed_system.sql 种子，ON CONFLICT (code)）
 CREATE TABLE IF NOT EXISTS um.params (
     id          uuid        PRIMARY KEY DEFAULT uuidv7(),
     code        text        NOT NULL,
@@ -417,7 +417,7 @@ CREATE TABLE IF NOT EXISTS um.params (
 );
 COMMENT ON TABLE um.params IS '系统参数（JSONB 值；预算开关/阈值、SMTP、JWT、列加密主密钥）';
 
--- um.users（seed_data.sql 种子契约，login_name 唯一、login_name_hash 盲索引、列加密 email/phone + 盲索引，id=ADMIN_UID 常量显式注入）
+-- um.users（seed_system.sql 种子契约，login_name 唯一、login_name_hash 盲索引、列加密 email/phone + 盲索引，id=ADMIN_UID 常量显式注入）
 CREATE TABLE IF NOT EXISTS um.users (
     id                 uuid        PRIMARY KEY DEFAULT uuidv7(),
     company_id         uuid        NOT NULL,
@@ -469,7 +469,7 @@ CREATE TABLE IF NOT EXISTS um.roles (
     CONSTRAINT uk_roles_code UNIQUE (code)
 );
 
--- 权限表建表即含 module_id/identifier 等升级列，seed_data 先于 um_perm.sql 执行，
+-- 权限表建表即含 module_id/identifier 等升级列，seed_system 先于 um_perm.sql 执行，
 -- 其权限 INSERT 引用 module_id 不报 'column module_id does not exist'，um_perm.sql 的
 -- ADD COLUMN 判存块为幂等空操作，module_id FK 由 um_perm.sql 补加（um.modules 已在本文件建表）
 CREATE TABLE IF NOT EXISTS um.permissions (
@@ -520,7 +520,7 @@ CREATE INDEX IF NOT EXISTS ix_role_perm_perm ON um.role_perm (perm_id) WHERE del
 -- org.companies / org.departments
 CREATE TABLE IF NOT EXISTS org.companies (
     id                uuid        PRIMARY KEY DEFAULT uuidv7(),
-    company_id        uuid,                       -- 自引用（seed_data.sql 种子列存在性自适应）
+    company_id        uuid,                       -- 自引用（seed_demo.sql 种子列存在性自适应）
     code              varchar(32)  NOT NULL,
     name              varchar(128) NOT NULL,
     currency          char(3)      NOT NULL DEFAULT 'CNY',

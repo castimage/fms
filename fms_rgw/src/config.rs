@@ -18,7 +18,7 @@ pub enum ConfigError {
     Io(#[from] io::Error),
 
     #[error("配置解析失败：{0}")]
-    Parse(#[from] serde_yml::Error),
+    Parse(#[from] noyalib::compat::serde_yaml::Error),
 }
 
 /// 读取配置，优先读取`FMS_RGW_CONFIG`环境变量指定的路径，否则使用`config/fms_rgw.yaml`
@@ -58,7 +58,7 @@ fn load_with(get_env: &dyn Fn(&str) -> Option<String>) -> Result<Config, ConfigE
 /// 显式从指定配置文件路径获取配置
 pub fn load_from(path: &Path) -> Result<Config, ConfigError> {
     let text = std::fs::read_to_string(path)?;
-    Ok(serde_yml::from_str(&text)?)
+    Ok(noyalib::compat::serde_yaml::from_str(&text)?)
 }
 
 /// 环境变量覆盖，仅非空环境变量生效
@@ -625,7 +625,7 @@ pub struct LogPgmqCfg {
     pub endpoint: String,
     /// 内部token(请求头`X-FMS-Int-Token`值)，留空 = 即使enabled也不投递，
     /// 经环境变量`FMS_RGW_LOG_TOKEN`注入(`apply_env_overrides`非空才覆盖)。注意，
-    /// `serde_yml`直接反序列化，不做`${...}`占位展开，YAML中不得写占位符，
+    /// `noyalib`直接反序列化，不做`${...}`占位展开，YAML中不得写占位符，
     /// 否则该字面串会被原样作为请求头发出，后端比对失败40300静默丢弃
     pub token: String,
     /// 单次http投递超时，秒，弱网/大batch(`batch_size`调大后单次POST体增大)
@@ -981,7 +981,7 @@ mod tests {
         assert!(msg.contains("配置读取失败"), "IO 错误显示应说明阶段");
         let parse = format!(
             "{}",
-            ConfigError::Parse(serde_yml::from_str::<Config>("a: [unclosed").unwrap_err())
+            ConfigError::Parse(noyalib::compat::serde_yaml::from_str::<Config>("a: [unclosed").unwrap_err())
         );
         assert!(parse.contains("配置解析失败"), "解析错误显示应说明阶段");
     }

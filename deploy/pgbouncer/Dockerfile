@@ -1,18 +1,18 @@
 # FMS PgBouncer 镜像，tag 为 fms-pgbouncer:1.24
-# 基于 debian:bookworm-slim 安装 pgbouncer 与 postgresql-client，psql 供 compose 健康检查使用
-# bookworm 仓库的 pgbouncer 为 1.19，1.18 及以上即支持 scram-sha-256 的 auth_file 明文密码
+# 基于 debian:trixie-slim 安装 pgbouncer 与 postgresql-client，psql 供 compose 健康检查使用
+# trixie 仓库的 pgbouncer 为 1.24，1.18 及以上即支持 scram-sha-256 的 auth_file 明文密码
 # 与事务池的 DISCARD ALL，功能覆盖本部署件场景
-# 镜像 tag 1.24 为 FMS 部署约定版本号，非仓库内部版本
+# 镜像 tag 1.24 与仓库版本一致
 # 配置 pgbouncer.ini 内含 DB_HOST_PLACEHOLDER，由入口脚本以 $DB_HOST 替换后启动，
 # 入口脚本同时以 .env 密码生成 userlist.txt
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbouncer postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     # 显式创建 pgbouncer 系统用户，幂等，Debian 包版本间行为不一致，
-    # 部分 bookworm 构建不创建同名用户而 chown 会失败，此处兜底保证确定
+    # 部分构建不创建同名用户而 chown 会失败，此处兜底保证确定
     && (id -u pgbouncer >/dev/null 2>&1 \
         || (groupadd -r pgbouncer && useradd -r -g pgbouncer -s /usr/sbin/nologin pgbouncer))
 

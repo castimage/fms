@@ -354,7 +354,7 @@ public class FmsProperties {
         /** smtp 密码，与 spring.mail.password 同源占位，无默认明文 */
         private String password;
 
-        /** 发件人地址，默认 no-reply@fms.local，与 seed_data um.params smtp.from 占位对齐 */
+        /** 发件人地址，默认 no-reply@fms.local，与 seed_system um.params smtp.from 占位对齐 */
         private String from = "no-reply@fms.local";
 
         /** 密码重置邮件主题 */

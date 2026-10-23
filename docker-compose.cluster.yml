@@ -86,6 +86,7 @@ x-backend-env: &backend-env
   FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
   FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
   FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+  FMS_SMTP_FROM: ${FMS_SMTP_FROM:-}
 
 networks:
   # 与 docker-compose.yml 同一 bridge 网络（单机共享，多机部署时本文件
