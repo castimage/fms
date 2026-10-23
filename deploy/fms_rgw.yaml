@@ -1,72 +1,52 @@
-# FMS 网关生产配置，部署覆盖件，替换镜像内 config/fms_rgw.yaml 模板
-# 经 compose 挂载到容器 /app/config/fms_rgw.yaml，FMS_RGW_CONFIG 指向。
-# 未列出的配置项，health/限流/熔断/shards/角色等，一律不写，采用代码默认值，
-# upstream 健康检查 /internal/health，interval 5s / timeout 2s
-# 限流 ip_per_window=100 / user_per_window=200 / login_per_window=10 / shards=64
-# 熔断 error_threshold_pct=50 / sample_window=100 / min_samples=20 /
-#     open_timeout_secs=30 / half_open_probes=5
+# FMS 网关生产配置，部署覆盖件，经 compose 挂载到容器 /app/config/fms_rgw.yaml（FMS_RGW_CONFIG 指向），
+# 替换镜像内模板。未列出的配置项（health/限流/熔断/shards/角色等）采用代码默认值：
+# upstream 健康检查 /internal/health（5s/2s），限流 100/200/10、shards=64，熔断 50%/100/20、30s、5 探针
 
 server:
-  listen: "0.0.0.0:8443"      # 与 compose 端口映射 8443:8443 一致，tls 入口
-  # ip 访问白名单，ip/CIDR 列表，如 ["10.0.0.0/8", "192.168.1.5"]，
-  # 空 = 不启用，非空 = 仅白名单来源可访问 /api，非白名单 403 直接丢弃，
-  # fail-closed，xff/X-Real-ip 伪造不绕过。
-  # 运维网段收敛经环境变量 FMS_RGW_IP_ALLOWLIST，逗号分隔，注入更灵活，
-  # 模板留空默认放行。
+  listen: "0.0.0.0:8443"      # 与 compose 端口映射 8443:8443 一致，TLS 入口
+  # ip 白名单（ip/CIDR 列表，如 ["10.0.0.0/8", "192.168.1.5"]）：空=放行全部，非空=仅白名单来源可访问 /api，
+  # 其余 403 fail-closed，伪造 XFF/X-Real-IP 不绕过；运维网段经 FMS_RGW_IP_ALLOWLIST（逗号分隔）注入，模板留空
   ip_allowlist: []
 
 tls:
   cert: "/app/certs/fms_rgw.pem"        # 自签证书，deploy/certs 只读挂载
   key: "/app/certs/fms_rgw_key.pem"     # 私钥，deploy/certs 只读挂载
-  # fail-closed，缺证书/证书损坏时容器启动即失败，不依赖 HEALTHCHECK 兜底
+  # fail-closed：缺证书或证书损坏时容器启动即失败，不依赖 HEALTHCHECK 兜底
   allow_insecure_fallback: false
 
 upstream:
-  # 容器内必须用 compose 服务名 fms-backend，模板的 127.0.0.1:8081 会让
-  # 探活/代理打回网关容器自身，导致全链路 502
-  # 【单机形态】保持 base_url 单值即最简，servers 为空时内部等价
-  #   vec![base_url]，任何 mode 行为一致，见 config.rs:249-256，天然兼容。
-  # 【集群形态】不改本文件，docker-compose.cluster.yml 经环境变量注入
-  #   FMS_RGW_UPSTREAM_SERVERS，逗号分隔多 url，与 FMS_RGW_UPSTREAM_MODE
-  #   auto = least-conn + 自动健康管理，servers 非空时优先于 base_url，
-  #   有效服务器列表 = servers 非空 ? servers : vec![base_url]，
-  #   见 config.rs apply_env_overrides，base_url 在集群形态成为死配置。
+  # 容器内必须用 compose 服务名 fms-backend；模板的 127.0.0.1:8081 会让探活/代理打回网关自身，全链路 502
+  # 单机形态保持 base_url 单值（servers 为空时内部等价 vec![base_url]）；
+  # 集群形态不改本文件，由 docker-compose.cluster.yml 注入 FMS_RGW_UPSTREAM_SERVERS（逗号分隔多 url）
+  # 与 FMS_RGW_UPSTREAM_MODE（auto=least-conn + 自动健康管理）；servers 非空时优先于 base_url，base_url 成为死配置
   base_url: "http://fms-backend:8081"
 
 auth:
-  # 密钥留空，由环境变量注入，FMS_RGW_JWT_SECRET / FMS_RGW_SIGN_SECRET，
-  # 仅非空值覆盖，见 config.rs apply_env_overrides。两者皆空时网关 run
-  # 校验拒绝启动，见 lib.rs:47-68。刻意不用模板的 change-me 连字符占位符，
-  # 占位符会被网关校验拒绝，空串 + 环境变量注入才是生产形态。
+  # 密钥留空，由 FMS_RGW_JWT_SECRET / FMS_RGW_SIGN_SECRET 注入，仅非空值覆盖；
+  # 两者皆空时网关启动校验拒绝。模板的 change-me 占位符会被网关校验拒绝，空串加环境变量注入才是生产形态
   jwt_secret: ""
 
 sign:
   sign_secret: ""
 
 cors:
-  # cors 白名单必须非空，空列表会被网关 run 校验拒绝 exit，1，
-  # 见 lib.rs:47-68，该字段无环境变量覆盖点，只能走本配置文件。
-  # 生产部署在此追加正式域名，如 https://fms.example.com。
+  # 白名单必须非空，空列表会被网关启动校验拒绝；该字段无环境变量覆盖点，只能修改本文件
+  # 生产部署在此追加正式域名（如 https://fms.example.com）；
   # WebSocket 升级另按本白名单校验 Origin（CSWSH 防护，无 Origin 的非浏览器客户端放行），
-  # 故浏览器实际访问用的来源必须在此列全，缺一项则该来源的实时通道被 403 拒绝。
+  # 浏览器实际访问来源必须列全，缺一项则该来源的实时通道被 403 拒绝
   allowed_origins:
     - "http://localhost:5173"
     - "https://fms.local"
-    - "https://192.168.1.123:8443"
-    - "https://lab1.castimage.net:18443"
 
 static:
-  dir: "/app/static"          # 方案 A，fms-web-build 产物卷 fms-static 只读挂载
+  dir: "/app/static"          # fms-web-build 产物卷 fms-static 只读挂载
 
 log:
   access_file: "/app/logs/access.log"   # 命名卷 fms-logs，避免 uid 10001 权限问题
-  # pgmq 审计链路，可选，默认关闭。
-  # 启用方式：.env 设置 FMS_INTERNAL_TOKEN，compose 已注入 FMS_RGW_LOG_TOKEN，
-  # 与后端同值；再把下方 enabled 改为 true，token 必须留空，经环境变量注入，
-  # serde_yml 不展开 ${}。
-  # 开启后网关访问日志经后端 /internal/log-batch 中转投递到 log.access_logs，
-  # 后端库无 pgmq 扩展时由 log.fn_send_access_batch 降级直接 INSERT（实现见
-  # init 的 log_access_batch 文件）。
+  # pgmq 审计链路，可选，默认关闭；开启方式：.env 设置 FMS_INTERNAL_TOKEN（compose 已注入 FMS_RGW_LOG_TOKEN，与后端同值），
+  # 再把 enabled 改为 true；token 必须留空，serde_yml 不展开 ${}，只能经环境变量注入。
+  # 开启后网关访问日志经后端 /internal/log-batch 中转投递到 log.access_logs；
+  # 后端库无 pgmq 扩展时由 log.fn_send_access_batch 降级直接 INSERT
   # pgmq:
   #   enabled: false
   #   endpoint: "/internal/log-batch"

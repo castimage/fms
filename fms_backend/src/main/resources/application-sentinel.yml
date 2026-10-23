@@ -1,7 +1,6 @@
-# Redis 哨兵集群 profile（可选增强）：SPRING_PROFILES_ACTIVE=sentinel 时启用
-# 经哨兵连接（自动发现当前主节点，主故障故障转移后客户端自动切换）；
-# 单节点模式（默认）不加载本文件，保持 spring.data.redis.host/port 直连。
-# 启用条件：FMS_REDIS_SENTINEL_MASTER / FMS_REDIS_SENTINEL_NODES 必填（空则启动失败）
+# redis 哨兵 profile（SPRING_PROFILES_ACTIVE=sentinel 启用）：经哨兵自动发现当前主节点，主故障转移后客户端自动切换；
+# 单节点模式（默认）不加载本文件，保持 spring.data.redis.host/port 直连
+# FMS_REDIS_SENTINEL_MASTER / FMS_REDIS_SENTINEL_NODES 必填，空则启动失败
 spring:
   data:
     redis:

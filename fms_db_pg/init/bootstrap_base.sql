@@ -13,10 +13,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fms_app') THEN
         -- CONNECTION LIMIT 100 为部署/容量运维参数期望值（与后端 fms.db.connection-limit 及 Hikari 池上限联动，
         -- 运维按环境调整 yaml 期望值后须重建角色生效）
-        CREATE ROLE fms_app WITH LOGIN PASSWORD 'FmsApp_2026_r7Xk#9mQ2vLpZ4sD' CONNECTION LIMIT 100;
+        CREATE ROLE fms_app WITH LOGIN PASSWORD 'FmsApp_r7Xk#9mQ2vLpZ4sD' CONNECTION LIMIT 100;
     ELSE
         -- fms_app 为唯一运行时连接角色，凭据是沙箱模型信任边界，一律以高强度随机口令重建（SCRAM-SHA-256 存储）
-        ALTER ROLE fms_app WITH PASSWORD 'FmsApp_2026_r7Xk#9mQ2vLpZ4sD';
+        ALTER ROLE fms_app WITH PASSWORD 'FmsApp_r7Xk#9mQ2vLpZ4sD';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fms_operator') THEN
         CREATE ROLE fms_operator WITH NOLOGIN;

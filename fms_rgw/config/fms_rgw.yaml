@@ -1,25 +1,21 @@
-# =============================================================================
-# fms_rgw (fms-gateway) 模板配置（生产默认：TLS 8443、密钥占位需注入、上游 8081）
-# 本地联调用 config/fms_rgw.local.yaml（FMS_RGW_CONFIG 指向），勿改本模板——
-# config 测试断言本文件 listen=0.0.0.0:8443 与 allow_insecure_fallback=false
-# =============================================================================
+# fms_rgw（fms-gateway）模板配置：生产默认 TLS 8443、密钥占位待注入、上游 8081。
+# 本地联调改 config/fms_rgw.local.yaml（FMS_RGW_CONFIG 指向），勿改本模板：
+# config 测试断言本文件 listen=0.0.0.0:8443 且 allow_insecure_fallback=false
 
 server:
   listen: "0.0.0.0:8443"
-  # 并发连接数上限（Semaphore 兼作 in-flight 计数，满则拒绝新连接）：部署容量参数，随机器规格与预期并发调整
+  # 并发连接上限（Semaphore 兼作 in-flight 计数，满则拒绝新连接），随机器规格与预期并发调整
   max_connections: 8192
-  # 优雅关闭宽限期：停止 accept 后等待 in-flight 请求完成的最长时限，超时强制退出；与停机窗口/上层负载均衡重连策略相关
+  # 优雅关闭宽限期：停止 accept 后等待 in-flight 请求完成的最长时限，超时强制退出
   graceful_shutdown_secs: 10
-  # 请求体上限（Content-Length 声明与实际缓冲双重校验，超限 413；WS 握手声明长度复用）：
-  # 批量导入/附件上传场景需调大；与后端 fms.security.max-body-bytes 对齐，且恒大于 fms.file.max-size-bytes（8MB 留 multipart 余量）
+  # 请求体上限（Content-Length 声明与实际缓冲双重校验，超限 413；WS 握手复用）：
+  # 须与后端 fms.security.max-body-bytes 对齐，且恒大于 fms.file.max-size-bytes（8MB 留 multipart 余量）
   max_body_bytes: 10485760
-  # IP 访问白名单（IP/CIDR 文本列表，如 ["10.0.0.0/8", "192.168.1.5"]）：空 = 不启用放行全部；
-  # 非空 = 仅白名单内来源可访问 /api（非白名单 403 fail-closed 直接丢弃，判定用真实对端 IP，
-  # XFF/X-Real-IP 伪造不绕过）；/healthz 与静态资源豁免。生产可经环境变量
-  # FMS_RGW_IP_ALLOWLIST（逗号分隔）注入，避免提交运维网段
+  # ip 白名单（ip/CIDR 列表，如 ["10.0.0.0/8", "192.168.1.5"]）：空=放行全部，
+  # 非空=仅白名单来源可访问 /api，其余 403 fail-closed；判定用真实对端 ip，伪造 XFF/X-Real-IP 不绕过；
+  # /healthz 与静态资源豁免；生产可经 FMS_RGW_IP_ALLOWLIST（逗号分隔）注入，避免提交运维网段
   ip_allowlist: []
-  # 响应体压缩（gzip/deflate/br/zstd 全编码，按 Accept-Encoding 协商；与 Nginx gzip 对位，
-  # 自动加 Vary: Accept-Encoding；已压缩内容/图片/SSE/WS 升级自动跳过）
+  # 响应体压缩（gzip/deflate/br/zstd 按 Accept-Encoding 协商，自动加 Vary；已压缩内容/图片/SSE/WS 升级跳过）
   compression:
     enabled: true
     min_length: 1024        # 低于此字节数的响应体不压缩
@@ -34,7 +30,7 @@ upstream:
   base_url: "http://127.0.0.1:8081"
   request_timeout_secs: 30
   idle_timeout_secs: 60
-  # 连接池每 host 空闲连接上限：高并发下影响连接复用效率（回收时长见 idle_timeout_secs，本键补全容量维度）
+  # 连接池每 host 空闲连接上限，配合 idle_timeout_secs 控制复用与回收
   pool_max_idle_per_host: 16
   health_path: "/internal/health"
   health_interval_secs: 5
@@ -45,7 +41,7 @@ auth:
   expected_iss: "fms"
   expected_aud: "fms-gateway"
   leeway_secs: 60
-  # 登出黑名单回退 TTL：token 无法解析出 exp 时的默认到期时间，对齐后端 access token 默认 2h（fms.jwt.access-ttl）；后端调整 access TTL 时需同步
+  # 登出黑名单回退 TTL：token 无法解析出 exp 时的默认到期时间，对齐后端 fms.jwt.access-ttl（默认 2h）
   logout_blacklist_ttl_secs: 7200
   allowed_roles:
     - "operator"
@@ -63,12 +59,11 @@ limits:
   login_per_window: 10
   shards: 64
   max_keys: 100000
-  # 限流滑动窗口时长（IP/用户/登录三维度共用，与上方各每窗次数键配套）
+  # 限流滑动窗口时长（ip/用户/登录三维度共用，与上方每窗次数键配套）
   window_secs: 60
-  # periodic_cleanup 清扫周期：限流表过期窗口与登出令牌黑名单过期条目回收频率，影响内存回收时效与表容量水位
+  # 限流表过期窗口与登出令牌黑名单过期条目的回收周期
   cleanup_interval_secs: 60
-  # 限流跳过路径（前缀匹配列表）：静态资源/健康检查等不承载配额语义的路径不计入限流计数；
-  # 默认保守列表（可收紧）；max_connections Semaphore 仍兜底防连接耗尽 DoS
+  # 限流跳过路径（前缀匹配）：静态资源/健康检查等不承载配额语义的路径不计入限流，max_connections Semaphore 仍兜底防连接耗尽
   skip_paths:
     - "/assets/"
     - "/healthz"
@@ -76,9 +71,7 @@ limits:
     - "/internal/"
 
 trace:
-  # traceId 采样率（百分比语义：100 = 全量生成/透传完整 traceId；10 = 确定性采样 10%——
-  # 请求序号 % 100 < rate 才采样，非随机数可复现；未采样请求 X-Trace-Id 不注入、
-  # 日志 req_id 为空；与 log.sample_rate 相互独立），默认 10（降采样）
+  # traceId 采样率（百分比语义：100=全量；10=确定性采样 10%，按请求序号 % 100 < rate 采样，可复现；未采样请求不注入 X-Trace-Id，日志 req_id 为空；与 log.sample_rate 独立）
   sample_rate: 10
 
 circuit:
@@ -89,7 +82,7 @@ circuit:
   half_open_probes: 5
 
 ws:
-  # 升级等待超时：上游返回 101 后对端迟迟未完成升级时清理任务与连接，防连接耗尽 DoS；慢客户端/弱网场景可调
+  # 升级等待超时：上游返回 101 后对端迟迟未完成升级时清理任务与连接，防连接耗尽 DoS
   upgrade_timeout_secs: 10
 
 cors:
@@ -113,33 +106,29 @@ cors:
 
 static:
   dir: "./static"
-  # Cache-Control 分级：带 hash 文件名资源 max-age（默认 1 年，部署方可按发布节奏收紧；index.html no-store 为 SPA 更新语义不变量不配置化）
+  # Cache-Control：带 hash 文件名资源的 max-age（默认 1 年，按发布节奏收紧；index.html no-store 属 SPA 更新语义，不配置化）
   hash_max_age_secs: 31536000
-  # Cache-Control 分级：普通非 hash 资源 max-age（默认 1 小时，可按发布节奏收紧）
+  # Cache-Control：普通非 hash 资源的 max-age（默认 1 小时）
   asset_max_age_secs: 3600
 
 log:
   access_file: "logs/access.jsonl"
   level: "info"
-  # 访问日志降噪：
-  # sample_rate: 采样率（1 = 全量保审计；10 = 确定性采样 1/10——按请求序号 % rate == 0
-  #   记录，非随机数，审计可复现）
+  # 采样率（1=全量保审计；10=确定性采样 1/10，按请求序号 % rate == 0 记录，可复现）
   sample_rate: 1
-  # batch_size: 后台 sink 批量 flush 条目数（攒批后一次写文件 + 一次 flush，替代原每请求 flush）
+  # 后台 sink 每批 flush 条目数（攒批后一次写文件并 flush）
   batch_size: 100
-  # batch_interval_ms: 条目不足 batch_size 时的最长攒批等待（毫秒，保实时性）
+  # 条目不足 batch_size 时的最长攒批等待（毫秒，保实时性）
   batch_interval_ms: 500
-  # channel_capacity: 有界通道容量（满则丢弃并计数，保护请求路径——日志可丢，请求不可受影响）
+  # 有界通道容量（满则丢弃并计数，日志可丢、请求不可受影响）
   channel_capacity: 10000
-  # path_max_len / ua_max_len: 访问日志 path/ua 字段最大长度（字符，防日志注入/超长 query
-  #   撑爆日志行与 PGMQ 消息；与后端 fms.log.path-max-len / ua-max-len 收敛同值，后端兜底截断）
+  # path/ua 字段最大长度（字符，防日志注入与超长 query 撑爆日志行或 pgmq 消息；与后端 fms.log.path-max-len / ua-max-len 同值，后端兜底截断）
   path_max_len: 1024
   ua_max_len: 256
   pgmq:
-    # PGMQ 投递（HTTP 中转，架构铁律 INTERFACE.md 决策 1：网关不直连 PG/PGMQ）：
-    # 网关批量 POST 后端 {endpoint}（该路径豁免网关签名但需内部 token 校验），
-    # 后端批量 pgmq.send("q_log_access")，后端 cron 消费落 log.access_logs
-    enabled: false          # 默认关闭，不改变现有行为；开启后访问日志经 HTTP 中转投递 PGMQ 供审计落库
+    # 网关批量 POST 后端 {endpoint}（该路径豁免网关签名但校验内部 token），
+    # 后端 pgmq.send("q_log_access") 后由 cron 消费落 log.access_logs；网关不直连 PG/pgmq
+    enabled: false          # 开启后访问日志经 http 中转投递 pgmq 供审计落库
     endpoint: "/internal/log-batch"   # 后端批量接收路径
-    token: ""               # 内部 token（X-FMS-Int-Token）；经环境变量 FMS_RGW_LOG_TOKEN 注入，留空禁用
-    timeout_secs: 3         # 单次 HTTP 投递超时（秒）；弱网/大 batch 场景可调，经 FMS_RGW_LOG_TIMEOUT 覆盖
+    token: ""               # 内部 token（X-FMS-Int-Token），经 FMS_RGW_LOG_TOKEN 注入，留空禁用
+    timeout_secs: 3         # 单次 http 投递超时（秒），经 FMS_RGW_LOG_TIMEOUT 覆盖

@@ -1,7 +1,7 @@
-# 外部覆盖配置（联调注入 DB 密码；8082 旧实例连接池损坏，新实例用 8083；优先级高于 jar 内 application.yaml）
+# 外部覆盖配置（联调注入 DB 密码与端口；优先级高于 jar 内 application.yaml）
 server:
   port: 8083
 
 spring:
   datasource:
-    password: "FmsApp_2026_r7Xk#9mQ2vLpZ4sD"
+    password: "FmsApp_r7Xk#9mQ2vLpZ4sD"

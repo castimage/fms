@@ -279,7 +279,7 @@ services:
       FMS_RGW_LISTEN: 0.0.0.0:8443
       # 容器内必须为服务名而非 127.0.0.1:8081
       FMS_RGW_UPSTREAM: http://fms-backend:8081
-      # 与后端共享密钥（网关 lib.rs:47-68 校验 ≥32 字符且非占位符，违者 exit，1）
+      # 与后端共享密钥（网关启动校验不少于 32 字符且非占位符，违者启动失败）
       FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
       FMS_RGW_STATIC_DIR: /app/static
