@@ -22,7 +22,7 @@ public interface AuthService {
      * 登录（匿名端点，网关白名单放行）。
      *
      * @param req       登录请求
-     * @param ip        客户端 IP（XFF 首段或 remoteAddr）
+     * @param ip        客户端 ip（X-Real-IP、XFF 末段或 remoteAddr，经规范化）
      * @param userAgent 客户端 UA
      * @return 令牌对；2FA 启用时仅票据（mfaRequired=true）
      */

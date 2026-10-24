@@ -80,7 +80,7 @@ class TraceIdFilterTest {
     }
 
     @Test
-    void clientIpIsCapturedFromForwardedForFirstSegment() throws Exception {
+    void clientIpIsCapturedFromForwardedForLastSegment() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/org/companies");
         req.addHeader("X-Forwarded-For", "203.0.113.9, 10.0.0.1");
         MockHttpServletResponse resp = new MockHttpServletResponse();
@@ -89,7 +89,7 @@ class TraceIdFilterTest {
         new TraceIdFilter().doFilter(req, resp, (servletRequest, servletResponse) ->
                 seen.set(ClientIpContext.get()));
 
-        assertEquals("203.0.113.9", seen.get());
+        assertEquals("10.0.0.1", seen.get());
         assertNull(ClientIpContext.get(), "请求结束后必须清理");
     }
 
