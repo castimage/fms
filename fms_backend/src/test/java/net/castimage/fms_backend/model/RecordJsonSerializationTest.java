@@ -40,7 +40,7 @@ class RecordJsonSerializationTest {
         assertEquals("loginName", names.next().getKey());
         assertEquals("password", names.next().getKey());
         assertTrue(!names.hasNext(), "record DTO 序列化不得输出额外字段");
-        assertEquals("admin", node.get("loginName").asText());
+        assertEquals("admin", node.get("loginName").asString());
 
         // 反序列化，经规范构造器回填，含 @NotBlank 校验注解的组件
         LoginRequest back = jackson3.readValue(json, LoginRequest.class);
@@ -59,10 +59,10 @@ class RecordJsonSerializationTest {
         String json = jackson3.writeValueAsString(view);
         JsonNode node = jackson3.readTree(json);
         // uuid 序列化为标准字符串，非时间戳，日期为 ISO-8601
-        assertEquals("0197f2a4-6b3c-4e2f-8a1d-000000000001", node.get("id").asText());
-        assertEquals("2026-01-01", node.get("fiscalYearStart").asText());
-        assertEquals("2026-08-09T10:30:00", node.get("createdAt").asText());
-        assertEquals("C001", node.get("code").asText());
+        assertEquals("0197f2a4-6b3c-4e2f-8a1d-000000000001", node.get("id").asString());
+        assertEquals("2026-01-01", node.get("fiscalYearStart").asString());
+        assertEquals("2026-08-09T10:30:00", node.get("createdAt").asString());
+        assertEquals("C001", node.get("code").asString());
 
         CompanyView back = jackson3.readValue(json, CompanyView.class);
         assertEquals(view, back);

@@ -130,12 +130,6 @@ public class InMemoryNonceStore implements NonceStore {
     }
 
     private void cleanup(long now) {
-        Iterator<Map.Entry<String, Long>> it = nonces.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, Long> e = it.next();
-            if (e.getValue() <= now) {
-                it.remove();
-            }
-        }
+        nonces.entrySet().removeIf(e -> e.getValue() <= now);
     }
 }

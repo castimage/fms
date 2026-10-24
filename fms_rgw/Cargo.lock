@@ -661,6 +661,7 @@ dependencies = [
  "hyper-util",
  "ipnet",
  "jsonwebtoken",
+ "noyalib",
  "percent-encoding",
  "rand 0.10.3",
  "rcgen",
@@ -669,7 +670,6 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
- "serde_yml",
  "sha2 0.11.0",
  "thiserror",
  "tokio",
@@ -1860,16 +1860,6 @@ dependencies = [
  "form_urlencoded",
  "itoa",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_yml"
-version = "0.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "909764a65f86829ccdb5eea9ab355843aa02c019a7bfd47465092953565caa05"
-dependencies = [
- "noyalib",
  "serde",
 ]
 

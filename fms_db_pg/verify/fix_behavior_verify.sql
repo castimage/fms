@@ -135,7 +135,7 @@ ROLLBACK;
 
 -- trg_period_voucher_guard，CLOSED 期间内 DRAFT 凭证被拒
 
--- 硬编码 '2026-07' 会假设该期间 CLOSED，但 seed_data 为 2026-07/2026-08 双 OPEN，
+-- 硬编码 '2026-07' 会假设该期间 CLOSED，但 seed_demo 为 2026-07/2026-08 双 OPEN，
 -- 该假设与 demo 凭证日期冲突，在双 OPEN 库上 CHK7 恒打印误导性 FAIL，
 -- 故动态取最新 CLOSED 期间，无 CLOSED 期间时 SKIP 提示，不误报
 BEGIN;

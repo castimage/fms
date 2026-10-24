@@ -291,7 +291,7 @@ SELECT v.id, '00000000-0000-7000-0000-000000000010',
 ON CONFLICT (code) DO NOTHING;
 
 -- granted_by 按 login_name 解析 admin 的子查询，用户不存在时落 NULL（FK 允许），
--- um.users 为空时 role_perm_granted_by_fkey 不失败，seed_data 失败后重放本文件的场景
+-- um.users 为空时 role_perm_granted_by_fkey 不失败，seed_system 失败后重放本文件的场景
 INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
        (SELECT id FROM um.users WHERE login_name = 'admin' AND deleted_at IS NULL), now()

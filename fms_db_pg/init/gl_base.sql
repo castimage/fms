@@ -23,7 +23,7 @@ BEGIN
     RETURN NEW;
 END $$;
 
--- gl.chart_accounts 会计科目表（ltree 科目树，seed_data 种子 ON CONFLICT (company_id,code)）
+-- gl.chart_accounts 会计科目表（ltree 科目树，seed_demo 种子 ON CONFLICT (company_id,code)）
 -- CREATE TABLE IF NOT EXISTS（存量保留，schema 演进由本文件末尾段的幂等 ALTER 承担）
 CREATE TABLE IF NOT EXISTS gl.chart_accounts (
     id                  uuid        PRIMARY KEY DEFAULT uuidv7(),
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS gl.chart_accounts (
 CREATE INDEX IF NOT EXISTS ix_accounts_path   ON gl.chart_accounts USING GIST (path);   -- <@ 子树
 CREATE INDEX IF NOT EXISTS ix_accounts_parent ON gl.chart_accounts (parent_id) WHERE deleted_at IS NULL;
 
--- gl.periods 会计期间（seed_data 种子 ON CONFLICT (company_id,period)）
+-- gl.periods 会计期间（seed_demo 种子 ON CONFLICT (company_id,period)）
 CREATE TABLE IF NOT EXISTS gl.periods (
     id          uuid        PRIMARY KEY DEFAULT uuidv7(),
     company_id  uuid        NOT NULL,
@@ -688,7 +688,7 @@ SELECT 'gl_base' AS file_name,
 
 -- 唯一性由部分唯一索引 uk_voucher_line (WHERE deleted_at IS NULL) 承担，全行 UNIQUE 约束
 -- 会被软删行占键，更新路径软删+全量重插复用原 line_no 恒 23505，存量库追加的
--- 全行约束幂等清理，seed_data 演示凭证 ON CONFLICT 为带谓词形态，匹配部分唯一索引
+-- 全行约束幂等清理，seed_demo 演示凭证 ON CONFLICT 为带谓词形态，匹配部分唯一索引
 ALTER TABLE gl.voucher_lines DROP CONSTRAINT IF EXISTS uk_voucher_line_no;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_voucher_line
     ON gl.voucher_lines (voucher_id, line_no) WHERE deleted_at IS NULL;

@@ -1,5 +1,5 @@
 -- FMS 财务系统（init/ar_ap_cash_base），ar 5 表（customers/invoices/receipts/receipt_allocations/bad_debt_provision，核销唯一约束防重复核销）+ ap 6 表（suppliers/invoices/payments/payment_allocations/reconciliations/reconciliation_lines）+ cash 5 表（bank_accounts 列加密+盲索引/transactions/bank_statements/bank_statement_lines/reconcile_runs，对账 GIN trgm 索引）+ 全表 FORCE rls + 授权矩阵 + 审计捕获触发器挂载
--- rpt_log_base.sql immv/视图依赖 ar.receipt_allocations(amount/invoice_id)、cash.transactions(trx_date/direction/amount)、ar.invoices 列契约，seed_data.sql 种子依赖 ar.customers/ap.suppliers UNIQUE(company_id,code)、cash.bank_accounts UNIQUE(account_no_hash)
+-- rpt_log_base.sql immv/视图依赖 ar.receipt_allocations(amount/invoice_id)、cash.transactions(trx_date/direction/amount)、ar.invoices 列契约，seed_demo.sql 种子依赖 ar.customers/ap.suppliers UNIQUE(company_id,code)、cash.bank_accounts UNIQUE(account_no_hash)
 -- 主键约定，id uuid PRIMARY KEY DEFAULT uuidv7（pg 18 原生，时间有序），全部引用列 uuid，无声明 FK，语义引用，类型与目标主键一致
 -- 职责，ar.receipts 收款重复登记幂等防护，uk_ar_receipt_dedup 部分唯一索引（同客户/同金额/同日期/同账户仅一条有效收款单，重复 INSERT 23505 映射 40900，软删行不占键）
 -- 职责，uk_ar_customer_code/uk_ar_invoice_no/uk_ap_supplier_code/uk_ap_invoice_no

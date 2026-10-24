@@ -86,6 +86,7 @@ x-backend-env: &backend-env
   FMS_SMTP_PORT: ${FMS_SMTP_PORT:-465}
   FMS_SMTP_USERNAME: ${FMS_SMTP_USERNAME:-}
   FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
+  FMS_SMTP_FROM: ${FMS_SMTP_FROM:-}
 
 networks:
   # 与 docker-compose.yml 同一 bridge 网络（单机共享，多机部署时本文件
@@ -380,7 +381,7 @@ services:
       # 实例探测，故障实例自动摘除）
       FMS_RGW_UPSTREAM_MODE: auto
       FMS_RGW_UPSTREAM_SERVERS: http://fms-backend-1:8081,http://fms-backend-2:8081
-      # 与后端共享密钥（网关 lib.rs:47-68 校验 ≥32 字符且非占位符，违者 exit，1）
+      # 与后端共享密钥（网关启动校验不少于 32 字符且非占位符，违者启动失败）
       FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
       FMS_RGW_STATIC_DIR: /app/static

@@ -16,7 +16,7 @@
 --       rls 行级收敛保持 fail-closed，未注入上下文则 current_uid NULL，全部分支 false，回空集。
 --       由此 admin 以 fms_operator 登录角色 + 审计权限点放行全量，等价于以审计职责读取。
 
--- 依赖，init/um_perm.sql（auth.has_permission、audit:read:all 存量回填）与 init/seed_data.sql，auditor 角色种子。
+-- 依赖，init/um_perm.sql（auth.has_permission、audit:read:all 存量回填）与 init/seed_system.sql，auditor 角色种子。
 --       全部 DDL 幂等可重跑。
 SET ROLE fms_admin;
 

@@ -2,6 +2,8 @@ package net.castimage.fms_backend.Utils;
 
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.Mac;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -34,7 +36,7 @@ class TotpUtilsTest {
         assertTrue(url.startsWith("otpauth://totp/"));
         assertTrue(url.contains("secret=" + secret));
         assertTrue(url.contains("issuer=FMS%20Corp"));
-        assertTrue(url.contains("period=30&digits=6"));
+        assertTrue(url.contains("algorithm=SHA256&period=30&digits=6"));
         assertTrue(url.contains("%20")); // issuer/account 中空格 url 编码
     }
 
@@ -99,8 +101,8 @@ class TotpUtilsTest {
             counter >>= 8;
         }
         try {
-            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
-            mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA1"));
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
             byte[] hash = mac.doFinal(msg);
             int offset = hash[hash.length - 1] & 0x0F;
             int binary = ((hash[offset] & 0x7F) << 24)

@@ -387,7 +387,7 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     /**
      * 启动报销审批实例并回填 wf_instance_id（幂等：已挂接跳过）：按公司查 ACTIVE 报销
-     * 审批流定义（code=expense_reimburse，seed_data 种子），经 wf.fn_start_instance
+     * 审批流定义（code=expense_reimburse，seed_system 种子），经 wf.fn_start_instance
      * （SECURITY DEFINER）原子创建 RUNNING 实例并激活首个 APPROVE 节点任务集，首节点
      * 与处理人展开由引擎读定义 node_json 完成；定义缺失/未激活跳过。
      */

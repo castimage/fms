@@ -23,8 +23,8 @@ RUN sh -c 'if [ -f package-lock.json ]; then npm ci; else npm install; fi'
 COPY . .
 RUN npm run build
 
-# 阶段二，交付层，Alpine 3.20 精简镜像，仅执行拷贝动作，不运行任何服务
-FROM alpine:3.20
+# 阶段二，交付层，Alpine 3.22 精简镜像，仅执行拷贝动作，不运行任何服务
+FROM alpine:3.22
 
 WORKDIR /app
 

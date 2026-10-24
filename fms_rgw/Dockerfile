@@ -1,6 +1,6 @@
 # fms_rgw 的多阶段构建镜像，compose 服务名为 fms-gateway
 # 阶段一 builder 用 rust:1.94-slim 执行 cargo build --release
-# 阶段二 runtime 用 debian:bookworm-slim 最小化，非 root 用户运行，uid 与 gid 固定 10001
+# 阶段二 runtime 用 debian:trixie-slim 最小化，非 root 用户运行，uid 与 gid 固定 10001
 # 对外暴露 8443 走 tls，静态资源目录 /app/static 以卷挂载，镜像不内置前端构建产物
 # 健康检查探 /healthz，证书齐备时走 https，缺证书的降级配置下回退明文探测
 # 本地构建用 docker build -t fms_rgw .，运行参数由 compose 承担
@@ -28,7 +28,7 @@ COPY src ./src
 RUN cargo build --release
 
 # 阶段二，运行层
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # curl 供健康检查使用，ca-certificates 保证 https 出站可用
 RUN apt-get update \

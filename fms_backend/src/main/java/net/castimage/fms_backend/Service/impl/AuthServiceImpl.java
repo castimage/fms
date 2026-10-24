@@ -36,7 +36,6 @@ import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.MailService;
 import net.castimage.fms_backend.Utils.PasswordUtils;
 import net.castimage.fms_backend.Utils.RequestContext;
-import net.castimage.fms_backend.Utils.RequestUtil;
 import net.castimage.fms_backend.Utils.TotpUtils;
 import net.castimage.fms_backend.Utils.WeakPasswordFilter;
 import org.springframework.stereotype.Service;
@@ -118,7 +117,7 @@ public class AuthServiceImpl implements AuthService {
      * locked/disabled/bad_password/success），审计落库失败仅 WARN 不影响主流程。
      *
      * @param req       登录请求（loginName + password）
-     * @param ip        客户端 ip（经 RequestUtil.sanitizeIp 消毒后落审计）
+     * @param ip        客户端 ip（getClientIp 已规范化）
      * @param userAgent 客户端 ua 字符串，审计用，可为空
      * @return 登录响应，2fa 启用时为 mfaRequired 票据，首步恒 false，否则为 access/refresh 令牌对
      * @throws UnauthorizedException 账号不存在/锁定/禁用/口令错误，40100
@@ -704,7 +703,7 @@ public class AuthServiceImpl implements AuthService {
         try {
             authFunctionMapper.recordLogin(userId,
                     loginName == null ? "" : loginName,
-                    RequestUtil.sanitizeIp(ip),
+                    ip,
                     userAgent == null ? "" : userAgent,
                     success, failReason);
         } catch (RuntimeException e) {

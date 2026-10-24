@@ -42,7 +42,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
 
         // 先注入仅含 traceId 的上下文，供下游填充身份与异常兜底取用
         RequestContext.set(new RequestContext(null, null, null, null, traceId));
-        ClientIpContext.set(RequestUtil.sanitizeIp(RequestUtil.getClientIp(request)));
+        ClientIpContext.set(RequestUtil.getClientIp(request));
         MDC.put(TraceIdUtil.MDC_KEY, traceId);
 
         // 响应头在链前写回，保证下游，含 4xx/5xx 响应恒携带，

@@ -65,13 +65,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         // 滑动窗口计数，先计数再判限，被拒请求同样计入，滑动窗口语义与 totpFailRecord 一致，
-        // ip 经 sanitizeIp 清洗，非法值归 0.0.0.0，防键膨胀
-        String key = KEY_PREFIX + type + ":" + RequestUtil.sanitizeIp(RequestUtil.getClientIp(request));
+        // getClientIp 已规范化，非法值归 0.0.0.0，防键膨胀
+        String ip = RequestUtil.getClientIp(request);
+        String key = KEY_PREFIX + type + ":" + ip;
         long count = cachePort.increment(key, WINDOW);
         if (count > limit) {
             log.warn("后端限流触发 type={} ip={} count={} limit={} path={}",
-                    type, RequestUtil.sanitizeIp(RequestUtil.getClientIp(request)),
-                    count, limit, uri);
+                    type, ip, count, limit, uri);
             // 429 + 42900 统一错误响应（四字段 {code,message,data:null,traceId}，错误路径 data 恒 null）
             response.setStatus(429);
             response.setContentType("application/json;charset=UTF-8");

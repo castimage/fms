@@ -4,7 +4,7 @@
 
 -- 执行顺序由 deploy/init/fms_init.sh 白名单调度，全部 DDL/种子幂等可重跑
 
--- 种子常量，ADMIN_UID=00000000-0000-7000-0000-000000000001、COMPANY_UID=00000000-0000-7000-0000-000000000010，模块 id 常量 …500 起、权限生成器 0x60c，1548 十进制起 141 条（seed_data 存量 12 条占 …600-…60b）
+-- 种子常量，ADMIN_UID=00000000-0000-7000-0000-000000000001、COMPANY_UID=00000000-0000-7000-0000-000000000010，模块 id 常量 …500 起、权限生成器 0x60c，1548 十进制起 141 条（seed_system 存量 12 条占 …600-…60b）
 
 SET ROLE fms_admin;
 
@@ -217,7 +217,7 @@ CREATE INDEX IF NOT EXISTS ix_permissions_req    ON um.permissions USING GIN (re
 -- 兼容性结论，现有 12 条种子与 role_perm 全部保留，新增列除 identifier NOT NULL 外均可空/有默认值，uk_permissions_code(code) 保留不删
 
 -- 权限种子（按子模块动作矩阵生成，code=identifier 兼容 uk_permissions_code，全部 ON CONFLICT 幂等）
--- 显式 id 常量 …60c-…698 顺序分配（seed_data 存量 12 条占 …600-…60b，生成器从 0x60c 起 141 条），pg 核心无 uuid 算术运算符，计数器用 to_hex/lpad 文本合成保序常数（十进制 1548 = 0x60c）
+-- 显式 id 常量 …60c-…698 顺序分配（seed_system 存量 12 条占 …600-…60b，生成器从 0x60c 起 141 条），pg 核心无 uuid 算术运算符，计数器用 to_hex/lpad 文本合成保序常数（十进制 1548 = 0x60c）
 DO $$
 DECLARE
     m record; a text; v_actions text[];
@@ -326,7 +326,7 @@ BEGIN
     END IF;
 END $$;
 
--- 存量回填，seed_data 种子行无授权人则记为 admin（ADMIN_UID 常量）、时间取 created_at
+-- 存量回填，seed_system 种子行无授权人则记为 admin（ADMIN_UID 常量）、时间取 created_at
 UPDATE um.role_perm SET granted_by = '00000000-0000-7000-0000-000000000001',
                         granted_at = COALESCE(granted_at, created_at)
  WHERE granted_by IS NULL;
@@ -341,14 +341,14 @@ BEGIN
     END IF;
 END $$;
 
-COMMENT ON COLUMN um.role_perm.granted_by IS '授权人（um.users.id；存量 seed_data 种子行回填 admin=00000000-0000-7000-0000-000000000001）';
+COMMENT ON COLUMN um.role_perm.granted_by IS '授权人（um.users.id；存量 seed_system 种子行回填 admin=00000000-0000-7000-0000-000000000001）';
 COMMENT ON COLUMN um.role_perm.granted_at IS '授权时间（存量回填 created_at）';
 COMMENT ON COLUMN um.role_perm.valid_until IS '角色-权限有效期（NULL=长期）；判定时过期即失效';
 COMMENT ON COLUMN um.user_role.valid_until IS '用户-角色有效期（NULL=长期）；判定时过期即失效';
 
 -- 授权种子，全部幂等，admin 角色全量授权，补新权限，+ admin 用户直接权限示例，长期特批 + 临时 7 天演示 reason/valid_until
 -- granted_by 按 login_name 解析 admin 的子查询，用户不存在时落 NULL（FK 允许），在
--- um.users 为空的库上，seed_data 失败后重放本文件，role_perm_granted_by_fkey 不失败，
+-- um.users 为空的库上，seed_system 失败后重放本文件，role_perm_granted_by_fkey 不失败，
 -- 既有回填逻辑（granted_by IS NULL 则按 admin）语义不变
 INSERT INTO um.role_perm (company_id, role_id, perm_id, granted_by, granted_at)
 SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id,
