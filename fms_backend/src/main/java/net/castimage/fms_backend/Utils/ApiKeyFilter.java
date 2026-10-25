@@ -53,13 +53,11 @@ public class ApiKeyFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/public/files/");
     }
 
+    /** api-key 校验服务，SECURITY DEFINER 函数闸口 */
     private final ApiKeyService apiKeyService;
-    private final boolean bypassGateway;
 
-    /**
-     * @param apiKeyService api-key 校验服务，SECURITY DEFINER 函数闸口
-     * @param bypassGateway 仅本地开发跳过签名校验，生产必须 false，跳过时本过滤器整体放行
-     */
+    /** 仅本地开发跳过签名校验，生产必须 false，跳过时本过滤器整体放行 */
+    private final boolean bypassGateway;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
