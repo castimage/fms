@@ -17,7 +17,7 @@
     <properties>
         <java.version>25</java.version>
         <mybatis-plus.version>3.5.15</mybatis-plus.version>
-        <postgresql.version>42.7.11</postgresql.version>
+        <postgresql.version>42.7.14</postgresql.version>
         <guava.version>33.4.0-jre</guava.version>
         <otp-java.version>2.1.0</otp-java.version>
         <uuid-creator.version>6.0.0</uuid-creator.version>
@@ -149,7 +149,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.18.3</version>
+            <version>2.18.12</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
