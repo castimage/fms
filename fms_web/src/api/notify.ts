@@ -1,6 +1,6 @@
 /**
  * 通知 api，/api/notify，4 端点与 NotifyController 一一对应，本人通知分页/未读数/单条已读/全部已读。
- * WebSocket 端点 /api/nt/ws，NotifyWebSocketEndpoint，网关按同路径精确匹配升级请求并转发，
+ * WebSocket 端点 /api/nt/ws，NotifyWebSocketHandler，网关按同路径精确匹配升级请求并转发，
  * 握手在 query 携带访问令牌，网关校验后按令牌主体改写 uid 再转发，服务端连接即回推未读数。
  */
 import { request } from './http'
