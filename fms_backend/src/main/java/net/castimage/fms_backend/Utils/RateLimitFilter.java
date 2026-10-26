@@ -65,7 +65,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         // 滑动窗口计数，先计数再判限，被拒请求同样计入，滑动窗口语义与 totpFailRecord 一致，
-        // getClientIp 已规范化，非法值归 0.0.0.0，防键膨胀
+        // 非法值归 0.0.0.0，防键膨胀
         String ip = RequestUtil.getClientIp(request);
         String key = KEY_PREFIX + type + ":" + ip;
         long count = cachePort.increment(key, WINDOW);
