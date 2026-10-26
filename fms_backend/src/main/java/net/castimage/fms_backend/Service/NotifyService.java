@@ -5,7 +5,7 @@ import net.castimage.fms_backend.Model.vo.NotificationView;
 import java.util.UUID;
 
 /** 通知模块业务接口（notify）：本人通知分页/未读数/已读标记 + WebSocket 实时推送未读数
- * （连接建立与已读动作后经 NotifyWebSocketEndpoint 推送 {"type":"unread_count","count":N}）
+ * （连接建立与已读动作后经 NotifyWebSocketHub 推送 {"type":"unread_count","count":N}）
  * + 系统公告全量广播（ADMIN 专属，SECURITY DEFINER 批量 INSERT + 全量 WS 推送） */
 public interface NotifyService {
 

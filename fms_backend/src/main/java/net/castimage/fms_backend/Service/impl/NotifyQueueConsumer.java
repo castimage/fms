@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
 import net.castimage.fms_backend.Mapper.NotificationMapper;
 import net.castimage.fms_backend.Service.NotifyService;
 import net.castimage.fms_backend.Utils.JwtRole;
@@ -55,6 +54,7 @@ public class NotifyQueueConsumer {
 
     private final NotificationMapper notificationMapper;
     private final NotifyService notifyService;
+    private final NotifyWebSocketHub wsHub;
     private final FmsProperties fmsProperties;
 
     /** 轮询两条队列（固定延迟：上一轮完成后再等 interval，防堆叠） */
@@ -216,7 +216,7 @@ public class NotifyQueueConsumer {
     private void pushUnreadCount(UUID assigneeId) {
         RequestContext.set(new RequestContext(assigneeId, JwtRole.VIEWER, null, null, null));
         try {
-            NotifyWebSocketEndpoint.sendToUser(assigneeId,
+            wsHub.sendToUser(assigneeId,
                     "{\"type\":\"unread_count\",\"count\":"
                             + notifyService.unreadCount(assigneeId) + "}");
         } catch (RuntimeException e) {
@@ -229,7 +229,7 @@ public class NotifyQueueConsumer {
     /** 全量广播预算预警（本地与跨实例，载荷带标题供前端刷新角标与列表），尽力而为，理由同未读数推送 */
     private void pushBroadcast(String title) {
         try {
-            NotifyWebSocketEndpoint.broadcast(JSONObject.of(
+            wsHub.broadcast(JSONObject.of(
                     "type", "budget_warning", "title", title).toJSONString());
         } catch (RuntimeException e) {
             log.warn("预算预警广播推送失败（角标待下次连接自愈）: {}", e.getMessage());

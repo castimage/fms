@@ -2,7 +2,6 @@ package net.castimage.fms_backend.Service.impl;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
 import net.castimage.fms_backend.Exception.NotFoundException;
 import net.castimage.fms_backend.Exception.UnauthorizedException;
 import net.castimage.fms_backend.Mapper.NotificationMapper;
@@ -19,7 +18,7 @@ import java.util.UUID;
 /**
  * 通知模块业务实现：身份一律取 RequestContext（网关签名校验采信），SQL 恒带 user_id 过滤
  * （RLS 按 auth.current_uid() = user_id 兜底，双层防御）；已读为原子 UPDATE（WHERE user_id
- * 归属校验，0 行则 40400）；已读动作后经 NotifyWebSocketEndpoint 推送本人最新未读数
+ * 归属校验，0 行则 40400）；已读动作后经 NotifyWebSocketHub 推送本人最新未读数
  * （JSON {"type":"unread_count","count":N}，实时角标刷新）。
  */
 @Service
@@ -27,6 +26,7 @@ import java.util.UUID;
 public class NotifyServiceImpl implements NotifyService {
 
     private final NotificationMapper notificationMapper;
+    private final NotifyWebSocketHub wsHub;
 
 
     /** {@inheritDoc} */
@@ -60,7 +60,7 @@ public class NotifyServiceImpl implements NotifyService {
             throw new NotFoundException("通知不存在或无权操作");
         }
         // 已读后推送本人最新未读数（连接建立时同样推送一次）
-        NotifyWebSocketEndpoint.sendToUser(userId, unreadPayload(userId));
+        wsHub.sendToUser(userId, unreadPayload(userId));
     }
 
     /** {@inheritDoc} */
@@ -69,7 +69,7 @@ public class NotifyServiceImpl implements NotifyService {
     public int markAllRead() {
         UUID userId = RequestContext.requireUserId();
         int affected = notificationMapper.markAllRead(userId);
-        NotifyWebSocketEndpoint.sendToUser(userId, unreadPayload(userId));
+        wsHub.sendToUser(userId, unreadPayload(userId));
         return affected;
     }
 
@@ -84,7 +84,7 @@ public class NotifyServiceImpl implements NotifyService {
         // 幂等：同 ref_type+ref_id+title 已存在则整批跳过，防 cron/重试重复）
         notificationMapper.broadcastNotification(title, content, refType, refId);
         // 全量 WS 推送：本地全量 + 跨实例广播（uid=null 哨兵，远端实例订阅端本地全量）
-        NotifyWebSocketEndpoint.broadcast(JSONObject.of(
+        wsHub.broadcast(JSONObject.of(
                 "type", "announcement", "title", title).toJSONString());
     }
 

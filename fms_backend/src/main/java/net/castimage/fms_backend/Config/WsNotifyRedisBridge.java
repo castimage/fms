@@ -4,7 +4,7 @@ package net.castimage.fms_backend.Config;
 import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import net.castimage.fms_backend.Controller.NotifyWebSocketEndpoint;
+import net.castimage.fms_backend.Service.impl.NotifyWebSocketHub;
 import net.castimage.fms_backend.Utils.UuidV7;
 import net.castimage.fms_backend.Utils.WsNotifyBroadcaster;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -21,9 +21,10 @@ import java.util.UUID;
 
 /**
  * WebSocket 通知跨实例广播装配，仅 fms.session-store=redis 时生效，
- * 多后端实例下用户 ws 连接可能挂在任意实例，已读事件在业务实例推送时本地会话表
- * 无该用户，SESSIONS 为进程内静态表，经 Redis pub/sub（channel fms:ws:notify）
- * 广播，各实例订阅后查本地会话表推送。消息带发送方实例 id，自收消息跳过防重复，本地推送由 sendToUser 先行执行，广播仅服务远端实例。
+ * 多后端实例下用户 ws 连接可能挂在任意实例，已读事件在业务实例推送时本实例会话表
+ * 无该用户，经 Redis pub/sub（channel fms:ws:notify）广播，各实例订阅后查本实例
+ * 会话表推送。消息带发送方实例 id，自收消息跳过防重复，本地推送由 sendToUser 先行执行，
+ * 广播仅服务远端实例。
  *
  * in-memory 模式装配 no-op 广播器，单实例语义，零开销。
  */
@@ -64,8 +65,6 @@ public class WsNotifyRedisBridge {
             }
         };
 
-        // 装配期注入静态引用，端点由 WebSocket 容器按连接实例化，无 Spring 注入能力
-        NotifyWebSocketEndpoint.setBroadcaster(broadcaster);
         return broadcaster;
     }
 
@@ -73,7 +72,7 @@ public class WsNotifyRedisBridge {
     @Bean
     @ConditionalOnProperty(name = "fms.session-store", havingValue = "redis")
     public RedisMessageListenerContainer wsNotifyListenerContainer(
-            RedisConnectionFactory connectionFactory) {
+            RedisConnectionFactory connectionFactory, NotifyWebSocketHub wsHub) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener((message, pattern) -> {
@@ -87,9 +86,9 @@ public class WsNotifyRedisBridge {
                 String payload = msg.getString("payload");
                 if (uidText == null || uidText.isBlank()) {
                     // 全量广播，系统公告/公司级预警，本实例所有在线会话全量推送
-                    NotifyWebSocketEndpoint.broadcastLocal(payload);
+                    wsHub.broadcastLocal(payload);
                 } else {
-                    NotifyWebSocketEndpoint.sendLocal(UUID.fromString(uidText), payload);
+                    wsHub.sendLocal(UUID.fromString(uidText), payload);
                 }
             } catch (RuntimeException e) {
                 // 广播消息解析失败仅 WARN，通知推送属尽力而为，不影响订阅与业务

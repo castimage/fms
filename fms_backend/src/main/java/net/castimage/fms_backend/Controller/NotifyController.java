@@ -21,7 +21,7 @@ import java.util.UUID;
 /**
  * 通知模块 REST 接口（/api/notify）：本人通知列表/未读数/单条已读/全部已读 +
  * 系统公告广播（/announcements，仅 ADMIN，成功后全量 WS 推送）；
- * WebSocket 端点为 /ws/notify（见 NotifyWebSocketEndpoint，连接即推送未读数，
+ * WebSocket 端点为 /api/nt/ws（见 NotifyWebSocketHandler，连接即推送未读数，
  * 已读动作后增量推送）。身份取 RequestContext（网关签名校验采信），RLS user_id 兜底。
  */
 @RestController

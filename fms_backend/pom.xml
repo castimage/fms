@@ -30,6 +30,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Spring WebSocket：通知实时通道的 Handler/握手拦截器体系 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!-- 参数校验：jakarta.validation（@Valid/@NotBlank 等） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
