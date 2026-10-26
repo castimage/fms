@@ -77,8 +77,8 @@ impl DenyRemote for RedisDenyRemote {
 /// 语义不同，网关侧撤销是ttl内的尽力失效层。
 ///
 /// 容量语义，条目ttl = 令牌自身exp，access默认2h量级，表大小与ttl内
-/// 登出令牌数成正比，上限有限，进程重启即清空(与后端内存黑名单同语义，
-/// 登出后服务重启的残余窗口可接受，令牌ttl本身有限)。
+/// 登出令牌数成正比，上限有限；进程重启清空进程内表，redis 远端条目按自身
+/// ttl 保留，撤销不因重启失效。
 pub struct TokenDenyList {
     inner: Mutex<HashMap<String, i64>>,
     /// 多网关共享远端(memory模式`None`)

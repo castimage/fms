@@ -1,0 +1,9 @@
+# fms_rgw 的 Docker 构建排除清单
+# target/ 为宿主 cargo 构建产物，容器内会重新编译，送入上下文只会拖慢构建并占用磁盘
+# config/ 必须保留，镜像需要内置配置模板
+
+target/
+.git
+.idea/
+*.md
+*.log

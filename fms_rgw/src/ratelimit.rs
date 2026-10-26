@@ -2,6 +2,9 @@
 //! 热路径无跨片锁，每key独立滑动窗口精确计数，维度ip每窗100次、用户每窗200次(`mw_auth`内)、
 //! 登录端点每窗10次，按ip收敛防撞库，超限429 + `Retry-After`，`max_keys`上限 + 60s周期cleanup
 //!
+//! 可选 redis 后端以 ZSET 时间戳 + WATCH/MULTI 乐观事务实现同语义滑动窗口，
+//! 多网关实例共享计数，任一实例超限即全局限流
+//!
 //! 调用关系，`mw_rate_limit`，安全链第二层调`tier_of`/`rate_key`/check，`mw_auth`验签后
 //! 按用户维度调check，main每60s调cleanup
 #![forbid(unsafe_code)]
@@ -17,7 +20,8 @@ use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 /// 限流错误，超限并给出`Retry-After`秒数，最少1s，`Backend` = 后端故障
 /// redis不可达，fail-closed按500拒绝，区别于429
@@ -204,9 +208,9 @@ fn ceil_secs(d: Duration) -> u64 {
 }
 
 /// 限流后端抽象，memory，默认，零外部依赖，单网关实例精确计数| redis
-/// 多网关实例共享计数，同一key跨实例原子INCR，任一实例超限即全局限流。
-/// check为同步签名，中间件热路径，Redis后端经blocking连接(本地毫秒级，
-/// 多实例收益大于单点阻塞成本)。
+/// 多网关实例共享计数，ZSET 时间戳 + WATCH/MULTI 乐观事务滑动窗口，
+/// 任一实例超限即全局限流。check为同步签名，中间件热路径，Redis后端经
+/// blocking连接(本地毫秒级，多实例收益大于单点阻塞成本)。
 pub trait RateLimitBackend: Send + Sync {
     /// 窗口内计数 +1并判限，超limit 则返回 `Err`(`Exceeded`)，否则记录并放行
     fn check(&self, key: &str, limit: u32, window: Duration) -> Result<(), RateLimitError>;
@@ -225,14 +229,26 @@ impl RateLimitBackend for RateLimiter {
     }
 }
 
-/// Redis共享限流后端，INCR + EXPIRE，ttl滚动 = 滑动窗口，过期自动归零，
-/// 与`RedisCachePort`同款原子语义，计数 > limit 则返回 `Err`(fail-closed，redis不可达
-/// 时check抛错，由中间件按500拒绝，宁可拒不可放)。
+/// 当前 unix 毫秒，时间戳写入 ZSET score；多实例依赖 NTP 同步
+fn unix_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Redis共享限流后端，ZSET 时间戳 + WATCH/MULTI 乐观事务，与内存实现同语义。
+/// 读阶段用 ZCOUNT 判断窗口内计数，放行时 MULTI 写入并清理旧记录；EXEC 返回
+/// 空表示键被其它实例改动，重新读取后重试。redis 不可达、命令失败或重试耗尽
+/// 返回 Backend，由中间件按 500 fail-closed 拒绝
 pub struct RedisRateLimiter {
     client: redis::Client,
 }
 
 impl RedisRateLimiter {
+    /// 单次限流的最大尝试次数，乐观事务冲突耗尽按后端故障拒绝
+    const MAX_ATTEMPTS: usize = 8;
+
     pub fn new(redis_url: &str) -> Result<Self, redis::RedisError> {
         Ok(Self {
             client: redis::Client::open(redis_url)?,
@@ -252,23 +268,70 @@ impl RateLimitBackend for RedisRateLimiter {
             .get_connection()
             .map_err(|_| RateLimitError::Backend)?;
 
-        // INCR原子自增 + EXPIRE刷新ttl(两步非严格原子，EXPIRE失败仅窗口未刷新，
-        // 计数偏严不偏松，与CachePort increment同取舍)
-        let count: i64 = redis::cmd("INCR")
-            .arg(key)
-            .query(&mut conn)
-            .unwrap_or(0);
-        let _: Result<(), _> = redis::cmd("EXPIRE")
-            .arg(key)
-            .arg(window.as_secs())
-            .query(&mut conn);
+        let window_ms = i64::try_from(window.as_millis()).unwrap_or(i64::MAX);
+        for attempt in 1..=Self::MAX_ATTEMPTS {
+            let now_ms = unix_millis();
+            let cutoff = now_ms.saturating_sub(window_ms);
 
-        if count > limit as i64 {
-            return Err(RateLimitError::Exceeded {
-                retry_after_secs: window.as_secs().max(1),
-            });
+            // WATCH 后读取计数与最旧记录，一条 pipeline 完成；只读不删，
+            // 保证判定与 EXEC 之间不产生自身写入
+            let (count, oldest): (i64, Vec<(String, f64)>) = redis::pipe()
+                .cmd("WATCH")
+                .arg(key)
+                .ignore()
+                .cmd("ZCOUNT")
+                .arg(key)
+                .arg(cutoff.saturating_add(1))
+                .arg("+inf")
+                .cmd("ZRANGEBYSCORE")
+                .arg(key)
+                .arg(cutoff.saturating_add(1))
+                .arg("+inf")
+                .arg("WITHSCORES")
+                .arg("LIMIT")
+                .arg(0)
+                .arg(1)
+                .query(&mut conn)
+                .map_err(|_| RateLimitError::Backend)?;
+
+            if count >= i64::from(limit) {
+                let _: redis::RedisResult<()> = redis::cmd("UNWATCH").exec(&mut conn);
+                let retry_ms = oldest
+                    .first()
+                    .map(|(_, score)| (*score as i64 + window_ms - now_ms).max(1))
+                    .unwrap_or(1);
+                return Err(RateLimitError::Exceeded {
+                    retry_after_secs: u64::try_from((retry_ms + 999) / 1000).unwrap_or(1).max(1),
+                });
+            }
+
+            // 放行时清旧记录、写入本次时间戳并续期；EXEC 返回 None 表示 WATCH 冲突，
+            // 成功时为各命令结果数组（此处仅 ZADD 未 ignore）
+            let written: Option<Vec<i64>> = redis::pipe()
+                .atomic()
+                .cmd("ZREMRANGEBYSCORE")
+                .arg(key)
+                .arg(0)
+                .arg(cutoff)
+                .ignore()
+                .cmd("ZADD")
+                .arg(key)
+                .arg(now_ms)
+                .arg(Uuid::now_v7().to_string())
+                .cmd("PEXPIRE")
+                .arg(key)
+                .arg(window_ms.saturating_add(1000))
+                .ignore()
+                .query(&mut conn)
+                .map_err(|_| RateLimitError::Backend)?;
+            if written.is_some() {
+                return Ok(());
+            }
+            // 冲突后短暂让出，降低多实例同时重读再次碰撞的概率
+            std::thread::sleep(Duration::from_micros(150 * attempt as u64));
         }
-        Ok(())
+
+        Err(RateLimitError::Backend)
     }
 }
 
@@ -487,6 +550,95 @@ mod tests {
         } else {
             panic!("应返回 Exceeded，实际 {err:?}");
         }
+    }
+
+    #[test]
+    fn redis_limit_zero_is_fail_closed_without_connection() {
+        // limit=0 在连接前返回，配置错误不得因 redis 可达性放行
+        let rl = RedisRateLimiter::new("redis://127.0.0.1:1").unwrap();
+        assert_eq!(
+            rl.check("ip:x", 0, Duration::from_secs(60)),
+            Err(RateLimitError::Exceeded {
+                retry_after_secs: 1
+            })
+        );
+    }
+
+    /// Redis 滑动窗口语义回归，需设置 FMS_TEST_REDIS_URL（如 redis://127.0.0.1:6379），
+    /// 未设置时跳过，避免无 Redis 环境失败
+    #[test]
+    fn redis_sliding_window_does_not_accumulate() {
+        let Ok(url) = std::env::var("FMS_TEST_REDIS_URL") else {
+            return;
+        };
+        let rl = RedisRateLimiter::new(&url).expect("redis url 非法");
+        let key = format!("fms:test:ratelimit:{}", Uuid::now_v7());
+        let window = Duration::from_millis(1200);
+        assert!(rl.check(&key, 2, window).is_ok());
+        std::thread::sleep(Duration::from_millis(700));
+        assert!(rl.check(&key, 2, window).is_ok());
+        std::thread::sleep(Duration::from_millis(700));
+        // 距首条已 1400ms，首条滑出窗口，窗口内仅剩 1 条，应放行而非继续累计
+        assert!(
+            rl.check(&key, 2, window).is_ok(),
+            "滑动窗口不应因持续低频访问累计到永久拒绝"
+        );
+        assert!(matches!(
+            rl.check(&key, 2, window),
+            Err(RateLimitError::Exceeded { .. })
+        ));
+        let mut conn = redis::Client::open(url).unwrap().get_connection().unwrap();
+        let _: Result<i64, _> = redis::cmd("DEL").arg(&key).query(&mut conn);
+    }
+
+    /// 并发打同一 key 时窗口内成功次数恰为 limit，验证 WATCH/MULTI 无丢更新；
+    /// 需设置 FMS_TEST_REDIS_URL，未设置时跳过
+    #[test]
+    fn redis_sliding_window_concurrent_never_exceeds_limit() {
+        let Ok(url) = std::env::var("FMS_TEST_REDIS_URL") else {
+            return;
+        };
+        let limiter = Arc::new(RedisRateLimiter::new(&url).expect("redis url 非法"));
+        let key = format!("fms:test:ratelimit:concurrent:{}", Uuid::now_v7());
+        let threads = 8usize;
+        let per_thread = 5usize;
+        let limit = 5u32;
+        let barrier = Arc::new(std::sync::Barrier::new(threads));
+
+        let mut handles = Vec::with_capacity(threads);
+        for _ in 0..threads {
+            let limiter = Arc::clone(&limiter);
+            let barrier = Arc::clone(&barrier);
+            let key = key.clone();
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                let mut allowed = 0usize;
+                let mut exceeded = 0usize;
+                let mut backend = 0usize;
+                for _ in 0..per_thread {
+                    match limiter.check(&key, limit, Duration::from_secs(30)) {
+                        Ok(()) => allowed += 1,
+                        Err(RateLimitError::Exceeded { .. }) => exceeded += 1,
+                        Err(RateLimitError::Backend) => backend += 1,
+                    }
+                }
+                (allowed, exceeded, backend)
+            }));
+        }
+
+        let (mut allowed, mut exceeded, mut backend) = (0, 0, 0);
+        for handle in handles {
+            let (a, e, b) = handle.join().expect("线程异常");
+            allowed += a;
+            exceeded += e;
+            backend += b;
+        }
+        assert_eq!(allowed, limit as usize, "窗口内成功次数应恰为 limit");
+        assert_eq!(exceeded, threads * per_thread - limit as usize);
+        assert_eq!(backend, 0, "事务冲突不应耗尽重试");
+
+        let mut conn = redis::Client::open(url).unwrap().get_connection().unwrap();
+        let _: Result<i64, _> = redis::cmd("DEL").arg(&key).query(&mut conn);
     }
 
     async fn echo_ok() -> &'static str {

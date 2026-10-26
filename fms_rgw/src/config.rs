@@ -456,7 +456,7 @@ pub struct RateLimitCfg {
     ///
     /// `memory`，默认，无外部依赖，单网关实例
     ///
-    /// `redis` (多网关实例共享计数，经`redis_url`连接，任一实例超限则全局限流，防止多实例分散攻击)
+    /// `redis` (多网关实例共享计数，ZSET + WATCH/MULTI 乐观事务滑动窗口，经`redis_url`连接，任一实例超限则全局限流，防止多实例分散攻击)
     pub backend: String,
     /// redis后端连接url，默认空
     ///
