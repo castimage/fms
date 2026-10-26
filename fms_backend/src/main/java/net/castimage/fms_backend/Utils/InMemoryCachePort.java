@@ -5,14 +5,21 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * CachePort 内存实现，fms.session-store 缺省=in-memory，保持单实例既有行为，
- * ConcurrentHashMap + 过期时刻（epoch millis），key 命名空间与 Redis 实现一一对应，fms:nonce: 等前缀，防跨实现漂移，见 CachePort 契约。过期条目惰性清理，读路径只判过期不删除，避免写放大，@Scheduled 兜底清扫回收长尾。
+ * CachePort 内存实现，fms.session-store 缺省=in-memory，保持单实例既有行为。
+ * 普通条目用 ConcurrentHashMap + 过期时刻（epoch millis），滑动窗口用独立
+ * ConcurrentHashMap + 时间戳队列，key 命名空间与 Redis 实现一一对应，防跨实现漂移，
+ * 见 CachePort 契约。过期条目惰性清理，读路径只判过期不删除，避免写放大，
+ * @Scheduled 兜底清扫回收长尾。
  *
  * 线程安全性，所有写路径走 CHM 原子方法（putIfAbsent/compute/computeIfPresent），
  * 并发下不丢写、不覆盖并发先行的新窗口，与 Redis 原子命令（SETNX/INCR/LPOP）语义对齐。
@@ -26,6 +33,19 @@ public class InMemoryCachePort implements CachePort {
 
     /** 全量存储（key 到条目），按 CachePort 命名空间前缀区分业务域 */
     private final Map<String, Entry> store = new ConcurrentHashMap<>();
+
+    /** 滑动窗口（key 到时间戳队列），仅在 checkSlidingWindow 路径使用 */
+    private final Map<String, Window> slidingWindows = new ConcurrentHashMap<>();
+
+    /** 滑动窗口条目，时间戳按升序保存，窗口内最多 limit 条 */
+    private static final class Window {
+        private final long windowMillis;
+        private final ArrayDeque<Long> timestamps = new ArrayDeque<>();
+
+        private Window(long windowMillis) {
+            this.windowMillis = windowMillis;
+        }
+    }
 
     @Override
     public boolean setIfAbsent(String key, String value, Duration ttl) {
@@ -71,6 +91,7 @@ public class InMemoryCachePort implements CachePort {
     @Override
     public void delete(String key) {
         store.remove(key); // 不存在静默成功
+        slidingWindows.remove(key);
     }
 
     @Override
@@ -79,7 +100,7 @@ public class InMemoryCachePort implements CachePort {
         long expireAt = now + ttl.toMillis();
         long[] holder = new long[1];
 
-        // compute 原子自增，过期/不存在按 0 起计，首写 1，每次调用刷新过期时刻，滑动窗口
+        // compute 原子自增，过期/不存在按 0 起计，首写 1，每次调用刷新过期时刻，滚动窗口
         store.compute(key, (k, existing) -> {
             long base = 0;
             if (existing != null && existing.expireAtMillis() > now) {
@@ -92,10 +113,65 @@ public class InMemoryCachePort implements CachePort {
     }
 
     @Override
+    public long incrementFixedWindow(String key, Duration ttl) {
+        long now = System.currentTimeMillis();
+        long expireAt = now + ttl.toMillis();
+        long[] holder = new long[1];
+
+        // compute 原子自增，过期/不存在按 0 起计并设过期时刻，窗口内自增保持原过期时刻不续期
+        store.compute(key, (k, existing) -> {
+            if (existing != null && existing.expireAtMillis() > now) {
+                holder[0] = Long.parseLong(existing.value()) + 1;
+                return new Entry(Long.toString(holder[0]), existing.expireAtMillis());
+            }
+            holder[0] = 1;
+            return new Entry("1", expireAt);
+        });
+        return holder[0];
+    }
+
+    @Override
+    public SlidingWindowResult checkSlidingWindow(String key, Duration window, long limit) {
+        if (window == null || window.isZero() || window.isNegative()) {
+            throw new IllegalArgumentException("window 必须为正");
+        }
+        if (limit < 0) {
+            throw new IllegalArgumentException("limit 不能为负");
+        }
+        long windowMillis = window.toMillis();
+        long now = System.currentTimeMillis();
+        long cutoff = now - windowMillis;
+        SlidingWindowResult[] result = new SlidingWindowResult[1];
+
+        // compute 对同一 key 串行，裁剪、判限、写入不可分割；不同 key 可并行
+        slidingWindows.compute(key, (k, existing) -> {
+            Window current = existing != null ? existing : new Window(windowMillis);
+            while (!current.timestamps.isEmpty() && current.timestamps.peekFirst() <= cutoff) {
+                current.timestamps.pollFirst();
+            }
+            if (current.timestamps.size() >= limit) {
+                long retry = current.timestamps.isEmpty() ? 1L
+                        : Math.max(1L, current.timestamps.peekFirst() + windowMillis - now);
+                result[0] = new SlidingWindowResult(false, current.timestamps.size(), retry);
+                return current.timestamps.isEmpty() ? null : current;
+            }
+            // 时钟回拨时保持队列升序，避免最旧记录取值失真
+            long timestamp = current.timestamps.isEmpty() ? now
+                    : Math.max(now, current.timestamps.peekLast());
+            current.timestamps.addLast(timestamp);
+            result[0] = new SlidingWindowResult(true, current.timestamps.size(), 0L);
+            return current;
+        });
+        return result[0];
+    }
+
+    @Override
     public long approximateSize(String keyPrefix) {
-        // 含前缀条目数，水位监控与容量推导口径，非精确计数的场景不存在于内存实现，全表可见
+        // 两类存储的 key 命名空间不重叠，合并去重后统计，避免同一 key 两处存在时重复计数
+        Set<String> keys = new HashSet<>(store.keySet());
+        keys.addAll(slidingWindows.keySet());
         long count = 0;
-        for (String key : store.keySet()) {
+        for (String key : keys) {
             if (key.startsWith(keyPrefix)) {
                 count++;
             }
@@ -118,6 +194,16 @@ public class InMemoryCachePort implements CachePort {
                 it.remove();
                 removed++;
             }
+        }
+        // 滑动窗口按各自窗口时长裁剪，空窗口直接移除
+        for (String key : List.copyOf(slidingWindows.keySet())) {
+            slidingWindows.computeIfPresent(key, (k, window) -> {
+                long cutoff = now - window.windowMillis;
+                while (!window.timestamps.isEmpty() && window.timestamps.peekFirst() <= cutoff) {
+                    window.timestamps.pollFirst();
+                }
+                return window.timestamps.isEmpty() ? null : window;
+            });
         }
         if (removed > 0) {
             log.debug("InMemoryCachePort 定时清理过期条目: {}", removed);

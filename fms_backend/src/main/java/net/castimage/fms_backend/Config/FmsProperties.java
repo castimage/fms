@@ -149,7 +149,7 @@ public class FmsProperties {
     }
 
     /**
-     * jwt 配置，secret 与网关 auth.jwt_secret 及 pg um.params['jwt.secret'] 三方一致，access 2h / refresh 7d。
+     * jwt 配置，secret 与网关 auth.jwt_secret 及 pg sec.app_secrets 的 jwt.secret 三方一致，access 2h / refresh 7d。
      */
     @Getter
     @Setter
@@ -367,10 +367,11 @@ public class FmsProperties {
     }
 
     /**
-     * 后端补充限流，fms.rate-limit.*，纵深防御，网关已有首道限流，本段为绕过网关
-     * 直连后端时的补充闸，仅覆盖三个敏感/匿名入口，login/recovery 防爆破、/internal/log-batch
-     * 防日志注入泛滥，不重复限流业务 /api/** 全量，避免与网关双倍影响。滑动窗口
-     * 计数经 CachePort（fms:ratelimit:{type}:{ip}，increment+ttl=60s）。
+     * 后端补充限流，fms.rate-limit.*，纵深防御，网关已有首道限流，本段补签名合法但
+     * 高频的请求，仅覆盖三个敏感/匿名入口，不重复限流业务 /api/** 全量。
+     * login/recovery 走精确滑动窗口（键 fms:ratelimit:sw:{type}:{ip}，任意 60 秒
+     * 窗口内不超过阈值，被拒请求不计数，429 带 Retry-After）；/internal/log-batch
+     * 走固定窗口（键 fms:ratelimit:{type}:{ip}，拒绝也计数，不设 Retry-After）。
      */
     @Getter
     @Setter

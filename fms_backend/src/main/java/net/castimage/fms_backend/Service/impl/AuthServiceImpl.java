@@ -199,8 +199,9 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    // 失败路径先落登录审计再抛 UnauthorizedException，事务不回滚以保全审计记录，与 login 同口径
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public LoginResponse verifyTotp(TotpVerifyRequest req, String ip, String userAgent) {
         // 会话态经 CachePort 收敛，多实例共享，2fa 票据 A 实例签发、B 实例可验证，
         // ttl 过期即 key 消失，解析失败按"票据无效"处理（fail-closed）

@@ -137,11 +137,11 @@ public class WebConfig implements WebMvcConfigurer {
     }
 
     /**
-     * 后端补充限流（纵深防御，order=4）：网关已有首道限流，本过滤器覆盖绕过网关直连
-     * 后端的三个敏感入口（login/recovery 匿名爆破、/internal/log-batch 日志注入泛滥）——
-     * /internal/log-batch 在签名过滤器（urlPatterns=/api/*）覆盖之外，须以独立 urlPatterns
-     * 注册；不重复限流业务 /api/** 全量（避免与网关双倍影响）。滑动窗口计数经 CachePort
-     * （redis 模式全局计数，多实例共享）。
+     * 后端补充限流（纵深防御，order=4）：网关已有首道限流，本过滤器覆盖三个敏感入口
+     * （login/recovery 匿名爆破、/internal/log-batch 日志注入泛滥）——/internal/log-batch
+     * 在签名过滤器（urlPatterns=/api/*）覆盖之外，须以独立 urlPatterns 注册；不重复限流
+     * 业务 /api/** 全量（避免与网关双倍影响）。login/recovery 走滑动窗口，internal-batch
+     * 走固定窗口，计数经 CachePort（redis 模式全局共享）。
      */
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilter(CachePort cachePort) {

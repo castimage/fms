@@ -68,7 +68,7 @@ public class AuthController {
     }
 
     /**
-     * 登出（可空请求体）：access/refresh 入内存黑名单。
+     * 登出（可空请求体）：access/refresh 写入 CachePort 黑名单。
      */
     @PostMapping("/logout")
     public ApiResponse<Void> logout(@RequestBody(required = false) @Valid LogoutRequest req) {

@@ -15,7 +15,7 @@ import net.castimage.fms_backend.Model.dto.TotpSetupResponse;
 import net.castimage.fms_backend.Model.dto.TotpVerifyRequest;
 import net.castimage.fms_backend.Model.vo.UserSessionView;
 
-/** 认证模块业务接口（登录/刷新/登出/2FA/找回/会话）：登录先 BCrypt 校验，再做锁定/禁用检查，随后 auth.jwt_sign 签发或两步票据；refresh 验签断言 type=refresh 后重签；登出令牌入内存黑名单 */
+/** 认证模块业务接口（登录/刷新/登出/2FA/找回/会话）：登录先 BCrypt 校验，再做锁定/禁用检查，随后 auth.jwt_sign 签发或两步票据；refresh 验签断言 type=refresh 后重签；登出令牌写入 CachePort 黑名单 */
 public interface AuthService {
 
     /**
@@ -49,7 +49,7 @@ public interface AuthService {
     LoginResponse refresh(RefreshRequest req);
 
     /**
-     * 登出：access/refresh 入内存黑名单（TTL 内失效）。
+     * 登出：access/refresh 写入 CachePort 黑名单（TTL 内失效）。
      *
      * @param req 登出请求（可空）
      */
@@ -118,7 +118,7 @@ public interface AuthService {
      * 自助改密（已认证）：旧密码复验 + 弱密码预检通过则 auth.set_password 写 BCrypt，再
      * auth.update_user 清 must_change_pwd，随后 auth.record_login 记 um.login_log
      * （success=true + fail_reason='password_changed'）；请求携带的令牌原值入
-     * 内存黑名单（当前会话立即失效，他端会话 TTL 内自然失效）。
+     * CachePort 黑名单（当前会话立即失效，他端会话 TTL 内自然失效）。
      *
      * @param req       改密请求（oldPassword/newPassword + 可选令牌）
      * @param ip        客户端 IP

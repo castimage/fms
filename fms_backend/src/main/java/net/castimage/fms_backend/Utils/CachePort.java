@@ -16,14 +16,18 @@ import java.util.Optional;
  * nonce 去重（第二道闸）与票据登记共用；
  * {@link #set}：覆盖写入 + TTL（黑名单/pending secret）；
  * {@link #get} / {@link #delete}：按 key 读/删（key 不存在恒 Optional.empty / 静默成功）；
- * {@link #increment}：原子自增并返回自增后值；首次写入设 TTL（TTL 内过期自动归零——
- * TOTP 连续失败计数滑动窗口语义，fail 时每次刷新 TTL 即滚动窗口）；
+ * {@link #increment}：原子自增并返回自增后值；每次调用刷新 TTL（TOTP 连续失败计数
+ * 滚动窗口语义，fail 时续期，成功时由调用方删除）；
+ * {@link #incrementFixedWindow}：原子自增并返回自增后值；首次写入设 TTL，后续自增
+ * 不续期，TTL 到期整体归零（固定窗口限流语义，窗口从首次请求起算）；
+ * {@link #checkSlidingWindow}：按时间戳精确判定滑动窗口，窗口内已达 limit 则拒绝且
+ * 不记录本次，放行才写入时间戳（滑动窗口限流语义，任意窗口内不超过 limit）；
  * {@link #approximateSize}：近似条目数（内存=全表 size；redis=SCAN 统计，仅水位监控
  * 与容量推导用，非精确计数）。
  *
  * key 命名空间（redis 键与内存键一一对应，防跨实现漂移）：
  * fms:nonce:、fms:ticket:、fms:recovery:、fms:pending:、fms:totpfail:、fms:blacklist:、
- * fms:alert:（安全告警去重标记，同 ip 登录失败/审计链断链/主从复制异常三类，抢占式写入）
+ * fms:alert:、fms:ratelimit:sw:（滑动窗口限流，固定窗口计数键为 fms:ratelimit:）
  *
  * 安全告警去重标记也用 setIfAbsent 抢占：多实例同跑定时告警，抢到标记的实例才发站内信，
  * 恢复时 delete 标记，故标记须与其他键同样具备原子写入与 TTL 语义。
@@ -46,8 +50,32 @@ public interface CachePort {
     /** 删除 key（不存在静默成功） */
     void delete(String key);
 
-    /** 原子自增（返回自增后值）；首次写入设 TTL，此后每次调用刷新 TTL（滑动窗口语义） */
+    /** 原子自增（返回自增后值）；首次写入设 TTL，此后每次调用刷新 TTL（滚动窗口语义） */
     long increment(String key, Duration ttl);
+
+    /** 原子自增（返回自增后值）；首次写入设 TTL，后续自增不续期，TTL 到期整体归零（固定窗口） */
+    long incrementFixedWindow(String key, Duration ttl);
+
+    /**
+     * 精确滑动窗口限流检查：以时间戳记录窗口内每次放行，先剔除早于 now-window 的记录，
+     * 窗口内已放行数达到 limit 则拒绝且不记录本次，否则记录本次时间戳并放行。
+     * 同一 key 的 window 须保持一致。
+     *
+     * 返回 allowed 时 count 为写入后计数，拒绝时 count 为当前计数（不含本次）；
+     * retryAfterMillis 拒绝时为最旧记录 + window - now（最少 1），放行时为 0。
+     * 两种实现语义逐条一致；redis 实现以 WATCH/MULTI 保证判定与写入原子，
+     * 事务冲突重试 10 次后抛异常，由调用方按 500 拒绝（fail-closed）。
+     *
+     * @param key    限流键，调用方负责命名空间
+     * @param window 滑动窗口时长，须为正
+     * @param limit  窗口内允许上限，可为 0（全部拒绝）
+     * @return 判定结果
+     */
+    SlidingWindowResult checkSlidingWindow(String key, Duration window, long limit);
+
+    /** 滑动窗口判定结果，字段含义见 {@link #checkSlidingWindow} */
+    record SlidingWindowResult(boolean allowed, long count, long retryAfterMillis) {
+    }
 
     /**
      * 近似条目数（prefix 过滤；水位监控与容量推导用，非精确计数）：

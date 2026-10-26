@@ -95,7 +95,7 @@ fms:
       false-positive-rate: 0.01       # 误判率（误判仅多一次 HashSet 查询，无拒绝风险）
       mark-on-login: true             # 登录命中弱密码即标记 requirePasswordChange
   jwt:
-    secret: ${FMS_JWT_SECRET:change-me-at-least-32-chars-0123456789abcdef}        # 与 fms_rgw auth.jwt_secret 及 PG um.params['jwt.secret'] 同值
+    secret: ${FMS_JWT_SECRET:change-me-at-least-32-chars-0123456789abcdef}        # 与 fms_rgw auth.jwt_secret 及 PG sec.app_secrets 的 jwt.secret 同值；后端签发由 DB 函数读库内密钥，本项为配置占位
     issuer: fms                       # 与 fms_rgw expected_iss 对齐
     audience: fms-gateway             # 与 fms_rgw expected_aud 对齐
     access-ttl: 2h                    # access token 有效期（会话 TTL 已配置化）
@@ -146,9 +146,9 @@ fms:
     reset-subject: "FMS 密码重置"
     reset-body-template: "您好 {loginName}：\n您正在找回 FMS 财务系统登录密码。\n重置票据：{ticket}\n有效期至：{expiresAt}\n请妥善保管，勿转发他人。"
   rate-limit:
-    internal-batch-per-min: 600       # /internal/log-batch 每 ip 每分钟上限（网关已有首道限流，后端为绕过网关直连时的补充闸）
-    login-per-min: 20                 # /api/auth/login 每 ip 每分钟上限（防绕过网关直连爆破）
-    recovery-per-min: 10              # /api/auth/recovery 每 ip 每分钟上限（防找回接口被当邮件轰炸器）
+    internal-batch-per-min: 600       # /internal/log-batch 每 ip 固定 60 秒窗口上限，拒绝也计数，不设 Retry-After
+    login-per-min: 20                 # /api/auth/login 每 ip 任意 60 秒滑动窗口上限，被拒不计数，429 带 Retry-After
+    recovery-per-min: 10              # /api/auth/recovery 每 ip 任意 60 秒滑动窗口上限，防找回接口被当邮件轰炸器
   ui:
     page-sizes: [10, 20, 50]          # 列表分页每页条数选项（DataTable/Pager 经 /api 下发收敛，删除前端硬编码）
   report:

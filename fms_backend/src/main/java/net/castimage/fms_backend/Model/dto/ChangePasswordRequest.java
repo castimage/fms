@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 /**
  * 自助改密请求（已认证端点 POST /api/auth/change-password）：旧密码复验 + 新密码弱密码
  * 预检后经 auth.set_password 写库（pass_hash 列级不可直写）；accessToken/refreshToken
- * 可空携带，改密成功后由服务端入内存黑名单（当前会话立即失效，强制重新登录）。
+ * 可空携带，改密成功后由服务端写入 CachePort 黑名单（当前会话立即失效，强制重新登录）。
  */
 public record ChangePasswordRequest(
         /** 旧密码（BCrypt 复验，语义与 auth.verify_login 一致） */
