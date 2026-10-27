@@ -71,8 +71,8 @@ limits:
     - "/internal/"
 
 trace:
-  # traceId 采样率（百分比语义：100=全量；10=确定性采样 10%，按请求序号 % 100 < rate 采样，可复现；未采样请求不注入 X-Trace-Id，日志 req_id 为空；与 log.sample_rate 独立）
-  sample_rate: 10
+  # traceId 采样率（百分比语义：100=全量，默认；10=确定性采样 10%，按请求序号 % 100 < rate 采样，可复现；未采样请求不注入 X-Trace-Id，日志 req_id 为空；与 log.sample_rate 独立）
+  sample_rate: 100
 
 circuit:
   error_threshold_pct: 50

@@ -494,18 +494,18 @@ impl Default for RateLimitCfg {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct TraceCfg {
-    /// traceId采样率，默认10，10%
+    /// traceId采样率，默认100，100%
     ///
-    /// 百分比语义，100=全量生成透传完整traceId，10=确定性采样10%，
+    /// 百分比语义，100=全量生成透传完整traceId（默认），10=确定性采样10%，
     /// 请求序号seq%100<rate才采样，非随机数可复现，未采样请求不注入`X-Trace-Id`、
-    /// 日志`req_id`为空，生产需全量链路追踪可显式调为100
+    /// 日志`req_id`为空
     pub sample_rate: u32,
 }
 
 /// trace采样配置的默认值
 impl Default for TraceCfg {
     fn default() -> Self {
-        Self { sample_rate: 10 }
+        Self { sample_rate: 100 }
     }
 }
 
@@ -754,8 +754,8 @@ mod tests {
             cfg.limits.skip_paths,
             vec!["/assets/", "/healthz", "/favicon", "/internal/"]
         );
-        // trace采样默认降采样，10%，与log.sample_rate，全量1相互独立
-        assert_eq!(cfg.trace.sample_rate, 10, "trace 默认 10% 降采样");
+        // trace采样默认全量，100%，与log.sample_rate（全量1）相互独立
+        assert_eq!(cfg.trace.sample_rate, 100, "trace 默认全量采样");
         assert_eq!(cfg.auth.logout_blacklist_ttl_secs, 7200);
         assert_eq!(cfg.ws.upgrade_timeout_secs, 10);
         assert_eq!(cfg.upstream.pool_max_idle_per_host, 16);

@@ -195,7 +195,7 @@ pub(crate) fn now_secs() -> i64 {
 }
 
 /// 中间件，安全链最外层，traceId确定性采样 + 生成/透传 + 计时。采样判定
-/// (`trace.sample_rate`百分比语义，默认10%降采样)由全局最外层的`mw_access_log`
+/// (`trace.sample_rate`百分比语义，默认100%全量采样)由全局最外层的`mw_access_log`
 /// 先行判定并经extensions.`TraceSampled`共享，本层读取复用，采样的请求，合法uuid
 /// 的`X-Trace-Id`透传复用，否则生成新uuid，注入`TraceCtx`并写回请求头，未采样请求，
 /// 不透传不生成，移除客户端旧值，防旧traceId穿到上游/日志，`X-Trace-Id`不注入、

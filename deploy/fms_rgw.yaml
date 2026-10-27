@@ -29,6 +29,10 @@ auth:
 sign:
   sign_secret: ""
 
+trace:
+  # 链路追踪采样率，100=全量，未采样请求不注入 X-Trace-Id
+  sample_rate: 100
+
 cors:
   # 白名单必须非空，空列表会被网关启动校验拒绝；该字段无环境变量覆盖点，只能修改本文件
   # 生产部署在此追加正式域名（如 https://fms.example.com）；
