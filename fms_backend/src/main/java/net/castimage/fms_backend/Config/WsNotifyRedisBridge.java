@@ -43,7 +43,7 @@ public class WsNotifyRedisBridge {
     @Bean
     @ConditionalOnProperty(name = "fms.session-store", havingValue = "redis")
     public WsNotifyBroadcaster redisWsNotifyBroadcaster(StringRedisTemplate stringRedisTemplate) {
-        WsNotifyBroadcaster broadcaster = new WsNotifyBroadcaster() {
+        return new WsNotifyBroadcaster() {
             /** 指定用户推送，uid 带值，订阅端按用户查本地会话表 */
             @Override
             public void broadcast(UUID uid, String payload) {
@@ -64,8 +64,6 @@ public class WsNotifyRedisBridge {
                 stringRedisTemplate.convertAndSend(CHANNEL, msg.toJSONString());
             }
         };
-
-        return broadcaster;
     }
 
     /** 订阅容器，收到广播若非本实例消息则按 uid 处理，为 null 走本地全量，否则按用户查本地会话表推送，防自收重复 */
