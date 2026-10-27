@@ -9,10 +9,10 @@ import org.apache.ibatis.annotations.Select;
  * send，循环移入 DB 内避免 N 次 JDBC 往返；函数内部逐条
  * pgmq.send 容错（单条失败 NOTICE 继续，best-effort），返回成功 send 条数。
  *
- * 权限模型：/internal 路径免网关签名，GatewaySignatureFilter 的 shouldNotFilter 放行，
- * 请求无身份采信，Controller 置 SandboxRoleHint.Hint.INTERNAL_OPERATOR，拦截器复位会话态后
- * SET ROLE fms_operator，函数 SECURITY DEFINER 以属主 fms_admin 身份执行绕过角色限制，
- * EXECUTE 授 fms_operator 与 fms_admin，REVOKE PUBLIC 兜底，新建函数必须自查。
+ * 权限模型：/internal 路径不在 GatewaySignatureFilter 的 urlPatterns(/api/*) 内，不经过网关
+ * 签名过滤器，请求无身份采信，Controller 置 SandboxRoleHint.Hint.INTERNAL_OPERATOR，拦截器
+ * 复位会话态后 SET ROLE fms_operator，函数 SECURITY DEFINER 以属主 fms_admin 身份执行绕过
+ * 角色限制，EXECUTE 授 fms_operator 与 fms_admin，REVOKE PUBLIC 兜底，新建函数必须自查。
  */
 public interface LogQueueMapper {
 

@@ -8,13 +8,14 @@ import com.alibaba.fastjson2.annotation.JSONField;
  * rgw 侧 serde 未配置 rename_all，字段名默认 = Rust 标识符即 snake_case；fms_rgw log.rs
  * entries_serialize_as_json_array_for_pgmq 单测断言这 9 个键）。其中 req_id = trace_id、
  * user = 验签通过 claims.sub、匿名/未认证为 null。
- * Java record 组件保持驼峰命名（reqId/latencyMs），经 @JsonProperty 显式映射 JSON 键
+ * Java record 组件保持驼峰命名（reqId/latencyMs），经 @JSONField 显式映射 JSON 键
  * req_id / latency_ms（fastjson2：record 组件注解即属性映射；未知键默认
- * 静默忽略——两端口径必须逐字一致，否则 reqId/latencyMs 绑 null，q_log_access 的
- * req_id/trace_id/latency 审计列恒空）。
- * 全部字段可空（网关 Option 字段 JSON 序列化为 null）——后端侧按
+ * 静默忽略——两端口径必须逐字一致，否则 reqId/latencyMs 绑 null，
+ * q_log_access 的 req_id/latency 键为空，落库后 trace_id/latency_ms 为空）。
+ * ip/user/ua 可空（网关 Option 字段序列化为 null），ts/req_id/method/path/status/latency_ms
+ * 网关始终输出；record 组件均为引用类型，缺键时为 null。后端侧按
  * q_log_access 约定重映射后批量投递 PGMQ，缺省由消费链兜底（fn_consume_log_queues：
- * method 缺省 GET、path 缺省 /，status/latency/ip 非法置 NULL）。
+ * method 缺省 GET、path 缺省 /，status/latency 空串置 NULL、非数字整条跳过，ip 非法置 NULL）。
  */
 public record AccessLogItem(
         /** RFC3339 UTC（毫秒精度） */

@@ -62,16 +62,16 @@ public class InternalLogController {
      * 批量接收访问日志并投递 pgmq q_log_access（best-effort）。
      *
      * @param token 内部 token（头 X-FMS-Int-Token，缺失/不匹配/未配置则 40300 fail-closed）
-     * @param items 日志条目数组（[{ts,req_id,method,path,status,latency_ms,ip,user,ua}...]，
-     * 与 rgw AccessLogEntry serde 序列化逐字一致，Java 组件经 @JsonProperty 映射）
+     * @param rawBody 网关批量日志 JSON 数组字符串（[{ts,req_id,method,path,status,latency_ms,ip,user,ua}...]，
+     * 与 rgw AccessLogEntry serde 序列化逐字一致，方法内按 AccessLogItem 的 @JSONField 映射解析）
      * @return {@code {accepted: N}}，N 为成功 send 条数，整批失败为 0，不抛错
      */
     @PostMapping("/log-batch")
     public ApiResponse<Map<String, Integer>> logBatch(
             @RequestHeader(name = HEADER_INT_TOKEN, required = false) String token,
             @RequestBody String rawBody) {
-        // 内部投递角色提示，匿名请求经 SandboxSessionInterceptor 注入 fms_operator（日志投递函数
-        // EXECUTE 授 fms_operator，fms_app 仅 CONNECT + 认证函数）
+        // 内部投递角色提示，匿名请求经 SandboxSessionInterceptor 注入 fms_operator；
+        // 日志投递函数 EXECUTE 授 fms_operator，fms_app 对该函数无 EXECUTE
         SandboxRoleHint.set(SandboxRoleHint.Hint.INTERNAL_OPERATOR);
         try {
             // 解析（fastjson2 手动，与项目统一，@RequestBody 自动绑定走 Boot 默认 Jackson 3
