@@ -12,8 +12,10 @@
 -- 共享映射，消息体到 log.access_logs 行的字段映射收敛为 log.fn_apply_access_log 单一函数，
 --       queues_cron.sql 消费链与本文件降级路径共同调用，杜绝三处复制漂移。
 
--- 权限，/internal 路径后端以 fms_app 空壳连接执行，无身份采信，SandboxSessionInterceptor 跳过
---       注入，函数 SECURITY DEFINER 以属主 fms_admin 执行绕过角色与 rls，EXECUTE 仅授 fms_app。
+-- 权限，/internal 路径 Controller 置 SandboxRoleHint.Hint.INTERNAL_OPERATOR，无身份采信，
+--       SandboxSessionInterceptor 复位会话态后 SET ROLE fms_operator，函数 SECURITY DEFINER
+--       以属主 fms_admin 执行绕过角色与 rls；本文件先授 fms_app，init/role_fms_public.sql
+--       随后收回并授 fms_operator，最终职责角色侧仅 fms_operator 可执行。
 -- grants_base.sql 的 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA log FROM PUBLIC 早于本文件执行，
 --       新建函数默认 PUBLIC EXECUTE，本文件必须显式 REVOKE 兜底。
 
@@ -25,8 +27,9 @@ SET ROLE fms_admin;
 -- 单行 INSERT。单一映射源，queues_cron.sql 的 fn_consume_log_queues 与下方 fn_send_access_batch 降级
 -- 分支共同调用，杜绝第三份复制。键名对齐 契约 {method,path,status,latency,ip,ts}
 -- + 扩展 ua + 消费链别名 user_id/trace_id，latency 为整数毫秒键，非网关原始 latency_ms，
--- 语义与 queues_cron.sql 消费链一致，method/path 空值兜底、status/latency 空则 NULL、ip 非法则 NULL、
--- ts 空/非法则 now、user_agent 取 ua 键。
+-- 语义与 queues_cron.sql 消费链一致，method/path 缺键或 NULL 兜底为 GET 与 /（空串原样）、
+-- status/latency 缺键或空串置 NULL、非数字抛错跳过，ip 非法则 NULL，
+-- ts 缺键或空串则 now、非法抛错跳过，user_agent 取 ua 键。
 -- SECURITY DEFINER（属主 fms_admin），仅内部调用，PUBLIC 显式收回。
 CREATE OR REPLACE FUNCTION log.fn_apply_access_log(p_msg jsonb)
 RETURNS void
@@ -61,7 +64,8 @@ COMMENT ON FUNCTION log.fn_apply_access_log(jsonb) IS
 '访问日志共享落库映射：q_log_access 消息体 -> log.access_logs 单行（init/queues_cron.sql 消费链与 fn_send_access_batch 降级路径共用，单一映射源防漂移）；SECURITY DEFINER（属主 fms_admin）';
 
 -- 最小授权，内部调用链（消费/降级函数同为 SECURITY DEFINER 属主 fms_admin）本无需授权，
--- 与 fn_send_access_batch 同款显式收回 PUBLIC 后仅授 fms_app，保持最小授权约定一致
+-- 与 fn_send_access_batch 同款收回 PUBLIC 后先授 fms_app；init/role_fms_public.sql
+-- 随后收回 fms_app 并授 fms_operator，最终职责角色侧由 fms_operator 执行
 REVOKE ALL ON FUNCTION log.fn_apply_access_log(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log.fn_apply_access_log(jsonb) TO fms_app;
 
@@ -121,9 +125,10 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION log.fn_send_access_batch(jsonb) IS
-'访问日志批量投递（双路径）：PGMQ 可用走 q_log_access 队列（init/queues_cron.sql 消费链落库），不可用经 log.fn_apply_access_log 直落 log.access_logs 兜底；单条失败 NOTICE 继续，返回成功条数；SECURITY DEFINER（属主 fms_admin）供 fms_app 空壳直调，配合后端 /internal/log-batch 端点';
+'访问日志批量投递（双路径）：PGMQ 可用走 q_log_access 队列（init/queues_cron.sql 消费链落库），不可用经 log.fn_apply_access_log 直落 log.access_logs 兜底；单条失败 NOTICE 继续，返回成功条数；SECURITY DEFINER（属主 fms_admin）供 fms_operator 经后端 /internal/log-batch 调用';
 
--- 最小授权，grants_base.sql 的 REVOKE PUBLIC 先于本文件执行，新建函数默认 PUBLIC EXECUTE，显式收回后仅授 fms_app
+-- 最小授权，grants_base.sql 的 REVOKE PUBLIC 先于本文件执行，新建函数默认 PUBLIC EXECUTE，
+-- 显式收回后先授 fms_app；init/role_fms_public.sql 随后收回并授 fms_operator
 REVOKE ALL ON FUNCTION log.fn_send_access_batch(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION log.fn_send_access_batch(jsonb) TO fms_app;
 
@@ -148,7 +153,7 @@ SELECT '27_chk_fallback' AS chk,
   FROM log.access_logs;
 ROLLBACK;
 
--- 文件末尾自查（配合 psql -v ON_ERROR_STOP=1），两个函数存在 + fms_app 可执行 + PUBLIC 已收回
+-- 文件末尾自查（配合 psql -v ON_ERROR_STOP=1），两个函数存在 + 本文件执行时点 fms_app 可执行 + PUBLIC 已收回
 SELECT 'log_access_batch' AS file_name,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'log' AND p.proname IN ('fn_send_access_batch', 'fn_apply_access_log')) AS fn_cnt,

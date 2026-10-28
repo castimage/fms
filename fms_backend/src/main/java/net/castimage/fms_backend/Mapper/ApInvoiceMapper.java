@@ -105,6 +105,7 @@ public interface ApInvoiceMapper extends BaseMapper<ApInvoice> {
      * @param date      对账单行交易日期（|差|≤3 天）
      * @param amount    对账单行金额（与发票总额相等）
      * @param summary   对账单行摘要（similarity 数据源）
+     * @param limit     候选返回条数上限
      * @return 候选列表（降序）
      */
     @Select("""
