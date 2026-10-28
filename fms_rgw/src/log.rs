@@ -392,7 +392,7 @@ fn truncate(s: &str, max: usize) -> String {
 /// 日志路径组装，任意路径下对query中token= 参数统一脱敏(防ws握手jwt明文落盘，
 /// 日志文件可能被采集/外传/轮转归档，与路径精确匹配解耦，变体路径同样脱敏)，
 /// token值长度 > 8即掩码，短值保留，jwt恒 >8，路径截断长度取配置，默认1024
-fn log_path(uri: &axum::http::Uri, max_path_len: usize) -> String {
+fn log_path(uri: &Uri, max_path_len: usize) -> String {
     let p = uri.path();
     match uri.query() {
         Some(q) => truncate(&format!("{p}?{}", mask_token_param(q)), max_path_len),
@@ -466,7 +466,7 @@ pub async fn mw_access_log(
         String::new()
     };
     if sampled
-        && let Ok(hv) = axum::http::HeaderValue::from_str(&trace_id)
+        && let Ok(hv) = HeaderValue::from_str(&trace_id)
     {
         req.headers_mut().insert("x-trace-id", hv);
     }
@@ -564,26 +564,26 @@ mod tests {
 
     #[test]
     fn log_path_masks_ws_token_and_truncates() {
-        let uri: axum::http::Uri = "/api/nt/ws?token=eyJhbGciOiJIUzI1NiJ9.signature"
+        let uri: Uri = "/api/nt/ws?token=eyJhbGciOiJIUzI1NiJ9.signature"
             .parse()
             .unwrap();
         assert_eq!(log_path(&uri, 1024), "/api/nt/ws?token=***", "WS token 必须脱敏");
-        let uri: axum::http::Uri = "/api/nt/ws".parse().unwrap();
+        let uri: Uri = "/api/nt/ws".parse().unwrap();
         assert_eq!(log_path(&uri, 1024), "/api/nt/ws", "无 query 原样记录");
-        let uri: axum::http::Uri = "/api/gl/vouchers?page=1&size=20".parse().unwrap();
+        let uri: Uri = "/api/gl/vouchers?page=1&size=20".parse().unwrap();
         assert_eq!(
             log_path(&uri, 1024),
             "/api/gl/vouchers?page=1&size=20",
             "非 WS 路径保留 query"
         );
         // 脱敏与路径规范解耦，任意路径的token= 长值统一掩码
-        let uri: axum::http::Uri = "/api/x?token=eyJhbGciOiJIUzI1NiJ9.sig".parse().unwrap();
+        let uri: Uri = "/api/x?token=eyJhbGciOiJIUzI1NiJ9.sig".parse().unwrap();
         assert_eq!(
             log_path(&uri, 1024),
             "/api/x?token=***",
             "非 WS 路径的长 token 同样脱敏"
         );
-        let uri: axum::http::Uri = "//api/nt/ws?token=eyJhbGciOiJIUzI1NiJ9.sig"
+        let uri: Uri = "//api/nt/ws?token=eyJhbGciOiJIUzI1NiJ9.sig"
             .parse()
             .unwrap();
         assert_eq!(
@@ -591,16 +591,16 @@ mod tests {
             "//api/nt/ws?token=***",
             "双斜杠变体必须脱敏(F3)"
         );
-        let uri: axum::http::Uri = "/API/NT/WS?token=eyJhbGciOiJIUzI1NiJ9.sig".parse().unwrap();
+        let uri: Uri = "/API/NT/WS?token=eyJhbGciOiJIUzI1NiJ9.sig".parse().unwrap();
         assert_eq!(
             log_path(&uri, 1024),
             "/API/NT/WS?token=***",
             "大小写变体必须脱敏(F3)"
         );
         // 短值，≤8字符视为非敏感参数保留，键大小写不敏感
-        let uri: axum::http::Uri = "/api/x?token=abc".parse().unwrap();
+        let uri: Uri = "/api/x?token=abc".parse().unwrap();
         assert_eq!(log_path(&uri, 1024), "/api/x?token=abc", "短 token 值不掩码");
-        let uri: axum::http::Uri = "/api/x?Token=eyJhbGciOiJIUzI1NiJ9.sig&page=1"
+        let uri: Uri = "/api/x?Token=eyJhbGciOiJIUzI1NiJ9.sig&page=1"
             .parse()
             .unwrap();
         assert_eq!(
@@ -610,7 +610,7 @@ mod tests {
         );
         // 超长路径截断到配置上限，默认1024
         let long = format!("/{}", "a".repeat(2000));
-        let uri: axum::http::Uri = long.parse().unwrap();
+        let uri: Uri = long.parse().unwrap();
         assert_eq!(log_path(&uri, 1024).chars().count(), 1024);
         assert_eq!(log_path(&uri, 512).chars().count(), 512, "截断长度可配置");
     }
@@ -634,7 +634,7 @@ mod tests {
                 mw_access_log,
             ))
             .with_state(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/x")
             .header("x-fms-userid", "attacker-fake")
             .body(Body::empty())
@@ -681,7 +681,7 @@ mod tests {
                 .with_state(state);
             let mut traced = 0;
             for _ in 0..20 {
-                let req = axum::http::Request::builder()
+                let req = Request::builder()
                     .uri("/x")
                     .body(Body::empty())
                     .unwrap();

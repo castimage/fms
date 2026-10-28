@@ -976,7 +976,7 @@ mod tests {
     fn config_error_display_mentions_stage() {
         let msg = format!(
             "{}",
-            ConfigError::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "x"))
+            ConfigError::Io(io::Error::new(io::ErrorKind::NotFound, "x"))
         );
         assert!(msg.contains("配置读取失败"), "IO 错误显示应说明阶段");
         let parse = format!(

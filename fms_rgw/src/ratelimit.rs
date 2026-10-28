@@ -657,13 +657,13 @@ mod tests {
                 mw_rate_limit,
             ))
             .with_state(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK, "窗口内放行");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();
@@ -702,14 +702,14 @@ mod tests {
             ))
             .with_state(state);
         // 第一个登录请求放行
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/login")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
         // 第二个则回登录维度 429(非ip维度，ip_per_window=1000未超)
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/login")
             .body(Body::empty())
             .unwrap();
@@ -717,7 +717,7 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
         assert!(resp.headers().contains_key("retry-after"));
         // 其他端点不受login维度影响，独立key
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/other")
             .body(Body::empty())
             .unwrap();
@@ -743,7 +743,7 @@ mod tests {
         // 跳过路径反复请求不触发限流
         for path in ["/healthz", "/assets/app.js", "/internal/health", "/favicon.ico"] {
             for _ in 0..3 {
-                let req = axum::http::Request::builder()
+                let req = Request::builder()
                     .uri(path)
                     .body(Body::empty())
                     .unwrap();
@@ -756,12 +756,12 @@ mod tests {
             }
         }
         // /api路径仍正常限流，第2次429
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();
         assert_eq!(app.clone().oneshot(req).await.unwrap().status(), axum::http::StatusCode::OK);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();

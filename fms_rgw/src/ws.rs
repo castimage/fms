@@ -72,7 +72,7 @@ pub fn is_websocket_request(headers: &HeaderMap, path: &str) -> bool {
 /// 头值中是否包含指定token，逗号分隔、trim、大小写不敏感
 fn header_contains_token(
     headers: &HeaderMap,
-    name: &axum::http::header::HeaderName,
+    name: &HeaderName,
     token: &str,
 ) -> bool {
     headers
@@ -263,7 +263,7 @@ pub async fn ws_handler(
         && let Ok(hv) = HeaderValue::from_str(&ch)
     {
         // 静态常量头名，parse不可能失败，不变量
-        const X_FORWARDED_HOST: axum::http::header::HeaderName =
+        const X_FORWARDED_HOST: HeaderName =
             HeaderName::from_static("x-forwarded-host");
         headers.insert(X_FORWARDED_HOST, hv);
     }
@@ -531,7 +531,7 @@ mod tests {
     }
 
     /// 强制熔断OPEN(默认cfg，`min_samples` 20)
-    fn open_circuit(state: &std::sync::Arc<AppState>) {
+    fn open_circuit(state: &Arc<AppState>) {
         for _ in 0..20 {
             state.circuit.record(false);
         }
@@ -547,7 +547,7 @@ mod tests {
         .expect("测试 token 签发")
     }
 
-    fn ws_router(state: std::sync::Arc<AppState>) -> axum::Router {
+    fn ws_router(state: Arc<AppState>) -> axum::Router {
         axum::Router::new()
             .route("/api/{*rest}", axum::routing::any(ws_handler))
             .with_state(state)
@@ -558,7 +558,7 @@ mod tests {
         // 升级请求但无token则 401，40100
         let state = test_state();
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/nt/ws")
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -566,7 +566,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         let body = http_body_util::BodyExt::collect(resp.into_body())
             .await
             .unwrap()
@@ -588,7 +588,7 @@ mod tests {
         };
         let token = sign_test_token(&claims);
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri(format!("/api/nt/ws?token={token}"))
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -596,7 +596,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         let body = http_body_util::BodyExt::collect(resp.into_body())
             .await
             .unwrap()
@@ -619,7 +619,7 @@ mod tests {
         let token = sign_test_token(&claims);
         open_circuit(&state);
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri(format!("/api/nt/ws?token={token}"))
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -627,7 +627,7 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert!(resp.headers().contains_key("retry-after"));
         let body = http_body_util::BodyExt::collect(resp.into_body())
             .await
@@ -651,7 +651,7 @@ mod tests {
         };
         let token = sign_test_token(&claims);
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri(format!("/api/nt/ws?token={token}"))
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -680,7 +680,7 @@ mod tests {
         let state = test_state();
         let app = ws_router(state);
         // 白名单Origin + 无token则走认证，最终 401(未被Origin校验误伤)
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/nt/ws")
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -695,7 +695,7 @@ mod tests {
             "白名单 Origin 应进入认证链(401)"
         );
         // 无Origin，非浏览器客户端则同样进入认证链，最终 401
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/nt/ws")
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -709,7 +709,7 @@ mod tests {
             "无 Origin 应进入认证链(401)"
         );
         // null Origin 则 403，与cors白名单一致，禁止file:///sandbox场景
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/nt/ws")
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -734,7 +734,7 @@ mod tests {
         };
         let token = sign_test_token(&claims);
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri(format!("/api/nt/ws?token={token}"))
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -746,10 +746,10 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
         // 正常声明长度不受影响(走 circuit 检查，默认配置 CLOSED 则上游连接失败 503，
         // 说明未被body检查误伤)
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri(format!("/api/nt/ws?token={token}"))
             .header(UPGRADE, HeaderValue::from_static("websocket"))
@@ -760,7 +760,7 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_ne!(
             resp.status(),
-            axum::http::StatusCode::PAYLOAD_TOO_LARGE,
+            StatusCode::PAYLOAD_TOO_LARGE,
             "正常长度握手不得被 413 误伤"
         );
     }
@@ -771,13 +771,13 @@ mod tests {
         let state = test_state();
         open_circuit(&state);
         let app = ws_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/nt/ws")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
         let body = http_body_util::BodyExt::collect(resp.into_body())
             .await
             .unwrap()

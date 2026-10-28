@@ -591,7 +591,7 @@ mod tests {
         );
     }
 
-    async fn echo_identity(req: axum::http::Request<Body>) -> String {
+    async fn echo_identity(req: Request<Body>) -> String {
         // 回显，注入的X-FMS-UserId / X-FMS-Role / Claims是否可见
         let uid = req
             .headers()
@@ -613,7 +613,7 @@ mod tests {
         format!("{uid}|{role}|{claims_sub}")
     }
 
-    fn auth_router(state: std::sync::Arc<AppState>) -> axum::Router {
+    fn auth_router(state: Arc<AppState>) -> axum::Router {
         axum::Router::new()
             .route("/api/{*rest}", axum::routing::any(echo_identity))
             .route_layer(axum::middleware::from_fn_with_state(state.clone(), mw_auth))
@@ -626,7 +626,7 @@ mod tests {
         let state = test_state();
         let app = auth_router(state);
         // 非升级http请求(无Upgrade头)+ 无token则 401/40100
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/nt/ws")
             .body(Body::empty())
             .unwrap();
@@ -637,7 +637,7 @@ mod tests {
             "非升级 /api/nt/ws 请求必须验签(F4)，不得匿名转发"
         );
         // 真正的ws升级请求(Upgrade+Connection)则匿名放行(token由ws_handler校验)
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/nt/ws")
             .header("upgrade", "websocket")
             .header("connection", "Upgrade")
@@ -650,7 +650,7 @@ mod tests {
             "真 WS 升级请求保持匿名放行"
         );
         // 伪造升级头(仅Upgrade无Connection)则按非升级处理，401
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/nt/ws")
             .header("upgrade", "websocket")
             .body(Body::empty())
@@ -670,7 +670,7 @@ mod tests {
             aud: None,
         };
         let token = sign_token(&claims, b"test-jwt-secret");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/nt/ws")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -688,13 +688,13 @@ mod tests {
         let state = test_state();
         let app = auth_router(state);
         // 匿名路径无Authorization则放行，不注入身份
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/login")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -719,14 +719,14 @@ mod tests {
         };
         let token = sign_token(&claims, b"test-jwt-secret");
         let app = auth_router(state.clone());
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/totp/setup")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK, "匿名路径带有效令牌应放行");
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -736,7 +736,7 @@ mod tests {
         assert_eq!(role, "operator", "匿名路径带有效令牌应注入角色");
         assert_eq!(uid, claims.sub.to_string(), "匿名路径带有效令牌应注入用户 id");
         // 客户端伪造身份头必须被剥离，白名单重写
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/totp/enable")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header("x-fms-role", "admin")
@@ -744,21 +744,21 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert_eq!(text, format!("{}|operator|", claims.sub), "伪造身份头须剥离后注入 Claims 身份");
         // 无效令牌则按匿名放行，不注入身份，不401
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/auth/totp/verify")
             .header(AUTHORIZATION, "Bearer fake.jwt.token")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK, "无效令牌在匿名路径应匿名放行");
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -770,20 +770,20 @@ mod tests {
         let state = test_state();
         let app = auth_router(state);
         // 非匿名/api路径无Authorization则 401 + 40100
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
         let v: serde_json::Value = serde_json::from_slice(&body).expect("合法 JSON");
         assert_eq!(v["code"], 40100);
         // 伪造token则 401
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, "Bearer fake.jwt.token")
             .body(Body::empty())
@@ -804,7 +804,7 @@ mod tests {
         };
         let token = sign_token(&claims, b"test-jwt-secret");
         let app = auth_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             // 客户端伪造身份头必须被剥离，白名单重写
@@ -814,7 +814,7 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -843,14 +843,14 @@ mod tests {
         };
         let token = sign_token(&claims, b"test-jwt-secret");
         let app = auth_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -872,7 +872,7 @@ mod tests {
         };
         let token = sign_token(&claims, b"test-jwt-secret");
         let app = auth_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -883,7 +883,7 @@ mod tests {
             axum::http::StatusCode::UNAUTHORIZED,
             "未知角色必须 401"
         );
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -897,7 +897,7 @@ mod tests {
         // 不注入身份头，X-API-Key原样透传
         let state = test_state();
         let app = auth_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/rpt/entries")
             .header("x-api-key", "ak_live_abc123")
             .body(Body::empty())
@@ -908,7 +908,7 @@ mod tests {
             axum::http::StatusCode::OK,
             "API Key 请求必须放行(后端校验)"
         );
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -919,7 +919,7 @@ mod tests {
             "API Key 模式不得注入身份"
         );
         // 空X-API-Key，仅空格/空串不构成api Key模式则按无Authorization 回 401
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/rpt/entries")
             .header("x-api-key", "   ")
             .body(Body::empty())
@@ -939,7 +939,7 @@ mod tests {
             aud: None,
         };
         let token = sign_token(&claims, b"test-jwt-secret");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/rpt/entries")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header("x-api-key", "ak_live_abc123")
@@ -947,7 +947,7 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -974,7 +974,7 @@ mod tests {
         let app = auth_router(state);
         // 登出请求，携带access/refresh令牌则放行，登出本身200
         let body = format!(r#"{{"accessToken":"{token}","refreshToken":"{token}"}}"#);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/auth/logout")
             .header("content-type", "application/json")
@@ -988,7 +988,7 @@ mod tests {
             "登出请求本身应放行"
         );
         // 登出后同一access token访问业务端点则 401/40101
-        let req2 = axum::http::Request::builder()
+        let req2 = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -999,7 +999,7 @@ mod tests {
             axum::http::StatusCode::UNAUTHORIZED,
             "登出后原 access token 必须失效(401)"
         );
-        let body2 = http_body_util::BodyExt::collect(resp2.into_body())
+        let body2 = BodyExt::collect(resp2.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -1014,7 +1014,7 @@ mod tests {
             aud: None,
         };
         let token2 = sign_token(&claims2, b"test-jwt-secret");
-        let req3 = axum::http::Request::builder()
+        let req3 = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token2}"))
             .body(Body::empty())
@@ -1043,14 +1043,14 @@ mod tests {
         let token = sign_token(&claims, b"test-jwt-secret");
         state.deny.revoke(&token, now_secs() + 3600).await;
         let app = auth_router(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -1084,7 +1084,7 @@ mod tests {
             ))
             .with_state(state.clone());
         let body = format!(r#"{{"oldPassword":"wrong","newPassword":"newPass123","accessToken":"{token}","refreshToken":"{token}"}}"#);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/auth/change-password")
             .header("content-type", "application/json")
@@ -1094,7 +1094,7 @@ mod tests {
         let resp = failing_app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
         // 失败后令牌仍可用，不误伤当前会话
-        let req2 = axum::http::Request::builder()
+        let req2 = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -1108,7 +1108,7 @@ mod tests {
         // 成功改密，后端2xx则 body携带的access token立即失效
         let app = auth_router(state);
         let body = format!(r#"{{"oldPassword":"oldPass1","newPassword":"newPass123","accessToken":"{token}","refreshToken":"{token}"}}"#);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/auth/change-password")
             .header("content-type", "application/json")
@@ -1122,7 +1122,7 @@ mod tests {
             "改密请求本身应放行"
         );
         // 改密成功后同一access token访问业务端点则 401/40101
-        let req3 = axum::http::Request::builder()
+        let req3 = Request::builder()
             .uri("/api/gl/vouchers")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -1133,7 +1133,7 @@ mod tests {
             axum::http::StatusCode::UNAUTHORIZED,
             "改密成功后原 access token 必须失效(401)"
         );
-        let body3 = http_body_util::BodyExt::collect(resp3.into_body())
+        let body3 = BodyExt::collect(resp3.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -1157,7 +1157,7 @@ mod tests {
         let app = auth_router(state);
         // 改密请求，body无令牌，仅带oldPassword/newPassword则 2xx放行
         let body = r#"{"oldPassword":"oldPass1","newPassword":"newPass123"}"#;
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/auth/change-password")
             .header("content-type", "application/json")
@@ -1167,7 +1167,7 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
         // 改密成功后当前Authorization令牌再访问则 401/40101
-        let req2 = axum::http::Request::builder()
+        let req2 = Request::builder()
             .uri("/api/auth/session")
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .body(Body::empty())
@@ -1178,7 +1178,7 @@ mod tests {
             axum::http::StatusCode::UNAUTHORIZED,
             "改密成功(body 无令牌)后当前会话令牌必须失效(401)"
         );
-        let body2 = http_body_util::BodyExt::collect(resp2.into_body())
+        let body2 = BodyExt::collect(resp2.into_body())
             .await
             .unwrap()
             .to_bytes();

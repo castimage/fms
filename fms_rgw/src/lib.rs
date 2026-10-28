@@ -338,7 +338,7 @@ pub async fn serve_with_shutdown(
     tokio::spawn(periodic_cleanup(state.clone()));
 
     // rustls加密提供者，ring(幂等，serve内安装保证测试直调serve不依赖run)
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let _ = ring::default_provider().install_default();
 
     // 明文降级受allow_insecure_fallback控制，默认false，生产缺证书必须启动失败，绝不静默降级
     let tls_acceptor: Option<Arc<tokio_rustls::TlsAcceptor>> = match (
@@ -500,10 +500,10 @@ struct ConnectInfoService {
 }
 
 impl tower::Service<axum::http::Request<Incoming>> for ConnectInfoService {
-    type Response = axum::http::Response<Body>;
+    type Response = Response<Body>;
     type Error = std::convert::Infallible;
     type Future = std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+        Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>,
     >;
 
     fn poll_ready(
@@ -631,7 +631,7 @@ mod tests {
         cfg.sign.sign_secret = "s".to_string();
         cfg.upstream.base_url = "http://127.0.0.1:8081".to_string();
         let state = build_state(cfg).expect("合法配置可组装 AppState");
-        assert!(state.cfg.auth.jwt_secret == "j");
+        assert_eq!(state.cfg.auth.jwt_secret, "j");
         assert!(
             state
                 .limiter

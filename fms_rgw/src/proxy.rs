@@ -167,7 +167,7 @@ impl UpstreamClient {
 /// 缓冲体。头模板需可`Clone`，多上游重试时每实例基于模板独立重建(头处理有原地
 /// 副作用，不可复用同一份)
 pub(crate) struct UpstreamRequestParts {
-    pub headers: axum::http::HeaderMap,
+    pub headers: HeaderMap,
     pub method: axum::http::Method,
     pub path: String,
     pub query: Option<String>,
@@ -679,7 +679,7 @@ mod tests {
         let app = axum::Router::new()
             .route("/api/{*rest}", axum::routing::any(proxy_handler))
             .with_state(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();
@@ -691,7 +691,7 @@ mod tests {
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse::<u64>().ok());
         assert!(retry.is_some_and(|s| s >= 1), "熔断必须带 Retry-After");
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();

@@ -182,10 +182,7 @@ impl CircuitBreaker {
                 let threshold = self.cfg.error_threshold_pct;
                 let min_samples = self.cfg.min_samples;
                 let window = self.cfg.sample_window;
-                let mut results = match self.results.lock() {
-                    Ok(g) => g,
-                    Err(poisoned) => poisoned.into_inner(),
-                };
+                let mut results = self.results.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
                 if results.len() >= window {
                     results.pop_front();
                 }

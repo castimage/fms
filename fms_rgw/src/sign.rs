@@ -689,7 +689,7 @@ mod tests {
         );
     }
 
-    async fn echo_middleware_view(req: axum::http::Request<Body>) -> axum::http::Response<Body> {
+    async fn echo_middleware_view(req: Request<Body>) -> Response<Body> {
         // 回显，X-FMS-Signature是否存在、BufferedBody是否存在及内容
         let sig = req
             .headers()
@@ -702,7 +702,7 @@ mod tests {
             .map(|b| String::from_utf8_lossy(&b.0).into_owned())
             .unwrap_or_default();
         let body = format!("sig={sig}|buffered={buffered}");
-        axum::http::Response::builder()
+        Response::builder()
             .status(200)
             .body(Body::from(body))
             .unwrap()
@@ -720,7 +720,7 @@ mod tests {
     async fn mw_sign_skips_ws_handshake_only_on_ws_path() {
         // ws升级头 + /api/nt/ws 则跳过，不签名、不缓冲
         let app = sign_router("/api/nt/ws");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/nt/ws")
             .header("upgrade", "websocket")
@@ -728,7 +728,7 @@ mod tests {
             .body(Body::from("frame-bytes"))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -739,7 +739,7 @@ mod tests {
         );
         // 同一ws头但路径非/api/nt/ws则不得跳过，防伪造签名绕过
         let app2 = sign_router("/api/other");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/other")
             .header("upgrade", "websocket")
@@ -747,7 +747,7 @@ mod tests {
             .body(Body::from("x"))
             .unwrap();
         let resp = app2.clone().oneshot(req).await.unwrap();
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -762,14 +762,14 @@ mod tests {
     async fn mw_sign_injects_verifiable_signature_and_buffered_body() {
         let app = sign_router("/api/items");
         let payload = "{\"a\":1}";
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header("content-type", "application/json")
             .body(Body::from(payload))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -802,7 +802,7 @@ mod tests {
         let app = sign_router("/api/items");
         let payload = "{\"a\":1}";
         let uid = "3f9a2c1d-0000-4000-8000-000000000001";
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header("content-type", "application/json")
@@ -811,7 +811,7 @@ mod tests {
             .body(Body::from(payload))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
-        let body = http_body_util::BodyExt::collect(resp.into_body())
+        let body = BodyExt::collect(resp.into_body())
             .await
             .unwrap()
             .to_bytes();
@@ -865,7 +865,7 @@ mod tests {
     async fn mw_sign_rejects_oversize_and_bad_body() {
         // 声明Content-Length超限则 413
         let app = sign_router("/api/items");
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header(
@@ -878,7 +878,7 @@ mod tests {
         assert_eq!(resp.status(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
         // 实际body超限(无Content-Length声明)则 413
         let big = vec![b'a'; filter::MAX_BODY_BYTES + 1];
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .body(Body::from(big))
@@ -886,7 +886,7 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
         // 非utf-8 body，无CT = 视为文本型则 400
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .body(Body::from(vec![0xffu8, 0xfe]))
@@ -894,10 +894,10 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
         // multipart二进制文件，非utf-8字节流则放行，上传场景，utf-8校验跳过
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
-            .header(axum::http::header::CONTENT_TYPE, "multipart/form-data; boundary=----x")
+            .header(CONTENT_TYPE, "multipart/form-data; boundary=----x")
             .body(Body::from(vec![0xffu8, 0xfe, b'\r', b'\n', 0x89, 0x50]))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
@@ -907,16 +907,16 @@ mod tests {
             "multipart 二进制 body 应放行(上传文件非 UTF-8 属正常)"
         );
         // octet-stream二进制同样放行
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
-            .header(axum::http::header::CONTENT_TYPE, "application/octet-stream")
+            .header(CONTENT_TYPE, "application/octet-stream")
             .body(Body::from(vec![0x89u8, 0x50, 0x4e, 0x47]))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK, "octet-stream 二进制放行");
         // 文本型body命中sql特征则 400
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header("content-type", "application/x-www-form-urlencoded")

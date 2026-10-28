@@ -758,13 +758,13 @@ mod tests {
             .route("/api/{*rest}", axum::routing::any(echo_ok))
             .route("/healthz", axum::routing::get(echo_ok))
             .fallback(echo_ok)
-            .layer(axum::middleware::from_fn_with_state(
+            .layer(middleware::from_fn_with_state(
                 state.clone(),
                 mw_crawler_block,
             ))
             .with_state(state);
         for path in ["/api/gl/vouchers", "/", "/healthz", "/login"] {
-            let req = axum::http::Request::builder()
+            let req = Request::builder()
                 .method("GET")
                 .uri(path)
                 .header("user-agent", "python-requests/2.31")
@@ -778,7 +778,7 @@ mod tests {
             );
         }
         // 正常浏览器ua则放行，全部路径
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/api/gl/vouchers")
             .header("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0")
@@ -796,12 +796,12 @@ mod tests {
         let app = axum::Router::new()
             .route("/api/{*rest}", axum::routing::any(echo_ok))
             .fallback(echo_ok)
-            .layer(axum::middleware::from_fn_with_state(
+            .layer(middleware::from_fn_with_state(
                 state.clone(),
                 mw_crawler_block,
             ))
             .with_state(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("GET")
             .uri("/")
             .header("user-agent", "python-requests/2.31")
@@ -1145,7 +1145,7 @@ x'; drop table users;--\r\n\
         let state = test_state();
         axum::Router::new()
             .route("/api/{*rest}", axum::routing::any(echo_ok))
-            .route_layer(axum::middleware::from_fn_with_state(
+            .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 mw_input_filter,
             ))
@@ -1156,7 +1156,7 @@ x'; drop table users;--\r\n\
     async fn mw_input_filter_rejects_trace_405() {
         // TRACE显式禁用则 405/40500，认证与否均拒绝，反射回显不转移上游
         let app = filter_router();
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("TRACE")
             .uri("/api/gl/vouchers")
             .body(Body::empty())
@@ -1179,21 +1179,21 @@ x'; drop table users;--\r\n\
     async fn mw_input_filter_rejects_bad_path_sql_and_content_type() {
         let app = filter_router();
         // 非法路径，穿越则 400
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/a/../b")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
         // sql注入特征，path 上命中则 400
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/x/1=1")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
         // 带body方法缺Content-Type，声明CL>0，实际有body则 400
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header("content-length", "1")
@@ -1202,7 +1202,7 @@ x'; drop table users;--\r\n\
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
         // 无body的POST，无CL，如登出/吊销则放行(不需要Content-Type)
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .body(Body::empty())
@@ -1210,7 +1210,7 @@ x'; drop table users;--\r\n\
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
         // 合法请求放行
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/api/items")
             .header(CONTENT_TYPE, "application/json")
@@ -1298,7 +1298,7 @@ x'; drop table users;--\r\n\
 
         use std::net::SocketAddr;
         // 对端 = 本机回环，白名单内则放行
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .extension(axum::extract::connect_info::ConnectInfo(
                 SocketAddr::from(([127, 0, 0, 1], 40001)),
@@ -1309,7 +1309,7 @@ x'; drop table users;--\r\n\
         assert_eq!(resp.status(), axum::http::StatusCode::OK);
 
         // 对端 = 白名单外9.9.9.9，xff伪造成白名单ip则仍 403，判定取真实对端，伪造不绕过
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .extension(axum::extract::connect_info::ConnectInfo(
                 SocketAddr::from(([9, 9, 9, 9], 40002)),
@@ -1337,7 +1337,7 @@ x'; drop table users;--\r\n\
                 mw_ip_allowlist,
             ))
             .with_state(state);
-        let req = axum::http::Request::builder()
+        let req = Request::builder()
             .uri("/api/gl/vouchers")
             .body(Body::empty())
             .unwrap();

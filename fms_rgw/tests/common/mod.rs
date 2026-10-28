@@ -149,7 +149,7 @@ async fn serve_connection(
     response: Arc<Mutex<MockResponse>>,
 ) {
     let io = TokioIo::new(stream);
-    let svc = service_fn(move |req: hyper::Request<Incoming>| {
+    let svc = service_fn(move |req: Request<Incoming>| {
         let requests = requests.clone();
         let response = response.clone();
         async move {
@@ -184,7 +184,7 @@ async fn serve_connection(
             if let Some(d) = r.delay {
                 tokio::time::sleep(d).await;
             }
-            let mut builder = hyper::Response::builder().status(r.status);
+            let mut builder = Response::builder().status(r.status);
             for (k, v) in &r.headers {
                 builder = builder.header(k.as_str(), v.as_str());
             }
@@ -342,7 +342,7 @@ pub fn now_secs() -> i64 {
 
 /// 临时静态目录夹具，建 index.html / hash 资源 / .env，Drop 时清理
 pub struct StaticFixture {
-    pub dir: std::path::PathBuf,
+    pub dir: PathBuf,
 }
 
 impl StaticFixture {
@@ -601,7 +601,7 @@ pub fn probe_port() -> u16 {
 }
 
 /// rcgen 自签证书(SAN localhost)写入临时 PEM，返回，cert_path, key_path
-pub fn write_test_cert(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+pub fn write_test_cert(dir: &std::path::Path) -> (PathBuf, PathBuf) {
     let key_pair = rcgen::KeyPair::generate().expect("rcgen 密钥生成失败");
     let params =
         rcgen::CertificateParams::new(vec!["localhost".to_string()]).expect("证书参数构造失败");
@@ -733,7 +733,7 @@ pub async fn h2_request(
     uri: &str,
     headers: &[(&str, &str)],
 ) -> (u16, Vec<u8>) {
-    let mut req = axum::http::Request::builder()
+    let mut req = Request::builder()
         .method(method)
         .uri(uri)
         .body(())

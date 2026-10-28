@@ -366,7 +366,7 @@ mod tests {
     }
 
     /// 构造临时静态目录 + 测试状态(`index.html` / hash资源 / 敏感文件 / dotfile)
-    fn static_fixture() -> (tempfile_like::TempDir, std::path::PathBuf) {
+    fn static_fixture() -> (tempfile_like::TempDir, PathBuf) {
         // 用进程内自增序号保证并行测试互不冲突
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -397,14 +397,14 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/assets/app.3f9a2c1d.js")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
             resp.headers()
                 .get(CACHE_CONTROL)
@@ -416,14 +416,14 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/assets/index-nK2IYyuW.js")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
             resp.headers()
                 .get(CACHE_CONTROL)
@@ -434,14 +434,14 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/index.html")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
             resp.headers()
                 .get(CACHE_CONTROL)
@@ -476,7 +476,7 @@ mod tests {
             let resp = app
                 .clone()
                 .oneshot(
-                    axum::http::Request::builder()
+                    Request::builder()
                         .uri(uri)
                         .body(Body::empty())
                         .unwrap(),
@@ -485,7 +485,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 resp.status(),
-                axum::http::StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
                 "{uri} 应 404"
             );
         }
@@ -499,7 +499,7 @@ mod tests {
             let resp = app
                 .clone()
                 .oneshot(
-                    axum::http::Request::builder()
+                    Request::builder()
                         .uri(uri)
                         .body(Body::empty())
                         .unwrap(),
@@ -508,7 +508,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 resp.status(),
-                axum::http::StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
                 "{uri} 应 404"
             );
         }
@@ -516,7 +516,7 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/assets/app.3f9a2c1d.js")
                     .body(Body::empty())
                     .unwrap(),
@@ -525,7 +525,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             resp.status(),
-            axum::http::StatusCode::OK,
+            StatusCode::OK,
             "hash 资源仍可服务"
         );
     }
@@ -543,7 +543,7 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/reports/2026/q1")
                     .body(Body::empty())
                     .unwrap(),
@@ -552,7 +552,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             resp.status(),
-            axum::http::StatusCode::OK,
+            StatusCode::OK,
             "SPA fallback 返回 index.html"
         );
         assert_eq!(
@@ -574,7 +574,7 @@ mod tests {
             let resp = app
                 .clone()
                 .oneshot(
-                    axum::http::Request::builder()
+                    Request::builder()
                         .uri(path)
                         .body(Body::empty())
                         .unwrap(),
@@ -583,7 +583,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 resp.status(),
-                axum::http::StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
                 "{path} 应 404"
             );
         }
@@ -591,7 +591,7 @@ mod tests {
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/secret.key")
                     .body(Body::empty())
                     .unwrap(),
@@ -600,14 +600,14 @@ mod tests {
             .unwrap();
         assert_eq!(
             resp.status(),
-            axum::http::StatusCode::NOT_FOUND,
+            StatusCode::NOT_FOUND,
             "*.key 应 404"
         );
         // /api/ 前缀永不落到静态
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/api/anything")
                     .body(Body::empty())
                     .unwrap(),
@@ -616,21 +616,21 @@ mod tests {
             .unwrap();
         assert_eq!(
             resp.status(),
-            axum::http::StatusCode::NOT_FOUND,
+            StatusCode::NOT_FOUND,
             "/api/ 不应落到静态"
         );
         // 路径穿越，filter二次校验则 400
         let resp = app
             .clone()
             .oneshot(
-                axum::http::Request::builder()
+                Request::builder()
                     .uri("/a/../index.html")
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 }
 

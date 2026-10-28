@@ -231,7 +231,7 @@ async fn proxy_chain_injects_identity_and_valid_signature() {
         "/api/gl/vouchers",
         &body_hash,
         sig_header,
-        common::now_secs(),
+        now_secs(),
         sub,
         "operator",
     )

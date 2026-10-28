@@ -231,7 +231,7 @@ async fn valid_jwt_full_chain_200() {
         &path,
         &body_hash,
         sig,
-        common::now_secs(),
+        now_secs(),
         &sub,
         "operator",
     )
