@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** 沙箱会话注入拦截器 MyBatis-Plus InnerInterceptor，每语句执行前向连接注入沙箱上下文，事务内 auth.set_session 与 SET ROLE，无事务退化为会话级 SET 与 SET ROLE，每语句注入幂等防事务边界失效，匿名按端点标记注入最小职责角色或复位回空壳角色，rls 缺身份时 fail-closed */
+/** 沙箱会话注入拦截器 MyBatis-Plus InnerInterceptor，每语句执行前向连接注入沙箱上下文，事务内 auth.set_session 与 SET ROLE，无事务退化为会话级 set_config 与 SET ROLE，每语句注入幂等防事务边界失效，匿名按端点标记注入最小职责角色或复位回空壳角色，rls 缺身份时 fail-closed */
 @Slf4j
 public class SandboxSessionInterceptor implements InnerInterceptor {
 
@@ -43,7 +43,7 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      * 向 MyBatis 当前连接注入沙箱上下文，每语句执行前由 willDoQuery/willDoUpdate 调用，
      * 幂等，防事务边界失效，先取 RequestContext 身份，有身份则按连接是否处于事务分派，
      * 事务内走 auth.set_session 即 bind 参数注入，guc 随提交/回滚自动结束，无事务退化为
-     * 会话级 SET，残留由连接池 RESET ALL 兜底。
+     * 会话级 set_config，残留由连接池 RESET ALL 兜底。
      *
      * 匿名请求按端点标记分三类，占位角色类先复位再注入职责角色，后台任务类复位回空壳角色，
      * 登录等认证路径类不复位保持既有会话态。复位清掉前序请求提交后残留在复用连接上的
@@ -61,7 +61,7 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      * 事务分派语义，MyBatis 事务内即 autoCommit=false 时 guc 用 SELECT auth.set_session
      * 以 bind 参数注入，orgIds/deptIds 显式传快照，null 则由函数从 scope 表预载，
      * guc 随提交/回滚自动清空，无跨事务残留，事务外即 autoCommit=true 时 SET LOCAL 无效，
-     * 退化为会话级 SET 三个 guc 与 SET ROLE，残留由连接池归还时的 RESET ALL 兜底。
+     * 退化为会话级 set_config 三个 guc 与 SET ROLE，残留由连接池归还时的 RESET ALL 兜底。
      * 每语句重复注入幂等，天然覆盖同一连接上的事务边界切换。身份注入之后紧接注入审计
      * 上下文 fms.client_ip 与 fms.request_id，供库侧 audit.record 在实参为空时回退取用。
      *
@@ -211,9 +211,9 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
 
     /**
      * 无事务连接（autoCommit=true）的注入退化路径，SET LOCAL 在事务外无效，故改会话级
-     * SET 三个 guc（fms.user_id / fms.org_ids / fms.dept_ids）+ SET ROLE。注入值均为
-     * 服务端生成的 canonical uuid，拼接前无可信边界问题，会话级 guc 在本连接归还连接池
-     * 前可能残留，由 rls 策略侧依赖的 RESET ALL 兜底清理。
+     * set_config 三个 guc（fms.user_id / fms.org_ids / fms.dept_ids）+ SET ROLE。guc 值
+     * 经 PreparedStatement 绑定，角色名来自枚举白名单，会话级 guc 在本连接归还连接池前
+     * 可能残留，由 rls 策略侧依赖的 RESET ALL 兜底清理。
      *
      * @param conn    当前连接，autoCommit=true，无事务上下文
      * @param userId  已采信的用户 id
@@ -224,10 +224,16 @@ public class SandboxSessionInterceptor implements InnerInterceptor {
      */
     private void injectSessionLevel(Connection conn, UUID userId, List<UUID> orgIds,
                                     List<UUID> deptIds, String pgRole) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT set_config('fms.user_id', ?, false), set_config('fms.org_ids', ?, false),"
+                        + " set_config('fms.dept_ids', ?, false)")) {
+            ps.setString(1, userId.toString());
+            ps.setString(2, orgIds == null ? "" : joinCsv(orgIds));
+            ps.setString(3, deptIds == null ? "" : joinCsv(deptIds));
+            ps.execute();
+        }
+
         try (Statement st = conn.createStatement()) {
-            st.execute("SET fms.user_id = '" + userId + "'");
-            st.execute("SET fms.org_ids = '" + (orgIds == null ? "" : joinCsv(orgIds)) + "'");
-            st.execute("SET fms.dept_ids = '" + (deptIds == null ? "" : joinCsv(deptIds)) + "'");
             st.execute("SET ROLE " + pgRole);
         }
 

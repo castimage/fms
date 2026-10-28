@@ -43,6 +43,10 @@ class SandboxSessionInterceptorTest {
     private static final String AUDIT_CTX_SQL =
             "SELECT set_config('fms.client_ip', ?, ?), set_config('fms.request_id', ?, ?)";
 
+    private static final String SESSION_GUC_SQL =
+            "SELECT set_config('fms.user_id', ?, false), set_config('fms.org_ids', ?, false),"
+                    + " set_config('fms.dept_ids', ?, false)";
+
     private static final List<String> RESET_SQL = List.of(
             "RESET ROLE", "RESET fms.user_id", "RESET fms.org_ids", "RESET fms.dept_ids",
             "SELECT set_config('fms.client_ip', '', false)",
@@ -163,16 +167,18 @@ class SandboxSessionInterceptorTest {
     @Test
     void identifiedQueryWithoutTransactionInjectsSessionLevelGuc() throws SQLException {
         UUID uid = UuidV7.next();
-        RequestContext.set(new RequestContext(uid, JwtRole.VIEWER, null, null, null));
+        UUID org = UuidV7.next();
+        UUID dept = UuidV7.next();
+        RequestContext.set(new RequestContext(uid, JwtRole.VIEWER, List.of(org), List.of(dept), null));
         when(conn.getAutoCommit()).thenReturn(true);
         inject();
-        assertThat(executedSql()).containsExactly(
-                "RESET ROLE",
-                "SET fms.user_id = '" + uid + "'",
-                "SET fms.org_ids = ''",
-                "SET fms.dept_ids = ''",
-                "SET ROLE fms_viewer");
+        verify(conn).prepareStatement(SESSION_GUC_SQL);
         verify(conn).prepareStatement(AUDIT_CTX_SQL);
+        verify(ps).setString(1, uid.toString());
+        verify(ps).setString(2, org.toString());
+        verify(ps).setString(3, dept.toString());
+        verify(ps, times(2)).execute();
+        assertThat(executedSql()).containsExactly("RESET ROLE", "SET ROLE fms_viewer");
     }
 
     @Test
