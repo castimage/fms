@@ -13,7 +13,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
-import java.util.UUID;
 
 /**
  * 集成测试基类，全上下文装配（@SpringBootTest MOCK 环境 + MockMvc）+ test profile，连测试机 fms-db 经 SSH 隧道，沙箱角色 fms_app 直连。

@@ -14,7 +14,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,7 +55,7 @@ class RptServiceImplTest {
     }
 
     @Test
-    void trialBalanceExportContainsBomHeaderAndRows() throws Exception {
+    void trialBalanceExportContainsBomHeaderAndRows() {
         TrialBalanceRow row = new TrialBalanceRow(UuidV7.next(), "1001", "库存现金", "DEBIT",
                 new BigDecimal("1000.00"), new BigDecimal("500.00"), new BigDecimal("200.00"),
                 new BigDecimal("1300.00"));
@@ -73,7 +72,7 @@ class RptServiceImplTest {
 
     /** RFC 4180，含逗号/引号的字段引号包裹且引号加倍 */
     @Test
-    void commaQuoteFieldsEscapedPerRfc4180() throws Exception {
+    void commaQuoteFieldsEscapedPerRfc4180() {
         TrialBalanceRow row = new TrialBalanceRow(UuidV7.next(), "1001", "库存\"现金\",外币", "DEBIT",
                 new BigDecimal("1.00"), BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("1.00"));
         when(rptMapper.selectTrialBalance(any(), eq("2026-08")))
@@ -85,7 +84,7 @@ class RptServiceImplTest {
     }
 
     @Test
-    void whitelistedTypesAllExportable() throws Exception {
+    void whitelistedTypesAllExportable() {
         service.exportCsv("income-statement", UuidV7.next(), "2026-08", null, response);
         service.exportCsv("cash-flow", UuidV7.next(), "2026-08", null, response);
         service.exportCsv("dept-expense", UuidV7.next(), "2026-08", null, response);

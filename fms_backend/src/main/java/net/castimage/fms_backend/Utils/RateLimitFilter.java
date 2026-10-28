@@ -59,7 +59,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         // getClientIp 已规范化，非法值归 0.0.0.0，防键膨胀
         String ip = RequestUtil.getClientIp(request);
         long count;
-        long retryAfterMillis = 0;
+        long retryAfterMillis;
         if (rule.sliding()) {
             CachePort.SlidingWindowResult result = cachePort.checkSlidingWindow(
                     SLIDING_KEY_PREFIX + rule.type() + ":" + ip, WINDOW, rule.limit());

@@ -8,7 +8,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import net.castimage.fms_backend.Exception.BadRequestException;
@@ -41,14 +40,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 固定资产模块业务实现：折旧计提在 Service 侧计算（直线/双倍余额递减 + 计提额封顶，
@@ -551,10 +544,7 @@ public class FaServiceImpl implements FaService {
 
     /** 金额规范化（null 则按 0，标度 2） */
     private static BigDecimal money(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        }
-        return value.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     /** 实体转资产视图 */

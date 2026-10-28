@@ -8,7 +8,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.ConflictException;
@@ -65,12 +64,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 资金模块业务实现，账号密文"写入走闸口函数、读出走 decrypt_bank_account"，列表不选密文列、
@@ -739,10 +733,7 @@ public class CashServiceImpl implements CashService {
 
     /** 金额规范化（null 则按 0，标度 2） */
     private static BigDecimal money(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        }
-        return value.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     /** 流水创建幂等键，规范化请求内容 SHA-256 十六进制，同 body 必同键，改任一字段即新键。

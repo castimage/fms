@@ -8,8 +8,6 @@ import net.castimage.fms_backend.Model.vo.AssetView;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
-import java.util.UUID;
-
 /** 固定资产卡片 Mapper（fa.assets）：CRUD 走 BaseMapper + Wrapper（net_value 生成列只读），分页手写 */
 public interface AssetMapper extends BaseMapper<Asset> {
 

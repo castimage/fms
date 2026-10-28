@@ -127,8 +127,7 @@ public class SystemInfoServiceImpl implements SystemInfoService {
             return new SystemInfoView.RedisInfo("in-memory", false, "", null, null, 0);
         }
         try {
-            var conn = redisTemplate.getConnectionFactory().getConnection();
-            try {
+            try (var conn = redisTemplate.getConnectionFactory().getConnection()) {
                 String version = conn.serverCommands().info("server").getProperty("redis_version");
                 String usedMem = conn.serverCommands().info("memory").getProperty("used_memory");
                 String maxMem = conn.serverCommands().info("memory").getProperty("maxmemory");
@@ -140,8 +139,6 @@ public class SystemInfoServiceImpl implements SystemInfoService {
                     pct = Math.round(usedBytes * 1000.0 / max) / 10.0;
                 }
                 return new SystemInfoView.RedisInfo("redis", true, version, keys, usedBytes >= 0 ? usedBytes : null, pct);
-            } finally {
-                conn.close();
             }
         } catch (Exception e) {
             log.warn("系统信息-Redis 采集失败: {}", e.getMessage());
@@ -176,7 +173,7 @@ public class SystemInfoServiceImpl implements SystemInfoService {
             log.warn("系统信息-数据库主从采集失败: {}", e.getMessage());
             return result;
         }
-        result.add(0, new SystemInfoView.DbNodeInfo("master", "primary", localHostPort(), "primary", "-", 0));
+        result.addFirst(new SystemInfoView.DbNodeInfo("master", "primary", localHostPort(), "primary", "-", 0));
         return result;
     }
 
@@ -256,10 +253,7 @@ public class SystemInfoServiceImpl implements SystemInfoService {
         }
         try {
             var conn = redisTemplate.getConnectionFactory().getSentinelConnection();
-            if (conn == null) {
-                return singleNode();
-            }
-            try {
+            try (conn) {
                 List<SystemInfoView.RedisNodeInfo> result = new ArrayList<>();
                 var masters = conn.masters();
                 if (masters.isEmpty()) {
@@ -274,8 +268,6 @@ public class SystemInfoServiceImpl implements SystemInfoService {
                     result.add(sentinelProbe(hp));
                 }
                 return result.stream().distinct().toList();
-            } finally {
-                conn.close();
             }
         } catch (Exception e) {
             log.warn("系统信息-Redis 节点聚合失败: {}", e.getMessage());
@@ -322,16 +314,13 @@ public class SystemInfoServiceImpl implements SystemInfoService {
     private List<SystemInfoView.RedisNodeInfo> singleNode() {
         List<SystemInfoView.RedisNodeInfo> result = new ArrayList<>();
         try {
-            var conn = redisTemplate.getConnectionFactory().getConnection();
-            try {
+            try (var conn = redisTemplate.getConnectionFactory().getConnection()) {
                 String role = conn.serverCommands().info("replication").getProperty("role");
                 String version = conn.serverCommands().info("server").getProperty("redis_version");
                 long keys = conn.serverCommands().dbSize();
                 result.add(new SystemInfoView.RedisNodeInfo(
                         role == null ? "master" : role, "current", "localhost", 6379,
                         "reachable", version, keys, null));
-            } finally {
-                conn.close();
             }
         } catch (Exception e) {
             log.warn("系统信息-Redis 节点采集失败: {}", e.getMessage());

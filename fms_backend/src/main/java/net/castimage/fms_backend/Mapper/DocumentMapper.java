@@ -5,7 +5,6 @@ import net.castimage.fms_backend.Model.entity.Document;
 import net.castimage.fms_backend.Model.vo.PublicDocumentMeta;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.UUID;

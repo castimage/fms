@@ -81,7 +81,7 @@ class RedisSlidingWindowIT {
             assertEquals(limit, allowed, "窗口内放行数应恰为 limit");
             assertEquals(threads * perThread - limit, rejected);
             assertEquals(0, errors, "事务冲突不应耗尽重试");
-            assertEquals((long) limit, template.opsForZSet().zCard(key));
+            assertEquals(limit, template.opsForZSet().zCard(key));
             template.delete(key);
         } finally {
             factory.destroy();

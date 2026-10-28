@@ -4,7 +4,6 @@ package net.castimage.fms_backend.Service.impl;
 import lombok.extern.slf4j.Slf4j;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import net.castimage.fms_backend.Utils.UuidV7;
 import net.castimage.fms_backend.Config.FmsProperties;
 import net.castimage.fms_backend.Exception.BadRequestException;
@@ -226,7 +225,7 @@ public class AuthServiceImpl implements AuthService {
             // 'bad_backup_code'，totp 错 + 备用码无/错统一走此原因
             boolean usedBackupCode = false;
             String secret = authFunctionMapper.getMfaSecret(ticket.userId());
-            if (secret == null || !TotpUtils.verify(secret, req.code(),
+            if (!TotpUtils.verify(secret, req.code(),
                     fmsProperties.getMfa().getTotpWindow())) {
                 if (!consumeBackupCode(ticket.userId(), req.code())) {
                     totpFailRecord(ticket.userId());

@@ -21,7 +21,7 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.sql.SQLException;
-import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * 全局异常处理器，把业务异常/校验失败/sql 异常映射 FMS 错误码 + http 状态码 + traceId
@@ -130,10 +130,9 @@ public class GlobalExceptionHandler {
                 if (message.contains("无权限") || message.contains("permission denied")) {
                     yield buildError(FmsBaseException.CODE_FORBIDDEN, "权限不足", traceId);
                 }
-                if (List.of("balance", "借贷", "period", "closed", "锁定", "immutable", "不可变",
+                if (Stream.of("balance", "借贷", "period", "closed", "锁定", "immutable", "不可变",
                         "leaf", "末级", "期间", "过账", "冲销", "结账", "审核", "凭证", "科目",
-                        "处理人", "白名单", "whitelist", "软删除")
-                        .stream().anyMatch(message::contains)) {
+                        "处理人", "白名单", "whitelist", "软删除").anyMatch(message::contains)) {
                     yield buildError(FmsBaseException.CODE_CONFLICT, "业务规则校验失败", traceId);
                 }
                 yield buildError(FmsBaseException.CODE_INTERNAL, "数据库操作失败", traceId); // 未命中关键词即兜底 50000，

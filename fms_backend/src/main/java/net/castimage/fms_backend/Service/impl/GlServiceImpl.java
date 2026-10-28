@@ -59,11 +59,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /** 总账模块业务实现，submit/approve 为 Service 事务，Java 预检 + db 触发器终审，post/reverse 调 pg SECURITY DEFINER 函数，取号/状态推进/审计原子完成，规避 rls 与不可变触发器拒绝顺序，平衡校验双层，异常统一 40900 */
 @Service
@@ -1044,10 +1040,7 @@ public class GlServiceImpl implements GlService {
 
     /** 金额规范化（null 则按 0，标度 2） */
     private static BigDecimal money(BigDecimal value) {
-        if (value == null) {
-            return BigDecimal.ZERO.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
-        }
-        return value.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        return Objects.requireNonNullElse(value, BigDecimal.ZERO).setScale(MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
     /** 币种规范化（CHAR，3） */

@@ -63,26 +63,17 @@ public class LocalDateTimeTzTypeHandler extends BaseTypeHandler<LocalDateTime> {
 
     /** 兼容 timestamptz（OffsetDateTime/Instant）与朴素 timestamp（Timestamp/LocalDateTime） */
     private static LocalDateTime toAppLocal(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof OffsetDateTime odt) {
-            return odt.atZoneSameInstant(APP_ZONE).toLocalDateTime();
-        }
-        if (value instanceof Instant instant) {
-            return instant.atZone(APP_ZONE).toLocalDateTime();
-        }
-        if (value instanceof Timestamp ts) {
-            // 朴素 timestamp（无时区）：按列值原样（session TZ 已由 pgjdbc/DB 解释）
-            return ts.toLocalDateTime();
-        }
-        if (value instanceof LocalDateTime ldt) {
-            return ldt;
-        }
-        if (value instanceof Date date) {
-            return OffsetDateTime.ofInstant(date.toInstant(), ZoneOffset.UTC)
+        return switch (value) {
+            case null -> null;
+            case OffsetDateTime odt -> odt.atZoneSameInstant(APP_ZONE).toLocalDateTime();
+            case Instant instant -> instant.atZone(APP_ZONE).toLocalDateTime();
+            case Timestamp ts ->
+                // 朴素 timestamp（无时区）：按列值原样（session TZ 已由 pgjdbc/DB 解释）
+                    ts.toLocalDateTime();
+            case LocalDateTime ldt -> ldt;
+            case Date date -> OffsetDateTime.ofInstant(date.toInstant(), ZoneOffset.UTC)
                     .atZoneSameInstant(APP_ZONE).toLocalDateTime();
-        }
-        return LocalDateTime.parse(String.valueOf(value));
+            default -> LocalDateTime.parse(String.valueOf(value));
+        };
     }
 }

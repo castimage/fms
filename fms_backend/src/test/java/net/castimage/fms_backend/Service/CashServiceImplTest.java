@@ -21,9 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -102,7 +100,7 @@ class CashServiceImplTest {
         MockMultipartFile f = file("2026-08-01,100.00,工资\nbad-date,50.00,餐费\n");
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 service.importStatement(f, ACCOUNT_ID));
-        assertEquals(true, ex.getMessage().contains("第 2 行"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("第 2 行"), ex.getMessage());
     }
 
     @Test

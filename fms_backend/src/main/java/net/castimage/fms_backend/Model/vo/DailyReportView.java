@@ -3,7 +3,6 @@ package net.castimage.fms_backend.Model.vo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 资金日报视图：opening/closing 余额 + 当日收付净额 + 分账户明细（来自 PG 函数

@@ -46,7 +46,7 @@ class RecordResultTypeTest {
         configuration.getTypeHandlerRegistry().register(new UuidTypeHandler());
 
         ResultMap resultMap = new ResultMap.Builder(configuration, "probe",
-                LedgerView.class, List.<org.apache.ibatis.mapping.ResultMapping>of(), Boolean.TRUE).build();
+                LedgerView.class, List.of(), Boolean.TRUE).build();
         MappedStatement ms = new MappedStatement.Builder(configuration, "probe.select",
                 new StaticSqlSource(configuration, "SELECT 1"), SqlCommandType.SELECT)
                 .resultMaps(List.of(resultMap)).build();

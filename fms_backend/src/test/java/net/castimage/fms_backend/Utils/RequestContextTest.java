@@ -130,8 +130,8 @@ class RequestContextTest {
 
     @Test
     void nullScopeSnapshotStaysNull() {
-        RequestContext ctx = new RequestContext(UID, JwtRole.OPERATOR, null, null, "t");
-        assertNull(ctx.orgIds());
-        assertNull(ctx.deptIds());
+        RequestContext.set(new RequestContext(UID, JwtRole.OPERATOR, null, null, "t"));
+        assertNull(RequestContext.orgIds());
+        assertNull(RequestContext.deptIds());
     }
 }

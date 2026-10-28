@@ -35,7 +35,6 @@ import net.castimage.fms_backend.Model.vo.ApInvoiceView;
 import net.castimage.fms_backend.Model.vo.MatchCandidate;
 import net.castimage.fms_backend.Model.vo.PaymentView;
 import net.castimage.fms_backend.Model.vo.ReconciliationDetailView;
-import net.castimage.fms_backend.Model.vo.ReconciliationLineView;
 import net.castimage.fms_backend.Model.vo.ReconciliationView;
 import net.castimage.fms_backend.Model.vo.SupplierView;
 import net.castimage.fms_backend.Service.ApService;

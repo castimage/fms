@@ -319,8 +319,8 @@ public class RptServiceImpl implements RptService {
         String title;
         if (def != null && !def.isBlank()) {
             String biz = r.businessId() == null ? ""
-                    : r.businessId().toString().substring(0,
-                            Math.min(TODO_BIZ_ID_PREFIX, r.businessId().toString().length()));
+                    : r.businessId().substring(0,
+                            Math.min(TODO_BIZ_ID_PREFIX, r.businessId().length()));
             title = String.format("%s（%s #%s）待审批", def,
                     r.businessType() == null ? "-" : r.businessType(), biz);
         } else {

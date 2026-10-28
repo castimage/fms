@@ -5,7 +5,6 @@ import net.castimage.fms_backend.Model.dto.LoginRequest;
 import net.castimage.fms_backend.Model.vo.CompanyView;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.SerializationFeature;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -13,8 +12,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * record dto/vo json 序列化/反序列化契约测试。
@@ -32,14 +30,14 @@ class RecordJsonSerializationTest {
     private final ObjectMapper jackson2 = new ObjectMapper();
 
     @Test
-    void loginRequestRoundTripsViaJackson3RuntimeSerializer() throws Exception {
+    void loginRequestRoundTripsViaJackson3RuntimeSerializer() {
         // 序列化，字段名必须按 record 组件名 camelCase 渲染且保持组件顺序
         String json = jackson3.writeValueAsString(new LoginRequest("admin", "P@ssw0rd"));
         JsonNode node = jackson3.readTree(json);
         Iterator<Map.Entry<String, JsonNode>> names = node.properties().iterator();
         assertEquals("loginName", names.next().getKey());
         assertEquals("password", names.next().getKey());
-        assertTrue(!names.hasNext(), "record DTO 序列化不得输出额外字段");
+        assertFalse(names.hasNext(), "record DTO 序列化不得输出额外字段");
         assertEquals("admin", node.get("loginName").asString());
 
         // 反序列化，经规范构造器回填，含 @NotBlank 校验注解的组件
@@ -50,7 +48,7 @@ class RecordJsonSerializationTest {
     }
 
     @Test
-    void companyViewWithUuidAndTimeRoundTripsViaJackson3() throws Exception {
+    void companyViewWithUuidAndTimeRoundTripsViaJackson3() {
         UUID id = UUID.fromString("0197f2a4-6b3c-4e2f-8a1d-000000000001");
         LocalDate fiscalStart = LocalDate.of(2026, 1, 1);
         LocalDateTime createdAt = LocalDateTime.of(2026, 8, 9, 10, 30, 0);

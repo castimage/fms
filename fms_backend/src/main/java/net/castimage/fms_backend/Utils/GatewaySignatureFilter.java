@@ -428,7 +428,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
          * 非 multipart 请求不触发，Spring StandardServletMultipartResolver 先查 Content-Type。
          */
         @Override
-        public Collection<Part> getParts() throws IOException, ServletException {
+        public Collection<Part> getParts() {
             if (parts == null) {
                 parts = parseMultipart();
             }
@@ -436,7 +436,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
 
         @Override
-        public Part getPart(String name) throws IOException, ServletException {
+        public Part getPart(String name) {
             for (Part p : getParts()) {
                 if (name.equals(p.getName())) {
                     return p;
@@ -484,7 +484,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
                         }
                     }
                 }
-            } catch (IOException | ServletException ignored) {
+            } catch (Exception ignored) {
                 // 解析失败按仅查询串参数处理
             }
             return merged;
@@ -499,7 +499,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
                         names.add(p.getName());
                     }
                 }
-            } catch (IOException | ServletException ignored) {
+            } catch (Exception ignored) {
                 // 解析失败按仅查询串参数处理
             }
             return Collections.enumeration(names);
@@ -521,7 +521,7 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
                         return new String(raw, 0, end, StandardCharsets.UTF_8);
                     }
                 }
-            } catch (IOException | ServletException ignored) {
+            } catch (Exception ignored) {
                 // 读取失败按参数缺失处理，查询串参数已由 super 兜底
             }
             return null;
@@ -813,82 +813,68 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 内存 multipart part（jakarta.servlet.http.Part 最小实现），内容为缓存 body 的
-     * 字节切片，不落盘，write/delete 仅为契约实现。
-     */
-    private static final class CachedPart implements Part {
+         * 内存 multipart part（jakarta.servlet.http.Part 最小实现），内容为缓存 body 的
+         * 字节切片，不落盘，write/delete 仅为契约实现。
+         */
+        private record CachedPart(String name, String fileName, String contentType, byte[] content,
+                                  Map<String, List<String>> headers) implements Part {
 
-        private final String name;
-        private final String fileName;
-        private final String contentType;
-        private final byte[] content;
-        private final Map<String, List<String>> headers;
-
-        CachedPart(String name, String fileName, String contentType, byte[] content,
-                   Map<String, List<String>> headers) {
-            this.name = name;
-            this.fileName = fileName;
-            this.contentType = contentType;
-            this.content = content;
-            this.headers = headers;
-        }
-
-        @Override
-        public InputStream getInputStream() {
-            return new ByteArrayInputStream(content);
-        }
-
-        @Override
-        public String getContentType() {
-            return contentType;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public String getSubmittedFileName() {
-            return fileName;
-        }
-
-        @Override
-        public long getSize() {
-            return content.length;
-        }
-
-        @Override
-        public void write(String fileName) throws IOException {
-            Path target = Path.of(fileName);
-            if (!target.isAbsolute()) {
-                target = Path.of(System.getProperty("java.io.tmpdir", "."), fileName);
+            @Override
+            public InputStream getInputStream() {
+                return new ByteArrayInputStream(content);
             }
-            Files.write(target, content);
-        }
 
-        @Override
-        public void delete() {
-            // 内存 part 无落盘副作用，无需清理
-        }
+            @Override
+            public String getContentType() {
+                return contentType;
+            }
 
-        @Override
-        public String getHeader(String name) {
-            List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
-            return (values == null || values.isEmpty()) ? null : values.getFirst();
-        }
+            @Override
+            public String getName() {
+                return name;
+            }
 
-        @Override
-        public Collection<String> getHeaders(String name) {
-            List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
-            return values == null ? Collections.emptyList() : values;
-        }
+            @Override
+            public String getSubmittedFileName() {
+                return fileName;
+            }
 
-        @Override
-        public Collection<String> getHeaderNames() {
-            return headers.keySet();
+            @Override
+            public long getSize() {
+                return content.length;
+            }
+
+            @Override
+            public void write(String fileName) throws IOException {
+                Path target = Path.of(fileName);
+                if (!target.isAbsolute()) {
+                    target = Path.of(System.getProperty("java.io.tmpdir", "."), fileName);
+                }
+                Files.write(target, content);
+            }
+
+            @Override
+            public void delete() {
+                // 内存 part 无落盘副作用，无需清理
+            }
+
+            @Override
+            public String getHeader(String name) {
+                List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
+                return (values == null || values.isEmpty()) ? null : values.getFirst();
+            }
+
+            @Override
+            public Collection<String> getHeaders(String name) {
+                List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
+                return values == null ? Collections.emptyList() : values;
+            }
+
+            @Override
+            public Collection<String> getHeaderNames() {
+                return headers.keySet();
+            }
         }
-    }
 
     /** 请求体超过上限的内部信号 */
     private static final class BodyTooLargeException extends IOException {

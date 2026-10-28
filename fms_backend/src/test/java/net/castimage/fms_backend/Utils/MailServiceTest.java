@@ -60,7 +60,7 @@ class MailServiceTest {
     }
 
     @Test
-    void enabledWithSenderSends() throws Exception {
+    void enabledWithSenderSends() {
         fmsProperties.getMail().setEnabled(true);
         fmsProperties.getMail().setHost("smtp.fms.local");
         JavaMailSender sender = mock(JavaMailSender.class);

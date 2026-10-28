@@ -94,7 +94,7 @@ public class RedisCachePort implements CachePort {
 
         // WATCH 监视键后读取窗口计数，放行时 MULTI 写入并清理旧记录；
         // EXEC 返回空列表或 null 表示期间被其它实例改动，重新读取后重试
-        SlidingWindowResult result = redisTemplate.execute(new SessionCallback<SlidingWindowResult>() {
+        SlidingWindowResult result = redisTemplate.execute(new SessionCallback<>() {
             @Override
             @SuppressWarnings("unchecked")
             public <K, V> SlidingWindowResult execute(RedisOperations<K, V> operations) {
