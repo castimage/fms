@@ -1,21 +1,21 @@
 -- FMS 财务系统， api-key 后端校验收敛(系统间集成）
 
 -- 网关无密钥库不校验（auth.rs 透传 + 剥离 X-FMS-* + 不注入身份头 + 签名身份段
---       空串），校验收敛在后端，um.api_keys.key_hash 为 hmac(key, blind_key) 盲索引
---       （init/fill_missing.sql），而 sec.app_secrets 不对任何角色授权（um_org_base），
---       Java 侧无法直读 blind_key，故盲索引计算 + 等值查 + last_used_at 回写必须
---       收敛于 SECURITY DEFINER 函数，以 fms_admin 身份读密钥，明文永不离开库内。
+-- 空串），校验收敛在后端，um.api_keys.key_hash 为 hmac(key, blind_key) 盲索引
+-- （init/fill_missing.sql），而 sec.app_secrets 不对任何角色授权（um_org_base），
+-- Java 侧无法直读 blind_key，故盲索引计算 + 等值查 + last_used_at 回写必须
+-- 收敛于 SECURITY DEFINER 函数，以 fms_admin 身份读密钥，明文永不离开库内。
 
 -- 网关中 'key_hash=sha256(key)' 为 sha256 表述，本部署实现为 hmac 盲索引
---       （防字典攻击），故校验必须在库内完成。
+-- （防字典攻击），故校验必须在库内完成。
 -- 幂等，全部 CREATE OR REPLACE，可重复执行。
 
 SET ROLE fms_admin;
 
 -- api-key 校验 + last_used_at 回写，单次往返原子完成
 
---    任何失败（哈希未命中/非 ACTIVE/已吊销/已过期/已软删/空串）一律返回 NULL，
---    由后端过滤器按 40100 fail-closed，不向调用方泄露失败原因，防枚举。
+-- 任何失败（哈希未命中/非 ACTIVE/已吊销/已过期/已软删/空串）一律返回 NULL，
+-- 由后端过滤器按 40100 fail-closed，不向调用方泄露失败原因，防枚举。
 CREATE OR REPLACE FUNCTION auth.api_key_validate(p_key text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -57,7 +57,7 @@ GRANT EXECUTE ON FUNCTION auth.api_key_validate(text) TO fms_app, fms_operator, 
 
 -- 吊销（软删除语义，revoked_at + status=REVOKED，行保留与 uk_api_keys_hash 唯一约束共存）
 
---    仅本人可吊销，维护会话 fms_admin/postgres 可代吊销，重复吊销幂等返回。
+-- 仅本人可吊销，维护会话 fms_admin/postgres 可代吊销，重复吊销幂等返回。
 CREATE OR REPLACE FUNCTION auth.revoke_api_key(p_key_id uuid)
 RETURNS void
 LANGUAGE plpgsql

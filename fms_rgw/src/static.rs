@@ -131,7 +131,7 @@ pub async fn static_handler(
     }
 
     // ServeDir oneshot取文件(目录自动append index.html，304由其处理)，
-    //    Request<Body> 不可Clone，404分支构造新请求并拷贝条件头
+    // Request<Body> 不可Clone，404分支构造新请求并拷贝条件头
     let conditional_headers = req.headers().clone();
     let serve_dir = ServeDir::new(&static_dir).append_index_html_on_directories(true);
     let resp = match serve_dir.oneshot(req).await {
@@ -152,8 +152,8 @@ pub async fn static_handler(
     }
 
     // Cache-Control分级，etag缺失时补齐。目录请求实际输出index.html 则 no-store
-    //    (index.html必须no-store，不能按普通文件asset_max_age_secs处理，
-    //    hash资源/普通资源max-age取配置static.hash_max_age_secs / asset_max_age_secs)
+    // (index.html必须no-store，不能按普通文件asset_max_age_secs处理，
+    // hash资源/普通资源max-age取配置static.hash_max_age_secs / asset_max_age_secs)
     let is_index = canon.is_dir() || canon.file_name().is_some_and(|n| n == "index.html");
     let cache = if is_index {
         "no-store".to_string()
@@ -262,7 +262,7 @@ pub fn is_hashed_asset(path: &str) -> bool {
     // 逐 '.' 分段判定(app.min-abcdefgh.css等分段命名同样命中)，
     // 分段整体为8+ 位纯hex(app.3f9a2c1d.js)，
     // 分段内 '-' 分隔的尾段为8+ 位base64url(index-nK2IYyuW.js、
-    //     vendor-DKX9Ih78.min.css，K/I/Y/W等非hex字符)
+    // vendor-DKX9Ih78.min.css，K/I/Y/W等非hex字符)
     stem.split('.').any(|seg| {
         if seg.len() >= 8 && seg.chars().all(|c| c.is_ascii_hexdigit()) {
             return true;

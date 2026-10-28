@@ -7,7 +7,7 @@
 # 登记，从库 pg_basebackup 前置条件，配套 docker-compose.pg-repl.yml。
 # 【目录语义】fms_db_pg/ 按两目录组织，目录级只读挂载至容器 /fms-init，
 # init/，新库初始化白名单，见下方 INIT_SCRIPTS，白名单之外的文件一律
-#     不执行
+# 不执行
 # verify/，部署后冒烟校验，只读
 # 执行顺序由 INIT_SCRIPTS 显式数组裁决，不依赖文件名排序。
 # 演示种子的 API Key 调用方凭据依赖 um.api_keys 建表，故 seed_demo 排在 fill_missing 之后，
@@ -65,7 +65,7 @@ for f in $INIT_SCRIPTS; do
     # 目标库裁决，bootstrap_base 建库，queues_cron 注册 pg_cron，自带 \c
     # 切换、以 postgres 库为锚点，其余 27 个脚本均须在 fms 库执行。
     # 约定，除 bootstrap_base/queues_cron 外全部在 fms 库，psql -f 是
-    #   独立会话，\c 不跨脚本生效。
+    # 独立会话，\c 不跨脚本生效。
     DBNAME=postgres
     case "$f" in
         bootstrap_base.sql|queues_cron.sql) ;;

@@ -197,7 +197,7 @@ pub async fn mw_auth(
     let trace_id = trace_id_of(&req);
 
     // 匿名路径放行，/api/nt/ws仅真ws升级请求(Upgrade+Connection双头)免jwt，
-    //    非升级http请求必须验签，防未认证请求被匿名豁免转发上游
+    // 非升级http请求必须验签，防未认证请求被匿名豁免转发上游
     let path = req.uri().path().to_string();
     // /api/nt/ws判定复用ws::is_websocket_request，单一实现，杜绝判定不对称
     let anonymous = if path == "/api/nt/ws" {
@@ -302,7 +302,7 @@ pub async fn mw_auth(
     };
 
     // 角色白名单，claims.role必须为已登记角色，未知角色拒绝(防任意字符串
-    //     经X-FMS-Role注入使后端SET ROLE落空或误映射)
+    // 经X-FMS-Role注入使后端SET ROLE落空或误映射)
     if !auth_cfg.allowed_roles.iter().any(|r| r == &claims.role) {
         tracing::warn!(trace_id = %trace_id, path = %req.uri().path(), role = %claims.role, "认证失败：角色不在白名单");
         return error_response(GatewayError::Unauthorized, &trace_id);
@@ -328,7 +328,7 @@ pub async fn mw_auth(
     }
 
     // Claims供后续sign/proxy使用，回填访问日志用户槽(外层mw_access_log先执行，
-    //    经LogUserSlot拿到验签后的user)
+    // 经LogUserSlot拿到验签后的user)
     let sub = claims.sub.to_string();
     req.extensions_mut().insert(claims);
     if let Some(slot) = req.extensions().get::<LogUserSlot>()

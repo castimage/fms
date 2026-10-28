@@ -1,9 +1,9 @@
 -- FMS 2fa 备用恢复码持久化（执行库，fms），
 -- um.backup_codes（备用码盲索引落盘，code_hash = hmac(明文, blind_key)，库内不存明文，
 
---    与 um.api_keys 同模式），auth.issue_backup_codes，签发，先软删旧未用码再批量插新行，
---    返回落库数，auth.consume_backup_code，核销，hmac 等值 + 条件更新 used_at 原子消费，
---    防并发双用。
+-- 与 um.api_keys 同模式），auth.issue_backup_codes，签发，先软删旧未用码再批量插新行，
+-- 返回落库数，auth.consume_backup_code，核销，hmac 等值 + 条件更新 used_at 原子消费，
+-- 防并发双用。
 
 -- 动机，恢复码需持久落盘：会话存储（CachePort，ttl 30min）下恢复码随 ttl/实例重启
 -- 丢失，用户未及时抄录即失效，核销无持久记录，无法审计"何时用哪个码恢复过"。db 落盘

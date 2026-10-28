@@ -1,11 +1,11 @@
 #!/bin/sh
 # FMS PgBouncer 容器入口
 # 职责：以 $DB_HOST，默认 fms-db，可指向宿主 IP 支持多机直连，sed 替换
-#       pgbouncer.ini 中的 DB_HOST_PLACEHOLDER；以 FMS_DB_PASSWORD，fms_app
-#       用户，与 POSTGRES_PASSWORD，postgres 用户，生成 userlist.txt。
-#       scram-sha-256 模式下 auth_file 存明文密码即可，pgbouncer 启动期自行
-#       计算 SCRAM 摘要，密码经 sed 转义注入模板行；userlist 格式无引号转义
-#       机制，.env 密码应避免含双引号；最后 exec 透传 CMD 启动 pgbouncer。
+# pgbouncer.ini 中的 DB_HOST_PLACEHOLDER；以 FMS_DB_PASSWORD，fms_app
+# 用户，与 POSTGRES_PASSWORD，postgres 用户，生成 userlist.txt。
+# scram-sha-256 模式下 auth_file 存明文密码即可，pgbouncer 启动期自行
+# 计算 SCRAM 摘要，密码经 sed 转义注入模板行；userlist 格式无引号转义
+# 机制，.env 密码应避免含双引号；最后 exec 透传 CMD 启动 pgbouncer。
 # 懒连接：pgbouncer 启动不依赖 fms-db 可达，事务时才按需建连，
 # 无需等待主库就绪。
 set -e

@@ -2,15 +2,15 @@
 //!
 //! 与`tests/http2.rs`，1个e2e互补，每个行为一个用例，断言严格，含边界与错误路径。
 //! 覆盖(对应`src/lib.rs` `serve`/`load_tls_acceptor`/`ConnectInfoService`)，
-//!     alpn协商，http/1.1客户端协商alpn=http/1.1(h2侧alpn断言在`http2.rs` e2e)
-//!     tls证书加载，有效/不匹配/损坏/缺失 × fallback真假(serve报`Err`而非panic)
-//!   连接上限，`Semaphore` 8192满员后新连接被丢弃、已接受连接继续服务
-//!   优雅关闭，in-flight请求完成 + accept持续，信号触发路径存在测试缺口，见用例注释
-//!     `ConnectInfoService`，客户端ip注入后对上游`X-Forwarded-For`做断言
-//!     h2单连接并发10请求(healthz`/api/static`混合)全部正确响应
-//!     tls握手失败路径，垃圾字节连接被关闭、服务器不panic继续服务
-//!     h2下安全链，filter 400 / auth 401 / rate 429全部在h2请求上生效
-//!   明文降级冒烟(`tests/accept_smoke.rs`既有，本文件t2c2/t2d亦覆盖真实serve路径)
+//! alpn协商，http/1.1客户端协商alpn=http/1.1(h2侧alpn断言在`http2.rs` e2e)
+//! tls证书加载，有效/不匹配/损坏/缺失 × fallback真假(serve报`Err`而非panic)
+//! 连接上限，`Semaphore` 8192满员后新连接被丢弃、已接受连接继续服务
+//! 优雅关闭，in-flight请求完成 + accept持续，信号触发路径存在测试缺口，见用例注释
+//! `ConnectInfoService`，客户端ip注入后对上游`X-Forwarded-For`做断言
+//! h2单连接并发10请求(healthz`/api/static`混合)全部正确响应
+//! tls握手失败路径，垃圾字节连接被关闭、服务器不panic继续服务
+//! h2下安全链，filter 400 / auth 401 / rate 429全部在h2请求上生效
+//! 明文降级冒烟(`tests/accept_smoke.rs`既有，本文件t2c2/t2d亦覆盖真实serve路径)
 //!
 //! 全部用例经真实`fms_rgw::serve`监听，rcgen自签证书 + h2/h1 tls客户端，非oneshot。
 
@@ -76,7 +76,7 @@ impl Drop for TempDir {
     }
 }
 
-//  alpn协商
+// alpn协商
 
 /// 【行为】tls客户端alpn仅声明http/1.1 时服务端从 alpn 清单["h2","http/1.1"]
 /// 协商出http/1.1，hyper-util auto按协商结果自动走http/1.1。
@@ -109,7 +109,7 @@ async fn http1_1_alpn_negotiated_and_200() {
     );
 }
 
-//  tls证书加载
+// tls证书加载
 
 /// 【行为】有效PEM证书+密钥，fallback=false 时 `load_tls_acceptor` 成功，tls 启动。
 /// 【断言】h2客户端alpn=h2、`/healthz` 200 + json status=ok，serve句柄持续运行，未退出。
@@ -416,7 +416,7 @@ async fn inflight_completes_and_accept_keeps_serving() {
     assert!(!handle.is_finished(), "无关闭信号时 serve 不得自行退出");
 }
 
-//  ConnectInfoService
+// ConnectInfoService
 
 /// 【行为】`ConnectInfoService`向请求扩展注入客户端对端ip，proxy转发时写入
 /// `X-Forwarded-For`。经真实tls+h2连接验证注入链路，127.0.0.1本机对端。
@@ -467,7 +467,7 @@ async fn connect_info_client_ip_in_x_forwarded_for() {
     );
 }
 
-//  h2多请求并发
+// h2多请求并发
 
 /// 【行为】同一tls连接上并发10个h2流，http/2多路复用，4×`/healthz`、
 /// 3×`/api/gl/vouchers`，无token 则 401、3×/index.html 静态 200。
@@ -520,7 +520,7 @@ async fn h2_concurrent_10_requests_single_connection() {
     }
 }
 
-//  tls握手失败路径
+// tls握手失败路径
 
 /// 【行为】对tls端口发送非tls垃圾字节则 `TlsAcceptor::accept` 失败，rustls 回
 /// tls fatal alert后关闭连接，或直接断开，服务器不panic，继续服务正常tls请求。
@@ -567,12 +567,12 @@ async fn tls_handshake_garbage_does_not_panic() {
     assert_eq!(status, 200, "垃圾字节攻击后服务器必须继续正常服务");
 }
 
-//  h2下中间件安全链
+// h2下中间件安全链
 
 /// 【行为】h2请求走 filter、rate、auth 安全链，trace最外层，路径穿越回 400、
 /// 无token 401。
 /// 【断言】h2 GET `/api/gl`/../etc/passwd 应回 400 + code 40001，filter拦截，
-///        h2 GET `/api/gl/vouchers`(无`Authorization`)应回 401 + code 40100，auth拦截。
+/// h2 GET `/api/gl/vouchers`(无`Authorization`)应回 401 + code 40100，auth拦截。
 #[tokio::test]
 async fn h2_filter_400_and_auth_401() {
     let _ = rustls::crypto::ring::default_provider().install_default();

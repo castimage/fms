@@ -372,8 +372,8 @@ GRANT SELECT ON cash.bank_accounts TO fms_pgaudit_role;
 -- 且 PAID/VOID 终态禁改禁删，DELETE 仅限 DRAFT（经 auth.fn_soft_delete 闸口）。
 
 -- 状态迁移例外，业务生命周期，Java 核销/撤销核销/作废走此通道，终审仍在此触发器，
---   ISSUED 转 PARTIAL/PAID 为核销推进、ISSUED 转 VOID 为作废，
---   PARTIAL 转 PAID 为核销完毕、PARTIAL 转 ISSUED 为撤销核销回退、PARTIAL 转 VOID 为作废。
+-- ISSUED 转 PARTIAL/PAID 为核销推进、ISSUED 转 VOID 为作废，
+-- PARTIAL 转 PAID 为核销完毕、PARTIAL 转 ISSUED 为撤销核销回退、PARTIAL 转 VOID 为作废。
 -- 同状态更新（NEW.status = OLD.status，ISSUED 保持 ISSUED）放行，凭证联动回填 voucher_id
 -- 即此形态（gl_voucher_link 联动凭证开票时/补生成端点回填）。
 -- voucher_id 为凭证联动回填列，豁免"仅 status 可变更"检查（与 init/gl_voucher_link.sql
@@ -633,8 +633,8 @@ END $$;
 -- ar.receipts 收款重复登记幂等防护，业务键部分唯一索引 uk_ar_receipt_dedup
 -- （company_id, customer_id, amount, receipt_date, COALESCE(bank_account_id, ZERO)）
 -- ， 同客户/同金额/同日期/同账户的收款单仅允许一张有效（deleted_at IS NULL），
---    重复登记 INSERT 触发 23505，GlobalExceptionHandler 全局映射 40900，
---    软删后的同键收款单不阻挡重新登记（部分索引 WHERE deleted_at IS NULL）。
+-- 重复登记 INSERT 触发 23505，GlobalExceptionHandler 全局映射 40900，
+-- 软删后的同键收款单不阻挡重新登记（部分索引 WHERE deleted_at IS NULL）。
 -- 核销重复生效由 Service 层防护（同对同金额重复请求 40900 + 收款单剩余
 -- 可核销额预检 selectAllocatedSumByReceipt），此处无相关 DDL。
 -- 可重复执行（IF NOT EXISTS）。

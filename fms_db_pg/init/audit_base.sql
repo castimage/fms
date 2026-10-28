@@ -1,7 +1,7 @@
 -- FMS 财务系统（init/audit_base），audit.audit_log 仅追加审计（FORCE rls + 无 INSERT 授权 + 触发器硬拒）+ sha256 哈希链（prev_hash/row_hash，篡改行即断链）+ audit.record/fn_audit_log（SECURITY DEFINER 写入）+ 链完整性校验 + um/org 审计触发器挂载
 
 -- 执行（按实际部署主机，部署入口为 deploy/init/fms_init.sh，本文件由白名单调度），
---   docker exec fms-db psql -U postgres -d fms -v ON_ERROR_STOP=1 -f /fms-init/init/audit_base.sql
+-- docker exec fms-db psql -U postgres -d fms -v ON_ERROR_STOP=1 -f /fms-init/init/audit_base.sql
 
 -- 职责，审计哈希链（ip/request_id 纳入公式 + occurred_at 时区无关化）+ 链校验/修复 + audit.record 最小授权
 

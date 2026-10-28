@@ -3,11 +3,11 @@
 -- 主键 uuidv7（pg 18 原生，时间有序，ORDER BY id 语义不变），表 CREATE IF NOT EXISTS 幂等保留存量数据，重放不清空业务数据，fn_fx_adjustment 判存创建的回退占位（签名含 DEFAULT 'CNY'，与 init/gl_fx_rates.sql 真实现一致，重放时不覆盖真实现），cron 以 NULL 字面量调用（queues_cron.sql）
 
 -- 文件末尾段，均幂等，
---   期间守卫触发器函数，反结账二次确认 + 已结账期间禁建凭证
---   voucher_lines 敏感列 cost_amount + 中文全文检索生成列 summary_tsv
---   凭证创建幂等键 idem_key + uk_voucher_idem / uk_voucher_line 部分唯一索引
---   chart_accounts 操作员写授权 + 写策略（4.3 can_access_org）
---   gl_lines_update 更新策略恢复，软删唯一出口为 auth.fn_soft_delete 闸口
+-- 期间守卫触发器函数，反结账二次确认 + 已结账期间禁建凭证
+-- voucher_lines 敏感列 cost_amount + 中文全文检索生成列 summary_tsv
+-- 凭证创建幂等键 idem_key + uk_voucher_idem / uk_voucher_line 部分唯一索引
+-- chart_accounts 操作员写授权 + 写策略（4.3 can_access_org）
+-- gl_lines_update 更新策略恢复，软删唯一出口为 auth.fn_soft_delete 闸口
 
 SET ROLE fms_admin;
 

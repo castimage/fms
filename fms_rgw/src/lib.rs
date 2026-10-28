@@ -318,7 +318,7 @@ pub async fn serve(state: Arc<AppState>) -> Result<(), Box<dyn std::error::Error
 /// `state`，已装配的全局状态，配置/上游/限流/熔断/日志
 ///
 /// `external_shutdown`，`None` = 内部注册os信号，生产，`Some`，rx = 外部触发
-///                        测试注入，关闭路径可断言
+/// 测试注入，关闭路径可断言
 ///
 /// @return正常退出Ok，tls强制失败，无证书且不允许降级等返回`Err`
 pub async fn serve_with_shutdown(

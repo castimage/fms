@@ -94,7 +94,7 @@ async fn assert_hits(mock: &MockUpstream, prefix: &str, count: usize, ctx: &str)
     );
 }
 
-//  jwt算法混淆
+// jwt算法混淆
 
 /// 【攻击】alg:none空签名，攻击者把header改成{"alg":"none"}且不带签名，声称无签名token。
 /// 【防护层】auth层，`verify_jwt`固定`Validation::new`，HS256，jsonwebtoken拒绝任何非HS256
@@ -201,7 +201,7 @@ async fn weak_secret_bruteforce_all_rejected() {
     assert_hits(&mock, "/api/gl/vouchers", 0, "弱密钥穷举不得到达上游").await;
 }
 
-//  jwt生命周期
+// jwt生命周期
 
 /// 【攻击】过期token重放，旧会话劫持。
 /// 【防护层】auth层，exp < now - leeway，60s 则回 `AuthError::Expired`，401 + code 40101。
@@ -292,7 +292,7 @@ async fn oversized_sub_rejected() {
     assert_hits(&mock, "/api/gl/vouchers", 0, "超长 sub 不得到达上游").await;
 }
 
-//  pgjwt兼容
+// pgjwt兼容
 
 /// 【攻击】pgjwt签发的token，无iss/aud必须可用，兼容性反向断言，若网关误拒则业务全断。
 /// 【防护层】auth层，iss/aud未配置时宽松(`claims.iss`/aud为`None`直接放行，与pgjwt一致)。

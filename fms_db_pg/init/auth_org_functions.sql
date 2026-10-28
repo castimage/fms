@@ -1,27 +1,27 @@
 -- FMS 财务系统（init/auth_org_functions），闸口函数，auth/org 敏感写入 SECURITY DEFINER 函数族
 
 -- 内容，decrypt_bank_account，current_user 职责身份守卫 + 密钥读 sec.app_secrets、jwt 委托断言、
---      解密出口授权收口，fms_app 不可执行、闸口守卫，update_user 白名单补 display_name、
---      非本人须 is_admin、record_login_failure 原子化、recovery_lookup/set_password/update_user
---      只读角色补发、pass_hash 列授权 + set_mfa 只读角色补发
+-- 解密出口授权收口，fms_app 不可执行、闸口守卫，update_user 白名单补 display_name、
+-- 非本人须 is_admin、record_login_failure 原子化、recovery_lookup/set_password/update_user
+-- 只读角色补发、pass_hash 列授权 + set_mfa 只读角色补发
 
 -- 缘由，五层授权矩阵下 um 敏感列（pass_hash/mfa_secret_enc/email_encrypted）与 um.roles/user_role/role_perm 写不对
 -- operator 开放，列级 SELECT 亦不可见、新公司 INSERT 被 rls WITH CHECK 恒拒，新建 company_id 不在任何 scope，
 -- 密码/2fa/建用户/角色管理/建公司必须经本文件闸口函数，以属主 fms_admin 身份绕过调用者权限边界。
 
 -- 范围，13 契约 14 个函数对象（verify_login / record_login_failure / recovery_lookup / create_user /
---       update_user / set_password / set_mfa / get_mfa_secret / assign_role / revoke_role /
---       upsert_role / grant+revoke_role_permission / org.fn_upsert_company）+ cash 扩展 1 个（fn_create_bank_account 密文写入口）。
+-- update_user / set_password / set_mfa / get_mfa_secret / assign_role / revoke_role /
+-- upsert_role / grant+revoke_role_permission / org.fn_upsert_company）+ cash 扩展 1 个（fn_create_bank_account 密文写入口）。
 
 -- 通用约束，全部 SECURITY DEFINER、SET search_path 收敛，<域>, public, pg_catalog，public 为 pgcrypto 扩展所在地，
---       与 init/um_org_base.sql文件 auth.decrypt_bank_account 的 'auth, public' 同构，去掉 public 则 pgp_sym_encrypt/crypt 运行期不可解析、
---       CREATE OR REPLACE 幂等、RAISE 统一 ERRCODE（业务 P0001 映射 40900、权限 42501 映射 40300），
---       GRANT 具名双通道，fms_app，直连通道+ fms_operator（SET ROLE 通道，AuthServiceImpl 匿名流程先 setRoleOperator），
---       不 GRANT PUBLIC，grants_base 对 auth schema 函数 REVOKE PUBLIC，具名授权不受影响。
+-- 与 init/um_org_base.sql文件 auth.decrypt_bank_account 的 'auth, public' 同构，去掉 public 则 pgp_sym_encrypt/crypt 运行期不可解析、
+-- CREATE OR REPLACE 幂等、RAISE 统一 ERRCODE（业务 P0001 映射 40900、权限 42501 映射 40300），
+-- GRANT 具名双通道，fms_app，直连通道+ fms_operator（SET ROLE 通道，AuthServiceImpl 匿名流程先 setRoleOperator），
+-- 不 GRANT PUBLIC，grants_base 对 auth schema 函数 REVOKE PUBLIC，具名授权不受影响。
 SET ROLE fms_admin;
 
 -- 契约 1，auth.verify_login， 登录凭据校验，唯一只读闸口，SECURITY DEFINER 直读 pass_hash 做 bcrypt 比对，
---   不暴露明文、零写入，失败计数/锁定由调用方经 auth.record_login_failure 原子化处理，用户不存在返回 {ok:false,status:'NOT_FOUND'} 不 RAISE 防枚举
+-- 不暴露明文、零写入，失败计数/锁定由调用方经 auth.record_login_failure 原子化处理，用户不存在返回 {ok:false,status:'NOT_FOUND'} 不 RAISE 防枚举
 CREATE OR REPLACE FUNCTION auth.verify_login(p_login_name text, p_password text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -60,11 +60,11 @@ GRANT EXECUTE ON FUNCTION auth.verify_login(text,text) TO fms_app, fms_operator;
 
 -- 契约 1b，auth.record_login_failure， 登录失败计数原子递增
 
---   单条 UPDATE ... SET failed_login_count = failed_login_count + 1 RETURNING 行级原子自增，
---   UPDATE 行锁串行化并发写，防读-改-写丢失更新绕过暴力破解锁定，达阈值同事务内置
---   LOCKED + locked_until，阈值判断基于原子递增后的最新计数，返回 {failed_login_count,
---   locked}，SECURITY DEFINER 属主 fms_admin 绕过 rls，与 update_user 同构，匿名登录期
---   current_uid 为 NULL 时 is_self 守卫放行。
+-- 单条 UPDATE ... SET failed_login_count = failed_login_count + 1 RETURNING 行级原子自增，
+-- UPDATE 行锁串行化并发写，防读-改-写丢失更新绕过暴力破解锁定，达阈值同事务内置
+-- LOCKED + locked_until，阈值判断基于原子递增后的最新计数，返回 {failed_login_count,
+-- locked}，SECURITY DEFINER 属主 fms_admin 绕过 rls，与 update_user 同构，匿名登录期
+-- current_uid 为 NULL 时 is_self 守卫放行。
 CREATE OR REPLACE FUNCTION auth.record_login_failure(
     p_user_id uuid,
     p_max_failures int,
@@ -108,7 +108,7 @@ COMMENT ON FUNCTION auth.record_login_failure(uuid,int,int)
 GRANT EXECUTE ON FUNCTION auth.record_login_failure(uuid,int,int) TO fms_app, fms_operator;
 
 -- 契约 2，auth.create_user， 建用户（INSERT um.users 唯一入口），pass_hash 为 Java 侧现成 bcrypt 哈希，防双哈希，
---   幂等，login_name 冲突返回已存在 id，email 联动 pgp_sym_encrypt 列加密 + hmac 盲索引，防持库离线爆破
+-- 幂等，login_name 冲突返回已存在 id，email 联动 pgp_sym_encrypt 列加密 + hmac 盲索引，防持库离线爆破
 CREATE OR REPLACE FUNCTION auth.create_user(
     p_login_name text, p_pass_hash text, p_email text,
     p_company_id uuid, p_must_change_pwd boolean, p_created_by uuid)
@@ -162,7 +162,7 @@ GRANT EXECUTE ON FUNCTION auth.create_user(text,text,text,uuid,boolean,uuid)
     TO fms_operator;
 
 -- 契约 3，auth.update_user， 用户字段补丁更新，白名单键 email/status/must_change_pwd/failed_login_count/locked_until/last_login_at/display_name
---   键名白名单化不拼用户输入，值经 format %L 绑定，非白名单键 RAISE P0001，契约，拒绝不静默，email 联动重加密+盲索引重算，空补丁静默，用户不存在 RAISE
+-- 键名白名单化不拼用户输入，值经 format %L 绑定，非白名单键 RAISE P0001，契约，拒绝不静默，email 联动重加密+盲索引重算，空补丁静默，用户不存在 RAISE
 CREATE OR REPLACE FUNCTION auth.update_user(p_user_id uuid, p_patch jsonb)
 RETURNS void
 LANGUAGE plpgsql
@@ -285,8 +285,8 @@ GRANT EXECUTE ON FUNCTION auth.set_password(uuid,text) TO fms_operator, fms_view
 -- pgcrypto 兼容重载，部署库适配，契约 5 set_mfa 以 bytea totp 种子 + text 主密钥调用
 -- pgp_sym_encrypt，但部署库 pgcrypto 的 bytea 加密变体注册名为 pgp_sym_encrypt_bytea(bytea,text)，
 -- 缺 pgp_sym_encrypt(bytea,text) 重载则 42883 function does not exist。此处幂等补建该重载，
---   存在 pgp_sym_encrypt_bytea(bytea,text)（定制 pgcrypto）则委托之（与 pgp_sym_decrypt(bytea,text) 对称），
---   标准 pgcrypto 环境则回退 text 重载，convert_from utf8 无损往返，db 编码为 utf8。
+-- 存在 pgp_sym_encrypt_bytea(bytea,text)（定制 pgcrypto）则委托之（与 pgp_sym_decrypt(bytea,text) 对称），
+-- 标准 pgcrypto 环境则回退 text 重载，convert_from utf8 无损往返，db 编码为 utf8。
 -- CREATE OR REPLACE 幂等，GRANT EXECUTE 具名双通道与 init/gl_core_functions.sql 同构。
 DO $pgp_fix$
 BEGIN
@@ -421,7 +421,7 @@ COMMENT ON FUNCTION auth.admin_reset_mfa(uuid,text)
 GRANT EXECUTE ON FUNCTION auth.admin_reset_mfa(uuid,text) TO fms_operator;
 
 -- 契约 7/8，auth.assign_role / auth.revoke_role， 角色分配/回收（um.user_role 写唯一入口），
---   assign_role 公司一致性 + ON CONFLICT 幂等重授，revoke_role 软删幂等，未命中静默
+-- assign_role 公司一致性 + ON CONFLICT 幂等重授，revoke_role 软删幂等，未命中静默
 CREATE OR REPLACE FUNCTION auth.assign_role(p_user_id uuid, p_role_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -475,7 +475,7 @@ GRANT EXECUTE ON FUNCTION auth.assign_role(uuid,text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION auth.revoke_role(uuid,text) TO fms_operator;
 
 -- 契约 9，auth.upsert_role， 角色创建/更新（um.roles 写唯一入口），company_id 取调用者公司，维护会话取最早公司，种子兼容，
---   uk_roles_code 幂等 upsert
+-- uk_roles_code 幂等 upsert
 CREATE OR REPLACE FUNCTION auth.upsert_role(p_code text, p_name text, p_is_system boolean)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -505,7 +505,7 @@ COMMENT ON FUNCTION auth.upsert_role(text,text,boolean)
 GRANT EXECUTE ON FUNCTION auth.upsert_role(text,text,boolean) TO fms_operator;
 
 -- 契约 10，auth.grant_role_permission / auth.revoke_role_permission， 角色-权限绑定/解绑（um.role_perm 写唯一入口），
---   grant 权限点存在性校验+幂等，revoke 软删幂等，未命中静默
+-- grant 权限点存在性校验+幂等，revoke 软删幂等，未命中静默
 CREATE OR REPLACE FUNCTION auth.grant_role_permission(p_role_id uuid, p_perm_code text)
 RETURNS void
 LANGUAGE plpgsql
@@ -553,7 +553,7 @@ GRANT EXECUTE ON FUNCTION auth.grant_role_permission(uuid,text) TO fms_operator;
 GRANT EXECUTE ON FUNCTION auth.revoke_role_permission(uuid,text) TO fms_operator;
 
 -- 契约 11，org.fn_upsert_company， 公司创建/更新（org.companies 写唯一入口），新建公司无 scope 直插必被 rls WITH CHECK 拒，
---   故 SECURITY DEFINER 绕过 + company_id 自引用回填（uk_companies_code 幂等 upsert）
+-- 故 SECURITY DEFINER 绕过 + company_id 自引用回填（uk_companies_code 幂等 upsert）
 CREATE OR REPLACE FUNCTION org.fn_upsert_company(
     p_code text, p_name text, p_currency text,
     p_fiscal_year_start date, p_status text)
@@ -590,8 +590,8 @@ GRANT EXECUTE ON FUNCTION org.fn_upsert_company(text,text,text,date,text)
     TO fms_operator;
 
 -- 扩展，cash.fn_create_bank_account， 银行账户密文写入口，account_no_enc/account_no_hash 不授予任何角色且 Java 无 pgp 能力，
---   新建账户须经本 SECURITY DEFINER 入口（与 auth.decrypt_bank_account 对偶），account_no_hash=sha256 防重，
---   账户 UPDATE，冻结/关闭，只动非敏感列，operator 可直写
+-- 新建账户须经本 SECURITY DEFINER 入口（与 auth.decrypt_bank_account 对偶），account_no_hash=sha256 防重，
+-- 账户 UPDATE，冻结/关闭，只动非敏感列，operator 可直写
 CREATE OR REPLACE FUNCTION cash.fn_create_bank_account(
     p_bank_name text, p_account_no text, p_account_type text,
     p_currency text, p_status text, p_is_active boolean)
@@ -786,7 +786,7 @@ RESET ROLE;
 
 -- 闸口守卫，管理员（is_admin）可管理他人，非管理员仍仅本人，42501
 
---    update_user 白名单含 display_name
+-- update_user 白名单含 display_name
 
 -- 契约 3，auth.update_user， 用户字段补丁更新
 CREATE OR REPLACE FUNCTION auth.update_user(p_user_id uuid, p_patch jsonb)
@@ -1123,11 +1123,11 @@ RESET ROLE;
 -- 按 jwt 角色 SET ROLE（viewer01 对应 fms_viewer 等），调用 auth.set_password / auth.update_user
 -- 须有 EXECUTE，自助改密对所有角色开放。安全语义不变，
 -- auth.set_password，函数体内含身份闸口（current_uid 非空且非本人则 42501 拒绝），
---     已登录会话只能改自己的密码，与 fms_app/fms_operator 既有授权同构，
+-- 已登录会话只能改自己的密码，与 fms_app/fms_operator 既有授权同构，
 -- auth.update_user，白名单键补丁（email/status/must_change_pwd/failed_login_count/
---     locked_until/last_login_at），自助改密路径仅清 must_change_pwd，
+-- locked_until/last_login_at），自助改密路径仅清 must_change_pwd，
 -- auth.record_login，SECURITY DEFINER 登录审计落库，要求改密事件记
---     um.login_log（fail_reason='password_changed'），缺授权时审计静默丢失（仅 WARN）。
+-- um.login_log（fail_reason='password_changed'），缺授权时审计静默丢失（仅 WARN）。
 SET ROLE fms_admin;
 
 GRANT EXECUTE ON FUNCTION auth.set_password(uuid, text) TO fms_report, fms_viewer, fms_auditor;

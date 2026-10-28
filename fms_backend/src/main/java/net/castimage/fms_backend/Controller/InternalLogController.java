@@ -75,8 +75,8 @@ public class InternalLogController {
         SandboxRoleHint.set(SandboxRoleHint.Hint.INTERNAL_OPERATOR);
         try {
             // 解析（fastjson2 手动，与项目统一，@RequestBody 自动绑定走 Boot 默认 Jackson 3
-            //    tools.jackson，不认 fastjson2 @JSONField，record 组件 camelCase 绑 snake_case
-            //    键恒 null，reqId/latencyMs 取不到值，故手动 parseArray）
+            // tools.jackson，不认 fastjson2 @JSONField，record 组件 camelCase 绑 snake_case
+            // 键恒 null，reqId/latencyMs 取不到值，故手动 parseArray）
             List<AccessLogItem> items;
             try {
                 items = JSON.parseArray(rawBody, AccessLogItem.class);

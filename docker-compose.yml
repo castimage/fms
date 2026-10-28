@@ -102,12 +102,12 @@ services:
 
   # fms-redis， Redis 7，多实例共享会话存储
   # 职责，后端 fms.session-store=redis 时承载 nonce 防重放/2FA 票据/备用码/
-  #       token 黑名单/WS 推送广播等跨实例共享状态。单机版虽仅一个后端实例，
-  #       仍开启 redis 存储，与集群形态（docker-compose.cluster.yml）共用
-  #       同一会话语义，避免"单机内存、集群 redis"两套行为切换，更稳。
+  # token 黑名单/WS 推送广播等跨实例共享状态。单机版虽仅一个后端实例，
+  # 仍开启 redis 存储，与集群形态（docker-compose.cluster.yml）共用
+  # 同一会话语义，避免"单机内存、集群 redis"两套行为切换，更稳。
   # 密码，requirepass 与后端 SPRING_DATA_REDIS_PASSWORD 共用 .env 的
-  #       FMS_REDIS_PASSWORD（强密码 ≥16 字符），appendonly 落 /data 卷，
-  #       防重启丢会话键（TTL 键容忍丢失，AOF 是零成本保险）。
+  # FMS_REDIS_PASSWORD（强密码 ≥16 字符），appendonly 落 /data 卷，
+  # 防重启丢会话键（TTL 键容忍丢失，AOF 是零成本保险）。
   fms-redis:
     image: redis:7-alpine
     container_name: fms-redis

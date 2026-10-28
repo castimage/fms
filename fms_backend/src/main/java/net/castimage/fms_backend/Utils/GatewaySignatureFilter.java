@@ -245,14 +245,14 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
 
         // 采信身份，UserId 必须 canonical uuid，Role 必须命中五角色白名单。
 
-        //    匿名端点豁免（login/refresh/recovery/totp/ws 无身份可采信，hmac 以空串
-        //    参与输入且已通过步骤 6，与网关注入的空身份签名一致），其余路径 fail-closed，
-        //    但携带非空 X-api-key 的 api-key 模式请求豁免，网关不注入身份头、签名身份段
-        //    空串，步骤 6 已通过，身份采信延后到 ApiKeyFilter（order=3）校验后注入。
+        // 匿名端点豁免（login/refresh/recovery/totp/ws 无身份可采信，hmac 以空串
+        // 参与输入且已通过步骤 6，与网关注入的空身份签名一致），其余路径 fail-closed，
+        // 但携带非空 X-api-key 的 api-key 模式请求豁免，网关不注入身份头、签名身份段
+        // 空串，步骤 6 已通过，身份采信延后到 ApiKeyFilter（order=3）校验后注入。
         // 匿名白名单路径若带身份头（网关对 /api/auth/totp/* 携带有效 Bearer 时
-        //    "尽力注入"身份），同样采信身份与角色，否则 RequestContext 有 userId 无
-        //    role，SandboxSessionInterceptor 拒绝注入，连接退化为 fms_app 空壳，
-        //    permission denied（2fa setup/enable/disable 报 40300）。
+        // "尽力注入"身份），同样采信身份与角色，否则 RequestContext 有 userId 无
+        // role，SandboxSessionInterceptor 拒绝注入，连接退化为 fms_app 空壳，
+        // permission denied（2fa setup/enable/disable 报 40300）。
         String path = request.getRequestURI();
         UUID userId = parseCanonicalUuid(uid);
         JwtRole jwtRole = null;
@@ -270,11 +270,11 @@ public class GatewaySignatureFilter extends OncePerRequestFilter {
         }
 
         // 剥离伪造 X-FMS-* 头，仅保留已采信的 UserId/Role，Signature 消费后一并移除，纵深防御，
-        //    剥离由 CachedBodyHttpServletRequest 的 getHeader/getHeaderNames 覆写完成，直接放行包装器
+        // 剥离由 CachedBodyHttpServletRequest 的 getHeader/getHeaderNames 覆写完成，直接放行包装器
         HttpServletRequest trusted = cached;
 
         // 填充身份上下文（orgIds/deptIds 传 null，由 pg 侧 auth.set_session 从 scope 表预载，
-        //     traceId 统一取 Utils.TraceIdUtil），匿名端点无身份可采信，不设上下文
+        // traceId 统一取 Utils.TraceIdUtil），匿名端点无身份可采信，不设上下文
         try {
             if (userId != null) {
                 RequestContext.set(new RequestContext(userId, jwtRole, null, null, TraceIdUtil.current()));

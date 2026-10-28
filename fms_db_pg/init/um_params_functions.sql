@@ -1,11 +1,11 @@
 -- FMS 财务系统（init/um_params_functions），um.params 读/写经 SECURITY DEFINER 函数以 fms_admin 身份执行
 
 -- um_org_base 对 um.params 执行最小授权（REVOKE ALL FROM 全部职责角色，密钥已收敛 sec.app_secrets），
---      /api/admin/params 读与 CRUD 经 um.fn_page_params / um.fn_get_param / um.fn_upsert_param
---      三个 SECURITY DEFINER 函数执行（属主 fms_admin 绕过表级 REVOKE，rls 策略
---      params_select/params_write 显式放行 current_user='fms_admin'），函数内 auth.require_permission
---      闸口，admin.param.view / admin.param.update， operator 等非管理角色 40300 按 rbac 设计拒绝，
---      admin（fms_admin_role 全量授权）200 可用。全部 DDL 幂等可重跑。
+-- /api/admin/params 读与 CRUD 经 um.fn_page_params / um.fn_get_param / um.fn_upsert_param
+-- 三个 SECURITY DEFINER 函数执行（属主 fms_admin 绕过表级 REVOKE，rls 策略
+-- params_select/params_write 显式放行 current_user='fms_admin'），函数内 auth.require_permission
+-- 闸口，admin.param.view / admin.param.update， operator 等非管理角色 40300 按 rbac 设计拒绝，
+-- admin（fms_admin_role 全量授权）200 可用。全部 DDL 幂等可重跑。
 
 -- 依赖，init/um_perm.sql（auth.require_permission / admin.param.view / admin.param.update 种子）。
 
@@ -49,7 +49,7 @@ END $$;
 
 -- 参数 upsert（插入或原子更新 value/updated_by/updated_at，返回行 id）。
 
---    双保险，Java 侧 assertNotSensitive 先行，40300，db 侧白名单镜像，消息含"无权限"则同样 40300。
+-- 双保险，Java 侧 assertNotSensitive 先行，40300，db 侧白名单镜像，消息含"无权限"则同样 40300。
 CREATE OR REPLACE FUNCTION um.fn_upsert_param(p_code text, p_value jsonb, p_updated_by uuid)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -84,10 +84,10 @@ END $$;
 
 -- 公共参数值读取（配置下发 /api/admin/params/public 支撑），任意登录角色可读的轻量读口，
 
---    仅返回单码 jsonb 值，参数缺失/异常返回 p_default，调用方必须传缺省值，防删参数后崩溃，
---    敏感键（jwt./pgcrypto. 前缀或含 secret/password/token/master_key/blind_key）一律返回
---    p_default，与写口白名单（fn_upsert_param）镜像双保险，密钥恒不经本通道外泄，
---    um.params 内已无敏感键，此过滤为纵深防御。
+-- 仅返回单码 jsonb 值，参数缺失/异常返回 p_default，调用方必须传缺省值，防删参数后崩溃，
+-- 敏感键（jwt./pgcrypto. 前缀或含 secret/password/token/master_key/blind_key）一律返回
+-- p_default，与写口白名单（fn_upsert_param）镜像双保险，密钥恒不经本通道外泄，
+-- um.params 内已无敏感键，此过滤为纵深防御。
 CREATE OR REPLACE FUNCTION um.fn_get_param_value(p_code text, p_default jsonb DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE plpgsql

@@ -1,26 +1,26 @@
 -- FMS 财务系统（init/dashboard_alerts），看板-异常告警聚合，预算执行率阈值 + 银行账户余额安全线
 
 -- GET /api/rpt/dashboard 异常告警维度。预算执行率阈值语义与
---   budget.fn_cron_budget_warning 同源（um.params budget.warn.ratio 可配，缺省 0.8），
---   银行账户余额安全线为可配参数 um.params cash.bank.safety.line，缺省 0 =
---   仅透支告警，admin 可经系统参数页调高。
+-- budget.fn_cron_budget_warning 同源（um.params budget.warn.ratio 可配，缺省 0.8），
+-- 银行账户余额安全线为可配参数 um.params cash.bank.safety.line，缺省 0 =
+-- 仅透支告警，admin 可经系统参数页调高。
 
 -- 形态，SECURITY DEFINER 函数 rpt.fn_dashboard_alerts(p_company_id)， 函数内
 -- 校验 auth.can_access_org，越权公司返回 '[]'，与看板"companyId 仅 ui 提示、
 
---   越权返回空集"语义一致，不泄露存在性，
+-- 越权返回空集"语义一致，不泄露存在性，
 -- 读 um.params 阈值，职责角色无 um.params 表级权限，故必须经 definer 函数，
 
 -- 扫描 budget.budget_plans×rpt.budget_actual，执行率≥阈值，ratio 降序 topN，
 
---      与 cash.bank_accounts×cash.transactions，净额<安全线，余额升序 topN，
---      bank_accounts 密文列不向只读角色授权，亦必须经 definer，N 读 um.params
---      rpt.dashboard.alert.topn，缺省 5。
---   返回 jsonb 数组字符串，
---     [{type:'warning',kind:'budget',period,dept_name,account_name,ratio，0-100,
---       plan_amount,actual_amount,threshold，0-1}, ...]
---     [{type:'error',kind:'bank',bank_name,balance,safety_line}, ...]
---   文案拼装在 Java 侧（RptServiceImpl.parseDashboardAlerts）。
+-- 与 cash.bank_accounts×cash.transactions，净额<安全线，余额升序 topN，
+-- bank_accounts 密文列不向只读角色授权，亦必须经 definer，N 读 um.params
+-- rpt.dashboard.alert.topn，缺省 5。
+-- 返回 jsonb 数组字符串，
+-- [{type:'warning',kind:'budget',period,dept_name,account_name,ratio，0-100,
+-- plan_amount,actual_amount,threshold，0-1}, ...]
+-- [{type:'error',kind:'bank',bank_name,balance,safety_line}, ...]
+-- 文案拼装在 Java 侧（RptServiceImpl.parseDashboardAlerts）。
 
 -- 可重复执行（CREATE OR REPLACE / ON CONFLICT DO NOTHING）。
 

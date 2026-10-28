@@ -1531,12 +1531,12 @@ SELECT 'FIX_BUDGET_ADJ_IDEM' AS k,
 -- wf 流程实例发起链路（POST /api/wf/instances 后端支撑），
 -- uk_wf_inst_business 部分唯一索引，同一业务单据仅允许一个未删除实例
 
---      （发起幂等 + 并发双保险，冲突 23505 映射 40900），
+-- （发起幂等 + 并发双保险，冲突 23505 映射 40900），
 -- wf.fn_start_instance SECURITY DEFINER 函数，原子创建 RUNNING 实例并激活
 
---      首个 APPROVE 节点任务集（处理人解析与策略展开见 fn_activate_node）。
---      SECURITY DEFINER 以属主（fms_admin，本文件 SET ROLE）身份执行，规避
---      um.users / um.user_role 的 rls 空集，fms_operator 对 um.users 仅可见本人。
+-- 首个 APPROVE 节点任务集（处理人解析与策略展开见 fn_activate_node）。
+-- SECURITY DEFINER 以属主（fms_admin，本文件 SET ROLE）身份执行，规避
+-- um.users / um.user_role 的 rls 空集，fms_operator 对 um.users 仅可见本人。
 -- 幂等，CREATE OR REPLACE FUNCTION + CREATE UNIQUE INDEX IF NOT EXISTS + GRANT
 -- 重复执行无害。
 
