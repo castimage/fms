@@ -5,7 +5,7 @@
 //! `fms_rgw::serve`真实监听，再做断言，
 //!h2客户端，h2 crate over tokio-rustls，alpn仅h2 时 GET `/healthz` 应回 http/2 200，
 
-//!      且tls握手alpn协商结果为h2，服务端alpn清单["h2", "http/1.1"]
+//! 且tls握手alpn协商结果为h2，服务端alpn清单["h2", "http/1.1"]
 //!http/1.1客户端，alpn仅http/1.1 时 raw GET `/healthz` 应回 200，自动降级http1
 
 //!
@@ -157,7 +157,7 @@ async fn h2_and_http1_over_tls_alpn() {
 
     //就绪轮询，tls + http/1.1 raw请求(10s上限，连接被拒=尚未绑定，
 
-    //    用非致命探测重试，spawn后首次探测与TcpListener::bind存在竞态)
+    // 用非致命探测重试，spawn后首次探测与TcpListener::bind存在竞态)
     let ready_req = b"GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     let mut ready = false;
     for _ in 0..100 {

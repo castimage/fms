@@ -1,9 +1,9 @@
 -- init/gl_voucher_reject.sql， 凭证驳回（SUBMITTED 转 REJECTED）
 
 -- 【状态机扩展】在 DRAFT 提交 SUBMITTED、审核 APPROVED、过账 POSTED、冲销 REVERSED 之上增加驳回态，
---   SUBMITTED 转 REJECTED，驳回，原因必填，记 voucher_status_history.remark + 审计
---   REJECTED 转 DRAFT，退回修改后即可重新提交，端点 POST /vouchers/{id}/revert
---                        经 SECURITY DEFINER 闸口 gl.fn_revert_voucher 原子退回，权限 gl.voucher.revert
+-- SUBMITTED 转 REJECTED，驳回，原因必填，记 voucher_status_history.remark + 审计
+-- REJECTED 转 DRAFT，退回修改后即可重新提交，端点 POST /vouchers/{id}/revert
+-- 经 SECURITY DEFINER 闸口 gl.fn_revert_voucher 原子退回，权限 gl.voucher.revert
 
 -- 配套（同步），
 -- gl.vouchers.status CHECK 加入 'REJECTED'
@@ -33,8 +33,8 @@ ALTER TABLE gl.vouchers ADD CONSTRAINT vouchers_status_check
 
 -- 状态机校验触发器，显式迁移白名单（唯一合法迁移，驳回 SUBMITTED 转 REJECTED、退回 REJECTED 转 DRAFT、
 
---    冲销 POSTED 转 REVERSED 经 fn_reverse_voucher 受控路径放行，反向凭证同事务 DRAFT 转 POSTED
---    在 reversal_of_voucher_id 互指非空时豁免，冲销函数独有特征，其余跳变/回退一律 RAISE）
+-- 冲销 POSTED 转 REVERSED 经 fn_reverse_voucher 受控路径放行，反向凭证同事务 DRAFT 转 POSTED
+-- 在 reversal_of_voucher_id 互指非空时豁免，冲销函数独有特征，其余跳变/回退一律 RAISE）
 CREATE OR REPLACE FUNCTION gl.fn_voucher_submit_check()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -114,7 +114,7 @@ END $$;
 
 -- 状态历史触发器，remark 支持事务级 guc fms.voucher_remark 透传，驳回原因由
 
---    fn_reject_voucher 写入，未设置时 INSERT 记'凭证创建'，迁移记 NULL
+-- fn_reject_voucher 写入，未设置时 INSERT 记'凭证创建'，迁移记 NULL
 CREATE OR REPLACE FUNCTION gl.fn_voucher_status_history()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -225,7 +225,7 @@ COMMENT ON FUNCTION gl.fn_revert_voucher(uuid)
 
 -- rls，gl_vouchers_update USING 纳入 REJECTED（REJECTED 转 DRAFT 退回路径可用，WITH CHECK 不变，
 
---    仍禁止 POSTED/REVERSED，状态机迁移白名单由触发器把关，策略层不额外放行）
+-- 仍禁止 POSTED/REVERSED，状态机迁移白名单由触发器把关，策略层不额外放行）
 DROP POLICY IF EXISTS gl_vouchers_update ON gl.vouchers;
 CREATE POLICY gl_vouchers_update ON gl.vouchers
     FOR UPDATE USING (status IN ('DRAFT','SUBMITTED','APPROVED','REJECTED')
@@ -276,8 +276,8 @@ END $$;
 
 -- 权限种子，幂等，um.permissions 含 'gl.voucher.reject'/'gl.voucher.revert' +
 
---    fms_admin_role/accountant 角色 + admin 用户直授，与 gl.voucher.reverse 同族，
---    revert = 被驳回凭证退回 DRAFT 的 api 端点权限
+-- fms_admin_role/accountant 角色 + admin 用户直授，与 gl.voucher.reverse 同族，
+-- revert = 被驳回凭证退回 DRAFT 的 api 端点权限
 INSERT INTO um.permissions (id, company_id, module_id, code, identifier, name,
                             resource_type, action, permission_type, is_enabled, is_system)
 SELECT v.id, '00000000-0000-7000-0000-000000000010',

@@ -1,7 +1,7 @@
 -- FMS 财务系统初始化（init/bootstrap_base），postgres 库建 8 角色（含 fms_pgaudit_role、fms_public）与 fms 库，\c fms 后装扩展、pgaudit/zhparser 配置、13 业务 schema，无 BEGIN/COMMIT（CREATE DATABASE 不可入事务），全幂等可重跑
 
 -- 执行（按实际部署主机，部署入口为 deploy/init/fms_init.sh，本文件由白名单调度），
---   docker exec fms-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /fms-init/init/bootstrap_base.sql
+-- docker exec fms-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f /fms-init/init/bootstrap_base.sql
 
 -- 角色体系，集群级对象，在 postgres 库执行，幂等 DO 块
 -- 角色，fms_admin(SUPERUSER NOLOGIN) / fms_app(LOGIN 唯一运行时连接角色) / fms_operator / fms_viewer / fms_auditor / fms_report(NOLOGIN 职责角色) / fms_pgaudit_role(NOLOGIN 对象审计标记角色) / fms_public(NOLOGIN 公开读口角色)

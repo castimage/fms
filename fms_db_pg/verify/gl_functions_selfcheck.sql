@@ -3,12 +3,12 @@
 -- 验证脚本只读、无副作用，
 -- 全文件包裹 BEGIN/ROLLBACK 事务，fn_close_period('2026-08') 在无未完成凭证的
 
---      库上会真实结账（gl.periods 2026-08 OPEN 转 CLOSED，系统无法再录凭证），重跑 selfcheck
---      即对库产生不可逆修改，事务回滚后任何状态变更均不落库。
+-- 库上会真实结账（gl.periods 2026-08 OPEN 转 CLOSED，系统无法再录凭证），重跑 selfcheck
+-- 即对库产生不可逆修改，事务回滚后任何状态变更均不落库。
 -- 结账/反结账使用不存在的测试期间 '2099-01'，不存在期间必然触发业务异常
 
---      （'不存在或已结账'/'未结账'），"期望抛错"断言在任何库状态下都成立，
---      且不触碰真实期间，即使脱离事务包裹单独执行本 DO 块也无副作用。
+-- （'不存在或已结账'/'未结账'），"期望抛错"断言在任何库状态下都成立，
+-- 且不触碰真实期间，即使脱离事务包裹单独执行本 DO 块也无副作用。
 BEGIN;
 DO $do$
 DECLARE
@@ -43,7 +43,7 @@ BEGIN
 
     -- gl.fn_close_period(uuid, text)，测试期间 '2099-01' 不存在则必然业务异常（'不存在或已结账'），
 
-    --    不触碰真实期间，'2026-08' 在无未完成凭证的库上会真实结账，OPEN 转 CLOSED，不可逆副作用
+    -- 不触碰真实期间，'2026-08' 在无未完成凭证的库上会真实结账，OPEN 转 CLOSED，不可逆副作用
     BEGIN
         PERFORM gl.fn_close_period(v_cid, '2099-01');
         RAISE NOTICE 'close_period: unexpectedly ok';
@@ -56,7 +56,7 @@ BEGIN
 
     -- gl.fn_reopen_period(uuid, text, text)，测试期间 '2099-01' 不存在则必然业务异常，
 
-    --    '2026-08' 在已结账库上会真实反结账，CLOSED 转 OPEN，同样不可逆副作用
+    -- '2026-08' 在已结账库上会真实反结账，CLOSED 转 OPEN，同样不可逆副作用
     BEGIN
         PERFORM gl.fn_reopen_period(v_cid, '2099-01', 'selfcheck');
         RAISE NOTICE 'reopen_period: unexpectedly ok';

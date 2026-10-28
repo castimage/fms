@@ -251,8 +251,8 @@ services:
 
   # fms-rgw， Rust 网关（8443 TLS 入口，应用主机，--profile app）
   # ports/volumes/environment/depends_on 与单机版完全一致，
-  #   8443:8443 对外，fms-static / deploy/fms_rgw.yaml / certs / fms-logs 四卷，
-  #   FMS_RGW_UPSTREAM=http://fms-backend:8081，容器内服务名。
+  # 8443:8443 对外，fms-static / deploy/fms_rgw.yaml / certs / fms-logs 四卷，
+  # FMS_RGW_UPSTREAM=http://fms-backend:8081，容器内服务名。
   fms-rgw:
     # 多机版，仅应用主机启动
     profiles: ["app"]

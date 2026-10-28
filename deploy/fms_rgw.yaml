@@ -48,6 +48,6 @@ log:
   # 开启后网关访问日志经后端 /internal/log-batch 中转投递到 log.access_logs；
   # 后端库无 pgmq 扩展时由 log.fn_send_access_batch 降级直接 INSERT
   # pgmq:
-  #   enabled: false
-  #   endpoint: "/internal/log-batch"
-  #   token: ""
+  # enabled: false
+  # endpoint: "/internal/log-batch"
+  # token: ""

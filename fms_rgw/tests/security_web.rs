@@ -30,7 +30,7 @@ fn admin_token() -> String {
     make_jwt(SUB, "operator", 3600, JWT_SECRET)
 }
 
-//  sql注入
+// sql注入
 
 /// 【攻击】sql注入全变体矩阵，经典or 1=1、大小写混写union select、sleep/benchmark
 /// 时间盲注、注释-- /*、分号堆叠、编码%27、制表符/换行变体、全角引号+恒等式。
@@ -276,7 +276,7 @@ async fn double_encoded_traversal_reaches_upstream() {
     );
 }
 
-//  CRLF注入
+// CRLF注入
 
 /// 【攻击】%0d%0a编码CRLF注入path/query/头值，网关不透传为响应头(hyper头值
 /// 在协议层不可含原始CR/LF，响应头仅由网关+上游构造)。
@@ -538,7 +538,7 @@ async fn multipart_big_file_413() {
     );
 }
 
-//  http方法滥用
+// http方法滥用
 
 /// 【攻击】TRACE / CONNECT，代理/中间件典型滥用向量，xst反射、隧道。
 /// 【防护层】TRACE被filter层显式禁用则 405/40500(，认证与否均拒绝，
@@ -895,7 +895,7 @@ async fn error_responses_no_internal_leak() {
     }
 }
 
-//  ws攻击
+// ws攻击
 
 fn ws_upgrade_req(uri: &str) -> Request<Body> {
     let mut req = request("GET", uri);
@@ -1015,7 +1015,7 @@ async fn ws_upgrade_origin_not_validated() {
     );
 }
 
-//  cors
+// cors
 
 /// 【攻击】任意反射`Origin` / null `Origin` / 子域`Origin`，浏览器跨域读取的决定依据是
 /// `Access-Control-Allow-Origin`回显，非白名单origin必须拿不到。
@@ -1126,7 +1126,7 @@ async fn preflight_evil_origin_denied() {
     }
 }
 
-//  Host头注入/伪造
+// Host头注入/伪造
 
 /// 【攻击】伪造`Host`头(`evil.com`)，代理路由必须仍指向配置上游(`base_url`拼url，
 /// `Host`绝不参与路由)，且客户端`Host`不得原样透传上游。
@@ -1172,7 +1172,7 @@ async fn host_header_not_used_for_routing() {
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
 
-//  /api前缀绕过
+// /api前缀绕过
 
 /// 【攻击】`/api`前缀变体，双斜杠 /`/api`//vouchers 不匹配 `/api`/{*rest} 路由则落入
 /// fallback，被static层二次校验(normalize折叠后做 `/api` 前缀检查)拒绝为 404，

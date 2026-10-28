@@ -116,9 +116,9 @@ services:
       FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
 
   # 后端切换哨兵连接，compose 合并语义，同名服务 environment 与主编排合并，
-  #   集群形态 backend-1/2 与单机形态 backend 均覆盖，未合并本文件则不受影响
+  # 集群形态 backend-1/2 与单机形态 backend 均覆盖，未合并本文件则不受影响
   # 切换变量放 .env，本段仅做 .env 到容器的桥接，
-  #   未在 .env 设置时变量为空，Spring 不加载 sentinel profile，保持单节点直连
+  # 未在 .env 设置时变量为空，Spring 不加载 sentinel profile，保持单节点直连
   fms-backend-1: &backend-sentinel
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}

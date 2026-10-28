@@ -1,15 +1,15 @@
 #!/bin/sh
 # FMS 从库 standby 容器入口 —— pg_basebackup + 流复制
 # 职责：等待主库就绪后 pg_basebackup -R -X stream，再补 primary_conninfo
-#       密码后写 standby.signal，再 exec postgres，热备只读运行。
+# 密码后写 standby.signal，再 exec postgres，热备只读运行。
 # 幂等：$PGDATA/PG_VERSION 已存在，basebackup 完成过/卷已初始化，则跳过
-#       basebackup 直接启动，容器/主机重启不重复全量拉取。
+# basebackup 直接启动，容器/主机重启不重复全量拉取。
 # 说明：从库只读，不执行业务 init 脚本与扩展安装，standby 上 CREATE
-#       EXTENSION 等写入不允许，扩展随 basebackup 从主库带来——主从同用
-#       定制镜像 fms-postgres:18，不必为从库单独构建。
+# EXTENSION 等写入不允许，扩展随 basebackup 从主库带来——主从同用
+# 定制镜像 fms-postgres:18，不必为从库单独构建。
 # 参数：PRIMARY_HOST 默认 fms-db / PRIMARY_PORT / REPL_USER 默认
-#       replicator / REPL_PASSWORD 缺省回退 FMS_REPL_PASSWORD /
-#       PGDATA 官方镜像 /var/lib/postgresql/18/docker。
+# replicator / REPL_PASSWORD 缺省回退 FMS_REPL_PASSWORD /
+# PGDATA 官方镜像 /var/lib/postgresql/18/docker。
 set -e
 
 PRIMARY_HOST="${PRIMARY_HOST:-fms-db}"

@@ -18,8 +18,8 @@ use common::*;
 async fn smoke_healthz_and_fake_jwt() {
     //临时YAML配置(noyalib解析，tls降级开、强密钥、cors白名单)
 
-    //    路径以CARGO_MANIFEST_DIR为锚(跨机器可移植，本地Windows与服务器Linux
-    //    均解析到仓库内target-verify/smoke/smoke.yaml)
+    // 路径以CARGO_MANIFEST_DIR为锚(跨机器可移植，本地Windows与服务器Linux
+    // 均解析到仓库内target-verify/smoke/smoke.yaml)
     let mut cfg = fms_rgw::config::load_from(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/target-verify/smoke/smoke.yaml"

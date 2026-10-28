@@ -1,20 +1,20 @@
 -- FMS 财务系统（init/role_fms_public，执行库，postgres + fms），fms_public 公开只读角色 + fms_app 最小权限收敛
 
 -- fms_app 为沙箱连接角色，仅保留 CONNECT 与认证函数（auth.* 认证族
---        EXECUTE，登录/2fa/jwt 签发为连接角色认证职责），禁止业务/公开类函数 EXECUTE。
+-- EXECUTE，登录/2fa/jwt 签发为连接角色认证职责），禁止业务/公开类函数 EXECUTE。
 
 -- 收敛，新角色 fms_public（NOLOGIN），公开读口（/api/public/**）匿名请求经
---        SandboxSessionInterceptor 注入，仅 EXECUTE fn_get_param_value / fn_public_document_meta
---        + um/docs/log schema USAGE，函数解析必需，无任何表权限，
+-- SandboxSessionInterceptor 注入，仅 EXECUTE fn_get_param_value / fn_public_document_meta
+-- + um/docs/log schema USAGE，函数解析必需，无任何表权限，
 -- fms_app 撤销 4 个业务/公开类函数 EXECUTE（docs.fn_public_document_meta /
 
---        um.fn_get_param_value / log.fn_send_access_batch / log.fn_apply_access_log），
+-- um.fn_get_param_value / log.fn_send_access_batch / log.fn_apply_access_log），
 -- 内部投递（/internal/log-batch，X-FMS-Int-Token 保护）匿名请求注入 fms_operator
 
---        （log.* 投递函数 EXECUTE 授 fms_operator）。
+-- （log.* 投递函数 EXECUTE 授 fms_operator）。
 
 -- 幂等，CREATE ROLE 判存 / REVOKE/GRANT 幂等，依赖 00（fms_app/职责角色）、init/um_params_functions.sql（fn_get_param_value）、
---        23（fn_public_document_meta）、27（fn_send_access_batch/fn_apply_access_log）已部署。
+-- 23（fn_public_document_meta）、27（fn_send_access_batch/fn_apply_access_log）已部署。
 
 -- 角色（集群级，postgres 库），fms_public NOLOGIN，公开读口最小角色
 DO $$

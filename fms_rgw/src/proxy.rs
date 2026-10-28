@@ -387,10 +387,10 @@ pub async fn proxy_handler(
     }
 
     // 转发，超时30s覆盖连接+头交换，多上游经pool选实例 + 失败自动重试
-    //   连续失败 ≥3剔除、健康探测恢复，客户端ip供ip-hash模式使用
-    //   连接对端地址，不可伪造，与限流/日志同源。
-    //   熔断记录，任一实例成功record(true)，全部重试失败，最后一次错误才record(false)，
-    //   多实例下熔断粒度降为整体兜底，实例级由健康探测管理
+    // 连续失败 ≥3剔除、健康探测恢复，客户端ip供ip-hash模式使用
+    // 连接对端地址，不可伪造，与限流/日志同源。
+    // 熔断记录，任一实例成功record(true)，全部重试失败，最后一次错误才record(false)，
+    // 多实例下熔断粒度降为整体兜底，实例级由健康探测管理
     let ip = extract_client_ip(&req);
     match state.upstream.forward(req, ip.as_deref()).await {
         Ok(resp) => {

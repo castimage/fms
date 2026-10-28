@@ -4,10 +4,10 @@
 -- （storage_path 相对路径 + sha256 完整性哈希），挂接业务（business_type + business_id 泛化关联，权限经 rls 公司范围收敛）
 
 -- 业务类型白名单，REIMBURSEMENT_LINE（报销明细发票附件，接入 expense.reimbursement_lines.invoice_file_id 写入链路）/
---               VOUCHER，凭证附件，已接通
+-- VOUCHER，凭证附件，已接通
 
 -- 安全模型，company_id 恒由业务对象子查询推导，rls 收敛，客户端不可自报，上传越权业务对象即空集 40400，
---           fms_app 沙箱空壳无 docs USAGE（fail-closed），无 DELETE 策略，软删（deleted_at）为唯一删除通道
+-- fms_app 沙箱空壳无 docs USAGE（fail-closed），无 DELETE 策略，软删（deleted_at）为唯一删除通道
 
 SET ROLE fms_admin;
 

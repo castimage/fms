@@ -142,7 +142,7 @@ async fn redteam_retest_all_replayed_attacks() {
         }
     }
 
-    //  ws Origin，有效jwt + 恶意Origin 则 403，无Origin 则放行
+    // ws Origin，有效jwt + 恶意Origin 则 403，无Origin 则放行
     {
         let base = |origin: Option<&str>| {
             let mut s = format!(
@@ -176,7 +176,7 @@ async fn redteam_retest_all_replayed_attacks() {
         assert_eq!(status, 200, "R4 无 Origin 应放行，实际 {status}");
     }
 
-    //  Host投毒，Host=evil.example.com 时上游收到的 Host 为配置 host
+    // Host投毒，Host=evil.example.com 时上游收到的 Host 为配置 host
     {
         let mut req = b"GET /api/gl/vouchers HTTP/1.1\r\nHost: evil.example.com\r\n".to_vec();
         req.extend_from_slice(&bearer(&token));
@@ -202,7 +202,7 @@ async fn redteam_retest_all_replayed_attacks() {
         assert_eq!(hits[0].header("x-forwarded-host"), Some("evil.example.com"));
     }
 
-    //  /api/vouchers与/api%2Fvouchers则 404，不落静态
+    // /api/vouchers与/api%2Fvouchers则 404，不落静态
     {
         for path in ["/API/vouchers", "/api%2Fvouchers", "/API%2Fvouchers"] {
             let raw =

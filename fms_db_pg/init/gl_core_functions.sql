@@ -1,9 +1,9 @@
 -- FMS 财务系统（核心函数补齐，执行库，fms），凭证不可变触发器（POSTED 转 REVERSED 受控放行）+ 防重复冲销唯一索引，分录行级借贷平衡校验 + 凭证头总额同步，过账，红字冲销，期间结账/反结账，资金日报，表 updated_at 触发器挂载，EXECUTE 授权矩阵 + 6 角色权限矩阵核对查询
 
 -- 文件末尾段，均幂等重定义，
---   per-company 取号序列（fn_get_voucher_no，与 init/gl_base.sql 同函数）
---   fn_post_voucher SoD（审核人≠制单人，与上文过账同函数）
---   fn_fx_adjustment uuid 签名 + 权限闸口（最终实现由 init/gl_fx_rates.sql 覆盖，签名与闸口一致）
+-- per-company 取号序列（fn_get_voucher_no，与 init/gl_base.sql 同函数）
+-- fn_post_voucher SoD（审核人≠制单人，与上文过账同函数）
+-- fn_fx_adjustment uuid 签名 + 权限闸口（最终实现由 init/gl_fx_rates.sql 覆盖，签名与闸口一致）
 
 -- 全部幂等可重跑（CREATE OR REPLACE / DROP TRIGGER IF EXISTS / 唯一索引 IF NOT EXISTS / DO 块判存）
 -- 反向凭证在同事务内经 DRAFT 转 POSTED，分录行级平衡触发器逐行执行，POSTED 逐行插分录中间态必然不平衡（RAISE），且总额同步 UPDATE 会被 trg_voucher_immutable 拒绝，DRAFT 中间态事务内原子不可见，最终语义不变。分录平衡触发器的 DELETE 分支不访问 NEW（DELETE 时 NEW 未赋值），按 TG_OP 分支取值。fn_reopen_period 读 fms.force_reopen 加 COALESCE 兜底，guc 缺失时 NULL <> 'on' 恒为 NULL（IF 不触发）则 fail-open，兜底后按默认 off 拒绝
@@ -273,7 +273,7 @@ COMMENT ON FUNCTION gl.fn_reverse_voucher(uuid, date, text)
 -- gl.fn_reject_voucher（驳回，SUBMITTED 转 REJECTED，原因必填，状态历史 remark + 审计）
 
 -- 行为，状态校验 + 原因必填 + SoD（驳回人≠制单人）+ UPDATE 置 REJECTED（状态历史由
---   trg_voucher_status_history 记录，原因经事务级 guc fms.voucher_remark 透传到 remark）+ audit.record
+-- trg_voucher_status_history 记录，原因经事务级 guc fms.voucher_remark 透传到 remark）+ audit.record
 
 -- 鉴权，auth.require_permission('gl.voucher.reject')，未注入 fms.user_id 上下文或缺少权限时 RAISE（fail-closed）
 
@@ -283,7 +283,7 @@ COMMENT ON FUNCTION gl.fn_reverse_voucher(uuid, date, text)
 
 -- 状态机语义，SUBMITTED 转 REJECTED 唯一合法通道，白名单触发器终审，驳回后凭证进入 REJECTED
 -- ，列表可见/可筛选，REJECTED 转 DRAFT 退回经 fn_revert_voucher 闸口开放
---   db 层白名单与端点一致
+-- db 层白名单与端点一致
 CREATE OR REPLACE FUNCTION gl.fn_reject_voucher(p_voucher_id uuid, p_reason text)
 RETURNS void
 LANGUAGE plpgsql

@@ -215,7 +215,7 @@ pub async fn mw_sign(
     let trace_id = trace_id_of(&req);
 
     // ws握手跳过，无body不签名，判定与ws_handler完全一致，双头 + 路径精确匹配，
-    //    防跳过签名却按普通http转发
+    // 防跳过签名却按普通http转发
     if is_websocket_request(req.headers(), req.uri().path()) {
         return next.run(req).await;
     }

@@ -508,8 +508,8 @@ GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator
 -- operator 权限面（职责角色 accountant/approver/cashier），
 -- 补授 wf.* 权限点，wf.fn_complete_task 的 require_permission
 
---    ('wf.instance.approve'/'wf.instance.reject') 闸口放行，期望矩阵，WF 任务
---    approve/reject/transfer = operator 业务操作
+-- ('wf.instance.approve'/'wf.instance.reject') 闸口放行，期望矩阵，WF 任务
+-- approve/reject/transfer = operator 业务操作
 
 -- 闸口收敛，纵深防御，Java requireAdminRole 之后 sql 侧双闸，
 
@@ -517,7 +517,7 @@ GRANT EXECUTE ON FUNCTION auth.require_permission(text) TO fms_app, fms_operator
 -- auth.upsert_role，admin.role.create 闸口，角色创建/更新
 -- auth.grant_role_permission / auth.revoke_role_permission，admin.role.grant 闸口
 -- org.fn_upsert_company，org.company.create 闸口，公司创建/更新
---    函数体追加 PERFORM auth.require_permission，... 首行闸口
+-- 函数体追加 PERFORM auth.require_permission，... 首行闸口
 -- 全部幂等可重跑，psql -v ON_ERROR_STOP=1 执行
 
 -- auth.update_user / auth.set_password / auth.create_user 不设闸，登录/找回/首登

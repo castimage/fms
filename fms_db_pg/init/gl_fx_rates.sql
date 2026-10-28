@@ -3,15 +3,15 @@
 
 -- gl.fn_fx_adjustment 期末调汇，外币科目期末余额 × 期末汇率 − 按 1:1 计价的账面本币
 
---    （记账汇率不可得，voucher_lines 仅存 currency 无 rate，折本币差额按「原币余额 ×（期末汇率−1）」简化，设计决策见下文），生成 DRAFT 调汇凭证草稿
+-- （记账汇率不可得，voucher_lines 仅存 currency 无 rate，折本币差额按「原币余额 ×（期末汇率−1）」简化，设计决策见下文），生成 DRAFT 调汇凭证草稿
 -- gl.fn_cron_voucher_number_check，断号发现写 audit.record（voucher_gap），缺口可追溯
 
 -- fa.fn_run_depreciation，凭证生成补 created_by/company_id（NOT NULL 约束）、资产累加累计折旧、
 
---    批次回填 voucher_id，与 Java 侧 FaServiceImpl 同口径
+-- 批次回填 voucher_id，与 Java 侧 FaServiceImpl 同口径
 -- um.params 种子，fx.gain.account / fx.loss.account（存科目 code，沿用 fa.depr.*.account 约定，um.params 全局无 company_id，存 code 而非 id 才能跨公司生效），
 
---    um.permissions 种子，gl.period.close / gl.period.reopen / gl.period.fx_adjustment（函数体内已引用，operator 会话调用须经 require_permission）
+-- um.permissions 种子，gl.period.close / gl.period.reopen / gl.period.fx_adjustment（函数体内已引用，operator 会话调用须经 require_permission）
 
 -- 全部幂等可重跑（CREATE OR REPLACE / DROP ... IF EXISTS / ON CONFLICT DO NOTHING）
 
@@ -21,13 +21,13 @@ SET ROLE fms_admin;
 
 
 -- 列语义，company_id 公司范围（rls can_access_org 收敛），currency CHAR，3 ISO 币种，
---   period 'YYYY-MM'，rate NUMERIC(18,6) 期末汇率（本币单位=1，如 USD 对 CNY 7.25），
---   updated_by/updated_at 维护审计，deleted_at 软删（统一经 auth.fn_soft_delete 闸口）。
+-- period 'YYYY-MM'，rate NUMERIC(18,6) 期末汇率（本币单位=1，如 USD 对 CNY 7.25），
+-- updated_by/updated_at 维护审计，deleted_at 软删（统一经 auth.fn_soft_delete 闸口）。
 
 -- 唯一键为部分唯一索引 (company_id, currency, period) WHERE deleted_at IS NULL，
---   软删行不占键位，upsert 以新行复活，全量约束下软删行仍占键，DO UPDATE 分支对软删行
---   触发 rls 检查恒报 42501，软删后重新维护汇率会失败，
---   活跃行仍走 DO UPDATE 更新语义，Mapper 侧 ON CONFLICT 同步带索引谓词 WHERE deleted_at IS NULL。
+-- 软删行不占键位，upsert 以新行复活，全量约束下软删行仍占键，DO UPDATE 分支对软删行
+-- 触发 rls 检查恒报 42501，软删后重新维护汇率会失败，
+-- 活跃行仍走 DO UPDATE 更新语义，Mapper 侧 ON CONFLICT 同步带索引谓词 WHERE deleted_at IS NULL。
 
 -- CREATE TABLE IF NOT EXISTS 幂等保留，不 DROP 清空既有汇率数据
 CREATE TABLE IF NOT EXISTS gl.fx_rates (
@@ -127,22 +127,22 @@ ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now
 
 
 -- 调汇算法与账务简化设计决策，
---   * 记账汇率不可得（voucher_lines 仅 currency 无 rate 列），账面本币无法精确还原，
---     采用任务指定简化，期末本币价值 = 原币余额 × 期末汇率，账面按 1:1 计价（base=CNY 时
---     即原币余额 × 1），差额 = 原币余额 ×（期末汇率 − 1），全部计入汇兑损益科目。
---   * 外币科目期末余额 = 截至期间末全部 POSTED/REVERSED 凭证的累计净额，含期初，按科目
---     direction 定借贷向（DEBIT 科目借−贷、CREDIT 科目贷−借），REVERSED 与反向 POSTED
---     金额互相抵消，不重复计量。
---   * 单科目调整额 adj = round(余额 × 汇率, 2) − round(余额, 2)，adj>0 按科目 direction
---     同向入账（DEBIT 科目记借、CREDIT 科目记贷），adj<0 反向入账。
---   * 全部科目调整额合计 T，T>0 则贷方记汇兑收益（fx.gain.account），T<0 则借方记汇兑损失
---     （fx.loss.account），借贷恒等，T=0 不生成凭证。
---   * 无汇率记录的外币科目/公司跳过（NOTICE），同公司同期间已生成过调汇凭证（幂等键
---     idem_key = 'fx_adjustment:'+period）跳过，期间 CLOSED 由 trg_period_voucher_guard
---     拒绝，调汇应在结账前完成，天然顺序保证。
---   * 凭证为 DRAFT 草稿（触发器 DRAFT 豁免平衡校验但本实现仍恒平衡），source_type
---     'FX_ADJUSTMENT'，制单人 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 以
---     postgres 身份调用无 guc 用户，落种子管理员保证 created_by NOT NULL。
+-- * 记账汇率不可得（voucher_lines 仅 currency 无 rate 列），账面本币无法精确还原，
+-- 采用任务指定简化，期末本币价值 = 原币余额 × 期末汇率，账面按 1:1 计价（base=CNY 时
+-- 即原币余额 × 1），差额 = 原币余额 ×（期末汇率 − 1），全部计入汇兑损益科目。
+-- * 外币科目期末余额 = 截至期间末全部 POSTED/REVERSED 凭证的累计净额，含期初，按科目
+-- direction 定借贷向（DEBIT 科目借−贷、CREDIT 科目贷−借），REVERSED 与反向 POSTED
+-- 金额互相抵消，不重复计量。
+-- * 单科目调整额 adj = round(余额 × 汇率, 2) − round(余额, 2)，adj>0 按科目 direction
+-- 同向入账（DEBIT 科目记借、CREDIT 科目记贷），adj<0 反向入账。
+-- * 全部科目调整额合计 T，T>0 则贷方记汇兑收益（fx.gain.account），T<0 则借方记汇兑损失
+-- （fx.loss.account），借贷恒等，T=0 不生成凭证。
+-- * 无汇率记录的外币科目/公司跳过（NOTICE），同公司同期间已生成过调汇凭证（幂等键
+-- idem_key = 'fx_adjustment:'+period）跳过，期间 CLOSED 由 trg_period_voucher_guard
+-- 拒绝，调汇应在结账前完成，天然顺序保证。
+-- * 凭证为 DRAFT 草稿（触发器 DRAFT 豁免平衡校验但本实现仍恒平衡），source_type
+-- 'FX_ADJUSTMENT'，制单人 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 以
+-- postgres 身份调用无 guc 用户，落种子管理员保证 created_by NOT NULL。
 
 -- 返回生成的调汇凭证数，SECURITY DEFINER + require_permission('gl.period.fx_adjustment')，
 -- 声明 VOLATILE，写库函数，STABLE 声明在写库时运行期报错。
@@ -441,11 +441,11 @@ GRANT EXECUTE ON FUNCTION gl.fn_cron_voucher_number_check() TO fms_operator;
 -- 折旧过账双路径统一（fa.fn_run_depreciation 重建）
 
 -- pg 与 Java（FaServiceImpl）双路径同口径，
---   * created_by 落 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 无 guc 用户，
---     分录补 company_id，两列 NOT NULL 无缺省，缺失则凭证生成恒被拦截，
---   * 逐资产累加累计折旧并 ACTIVE 转 DEPRECIATING，与 Java 同算法，
---   * 凭证幂等键 idem_key='fa_depreciation:'+period，双路径互斥，先跑者胜，
---   * 批次回填 voucher_id（fa.depreciation_runs 新增列，展示链路）。
+-- * created_by 落 COALESCE(auth.current_uid, 种子 ADMIN_UID)，cron 无 guc 用户，
+-- 分录补 company_id，两列 NOT NULL 无缺省，缺失则凭证生成恒被拦截，
+-- * 逐资产累加累计折旧并 ACTIVE 转 DEPRECIATING，与 Java 同算法，
+-- * 凭证幂等键 idem_key='fa_depreciation:'+period，双路径互斥，先跑者胜，
+-- * 批次回填 voucher_id（fa.depreciation_runs 新增列，展示链路）。
 -- Java 侧 FaServiceImpl 同构生成 DRAFT 折旧凭证 + 回填 voucher_id，同文件批次。
 ALTER TABLE fa.depreciation_runs
     ADD COLUMN IF NOT EXISTS voucher_id uuid REFERENCES gl.vouchers(id);
@@ -615,11 +615,11 @@ GRANT EXECUTE ON FUNCTION fa.fn_run_depreciation(uuid, text) TO fms_operator;
 -- b gl 侧配套小函数（Java FaServiceImpl 凭证生成共用，避免 Java 直读 um.params，无表级授权
 
 -- 与科目解析重复实现，科目映射参数单一来源仍在 pg），
---   * gl.fn_depr_accounts(p_company_id)，按 um.params fa.depr.*.account 解析该公司折旧凭证
---     两科目 id（jsonb {depreciation, accumulated}，科目缺失为 null）
---   * gl.fn_idem_voucher_exists(p_company_id, p_period, p_idem_key)，幂等键查重（SECURITY
---     DEFINER 绕过 rls，DRAFT 凭证仅创建人可见，跨路径（cron/不同操作员）查重必须无视
---     rls，只读布尔，不泄露明细）
+-- * gl.fn_depr_accounts(p_company_id)，按 um.params fa.depr.*.account 解析该公司折旧凭证
+-- 两科目 id（jsonb {depreciation, accumulated}，科目缺失为 null）
+-- * gl.fn_idem_voucher_exists(p_company_id, p_period, p_idem_key)，幂等键查重（SECURITY
+-- DEFINER 绕过 rls，DRAFT 凭证仅创建人可见，跨路径（cron/不同操作员）查重必须无视
+-- rls，只读布尔，不泄露明细）
 CREATE OR REPLACE FUNCTION gl.fn_depr_accounts(p_company_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql

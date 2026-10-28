@@ -122,7 +122,7 @@ pub async fn ws_handler(
     }
 
     // Origin校验，cswsh防护，浏览器ws握手携带的Origin必须命中cors白名单
-    //    (CorsLayer不约束ws升级)，无Origin的非浏览器客户端放行，非白名单则 403
+    // (CorsLayer不约束ws升级)，无Origin的非浏览器客户端放行，非白名单则 403
     if let Some(origin) = req.headers().get(ORIGIN).and_then(|v| v.to_str().ok())
         && !state.cfg.cors.allowed_origins.iter().any(|o| o == origin)
     {
@@ -134,7 +134,7 @@ pub async fn ws_handler(
     }
 
     // 认证，query ?token= 优先，其次Authorization头，query token为裸jwt，
-    //    verify_jwt要求 "Bearer " 前缀，需补上，否则按格式非法恒401
+    // verify_jwt要求 "Bearer " 前缀，需补上，否则按格式非法恒401
     let token: Option<String> = extract_token_from_query(req.uri())
         .map(|t| format!("Bearer {t}"))
         .or_else(|| {
@@ -184,7 +184,7 @@ pub async fn ws_handler(
     };
 
     // 限流，用户维度(ip维度已由mw_rate_limit计过一次，不重复)+ 熔断检查，
-    //    握手body声明长度防御性检查(mw_sign对ws升级跳过缓冲，上限取配置)
+    // 握手body声明长度防御性检查(mw_sign对ws升级跳过缓冲，上限取配置)
     let ip = extract_client_ip(&req);
     if let Some(len) = req
         .headers()
@@ -214,8 +214,8 @@ pub async fn ws_handler(
     }
 
     // 选取ws目标实例并固定(ip-hash，有ip时或round-robin，长连接粘性，
-    //    握手后双向泵全程同一实例，不参与重试)，无健康实例则 503
-    //  与proxy路径同语义，实例级剔除由pool健康探测管理
+    // 握手后双向泵全程同一实例，不参与重试)，无健康实例则 503
+    // 与proxy路径同语义，实例级剔除由pool健康探测管理
     let Some(target) = state.upstream.ws_target(ip.as_deref()) else {
         warn!(trace_id = %trace_id, "WS 握手：无健康上游实例");
         state.circuit.record(false);
@@ -223,7 +223,7 @@ pub async fn ws_handler(
     };
 
     // 重建上游请求，同path，保留Connection/Upgrade/Sec-WebSocket-*，
-    //    剥离X-FMS-*后注入身份、签名与trace
+    // 剥离X-FMS-*后注入身份、签名与trace
     let (client_parts, _) = req.into_parts();
     let mut headers = client_parts.headers.clone();
     // ws场景剥离hop-by-hop，保留Connection/Upgrade，升级所需，其余共享proxy单一清单
@@ -281,7 +281,7 @@ pub async fn ws_handler(
     }
     forward_client_headers(&mut headers, ip.as_deref(), proto);
     // 上游query重建，剥离客户端uid与token后注入令牌里的uid，端点身份取自信任头而非该参数，
-    //    此处归一为避免客户端可控值随请求流入上游与访问日志
+    // 此处归一为避免客户端可控值随请求流入上游与访问日志
     let up_query = trusted_ws_query(client_parts.uri.query(), &claims.sub.to_string());
     let uri = match build_upstream_uri(&target.base_url, client_parts.uri.path(), Some(&up_query)) {
         Ok(u) => u,

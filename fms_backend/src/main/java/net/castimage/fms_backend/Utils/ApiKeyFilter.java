@@ -79,9 +79,9 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         // jwt 模式身份已采信 / 匿名端点则透传。注意，TraceIdFilter（order=1）已注入
-        //    仅含 traceId 的占位上下文（userId=null），故不能用 get!=null 判身份，
-        //    必须用 authenticated（要求 userId 非 null），api-key 模式网关不注入
-        //    身份头，签名过滤器跳过采信后占位上下文保留 userId=null，正是校验入口。
+        // 仅含 traceId 的占位上下文（userId=null），故不能用 get!=null 判身份，
+        // 必须用 authenticated（要求 userId 非 null），api-key 模式网关不注入
+        // 身份头，签名过滤器跳过采信后占位上下文保留 userId=null，正是校验入口。
         if (RequestContext.authenticated() || isAnonymousPath(request.getRequestURI())) {
             filterChain.doFilter(request, response);
             return;
@@ -116,7 +116,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         }
 
         // 采信身份，仅来自 key.user_id + scope，不读任何 X-FMS-* 头，orgIds/deptIds 传 null
-        //    由 pg 侧 auth.set_session 从 scope 表预载，与签名过滤器 jwt 路径同语义
+        // 由 pg 侧 auth.set_session 从 scope 表预载，与签名过滤器 jwt 路径同语义
         try {
             RequestContext.set(new RequestContext(identity.userId(), role, null, null, TraceIdUtil.current()));
             filterChain.doFilter(request, response);

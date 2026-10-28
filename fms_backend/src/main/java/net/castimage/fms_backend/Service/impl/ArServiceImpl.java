@@ -534,15 +534,15 @@ public class ArServiceImpl implements ArService {
             throw new ConflictException("核销金额超过发票未核销余额（已核销 " + allocated + "，总额 " + invoice.getTotal() + "）");
         }
         // 收款单剩余可核销额预检，累计已核销 + 本次 ≤ 收款金额（合并路径防循环累加
-        //    超分，小金额收款单不可通过多次核销累加超过收款金额）
+        // 超分，小金额收款单不可通过多次核销累加超过收款金额）
         BigDecimal receiptUsed = money(receiptAllocationMapper.selectAllocatedSumByReceipt(receiptId));
         if (receiptUsed.add(amount).compareTo(money(receipt.getAmount())) > 0) {
             throw new ConflictException("核销金额超过收款单未核销余额（已核销 " + receiptUsed
                     + "，收款金额 " + receipt.getAmount() + "）");
         }
         // 核销明细写入，同 (receipt_id, invoice_id) 存在有效行则乐观锁合并金额
-        //    （updateWithVersion，uk_ar_alloc 唯一约束保持"同对仅一行"语义，同对多次核销
-        //    推进仅累加金额，防并发出双行/重复核销），无有效行则 INSERT 新行（version 0）。
+        // （updateWithVersion，uk_ar_alloc 唯一约束保持"同对仅一行"语义，同对多次核销
+        // 推进仅累加金额，防并发出双行/重复核销），无有效行则 INSERT 新行（version 0）。
         UUID allocId;
         int allocVersion;
         BigDecimal allocAmount;

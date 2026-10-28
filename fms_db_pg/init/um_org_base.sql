@@ -937,7 +937,7 @@ COMMENT ON FUNCTION auth.fn_soft_delete(text, text, uuid)
     IS '软删除统一出口（SECURITY DEFINER）：白名单表按公司范围收敛后置 deleted_at=now()；应用角色软删除经本闸口（PG15+ 新行可见性检查下直 UPDATE 不可达）';
 
 -- 版本化变体，核销撤销/冲销乐观锁，返回受影响行数，0 = 版本冲突/不存在/已删除，
---     ar/ap 核销明细撤销经此出口（Mapper softDeleteWithVersion 转交 auth.fn_soft_delete_v）
+-- ar/ap 核销明细撤销经此出口（Mapper softDeleteWithVersion 转交 auth.fn_soft_delete_v）
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete_v(p_schema text, p_table text, p_id uuid, p_old_version int)
 RETURNS int
 LANGUAGE plpgsql
@@ -979,7 +979,7 @@ COMMENT ON FUNCTION auth.fn_soft_delete_v(text, text, uuid, int)
 
 -- auth.fn_soft_delete（保持属主 postgres，以连接用户 postgres 重建，勿 SET ROLE），
 
---    白名单含 um.roles/um.role_perm，数据范围放宽 is_admin
+-- 白名单含 um.roles/um.role_perm，数据范围放宽 is_admin
 CREATE OR REPLACE FUNCTION auth.fn_soft_delete(p_schema text, p_table text, p_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql

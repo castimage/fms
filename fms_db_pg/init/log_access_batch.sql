@@ -1,26 +1,26 @@
 -- FMS 财务系统（init/log_access_batch，执行库，fms），访问日志批量投递函数 log.fn_send_access_batch
 
 -- 网关零外部基础设施依赖，访问日志经 http
---       中转后端 /internal/log-batch（免网关签名 + 内部 token X-FMS-Int-Token），后端批量投递
---       pgmq q_log_access，由 queues_cron.sql 的 log.fn_consume_log_queues 每分钟消费落 log.access_logs
---       供审计。
+-- 中转后端 /internal/log-batch（免网关签名 + 内部 token X-FMS-Int-Token），后端批量投递
+-- pgmq q_log_access，由 queues_cron.sql 的 log.fn_consume_log_queues 每分钟消费落 log.access_logs
+-- 供审计。
 
 -- 方案，SECURITY DEFINER 包装函数（属主 fms_admin）一次调用内逐条 pgmq.send，pgmq 无批量 api
---       （仅逐条 send），循环移入 db 内避免 N 次 jdbc 往返，Java 侧 LogQueueMapper
---       单次调用传整个 jsonb 数组，逐条容错，单条失败 NOTICE 继续，best-effort，返回成功条数。
+-- （仅逐条 send），循环移入 db 内避免 N 次 jdbc 往返，Java 侧 LogQueueMapper
+-- 单次调用传整个 jsonb 数组，逐条容错，单条失败 NOTICE 继续，best-effort，返回成功条数。
 
 -- 共享映射，消息体到 log.access_logs 行的字段映射收敛为 log.fn_apply_access_log 单一函数，
---       queues_cron.sql 消费链与本文件降级路径共同调用，杜绝三处复制漂移。
+-- queues_cron.sql 消费链与本文件降级路径共同调用，杜绝三处复制漂移。
 
 -- 权限，/internal 路径 Controller 置 SandboxRoleHint.Hint.INTERNAL_OPERATOR，无身份采信，
---       SandboxSessionInterceptor 复位会话态后 SET ROLE fms_operator，函数 SECURITY DEFINER
---       以属主 fms_admin 执行绕过角色与 rls；本文件先授 fms_app，init/role_fms_public.sql
---       随后收回并授 fms_operator，最终职责角色侧仅 fms_operator 可执行。
+-- SandboxSessionInterceptor 复位会话态后 SET ROLE fms_operator，函数 SECURITY DEFINER
+-- 以属主 fms_admin 执行绕过角色与 rls；本文件先授 fms_app，init/role_fms_public.sql
+-- 随后收回并授 fms_operator，最终职责角色侧仅 fms_operator 可执行。
 -- grants_base.sql 的 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA log FROM PUBLIC 早于本文件执行，
---       新建函数默认 PUBLIC EXECUTE，本文件必须显式 REVOKE 兜底。
+-- 新建函数默认 PUBLIC EXECUTE，本文件必须显式 REVOKE 兜底。
 
 -- 依赖，queues_cron.sql 已建 q_log_access 队列且 pgmq 核心函数为 SECURITY DEFINER（属主 fms_admin），
---       grants_base.sql 已授 fms_app log schema USAGE。全部 DDL 幂等可重跑。
+-- grants_base.sql 已授 fms_app log schema USAGE。全部 DDL 幂等可重跑。
 SET ROLE fms_admin;
 
 -- 共享落库映射 log.fn_apply_access_log(p_msg jsonb)，q_log_access 消息体映射 log.access_logs
@@ -72,10 +72,10 @@ GRANT EXECUTE ON FUNCTION log.fn_apply_access_log(jsonb) TO fms_app;
 -- 批量投递，双路径，p_items 为 jsonb 数组（元素 = q_log_access 约定消息体）
 -- pgmq 可用（pgmq.send 函数存在性探测）则逐条 pgmq.send（第三参 delay_sec=0 即时投递），
 
---      单条失败 NOTICE 不阻断整批，由 queues_cron.sql 消费链落库，本地库形态，
+-- 单条失败 NOTICE 不阻断整批，由 queues_cron.sql 消费链落库，本地库形态，
 -- pgmq 不可用则逐条经 log.fn_apply_access_log 直落 log.access_logs 兜底，同一审计
 
---      目标，跳过队列中转，两形态最终数据均落审计表。
+-- 目标，跳过队列中转，两形态最终数据均落审计表。
 CREATE OR REPLACE FUNCTION log.fn_send_access_batch(p_items jsonb)
 RETURNS int
 LANGUAGE plpgsql
