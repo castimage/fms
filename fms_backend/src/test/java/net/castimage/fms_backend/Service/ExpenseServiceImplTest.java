@@ -3,11 +3,13 @@ package net.castimage.fms_backend.Service;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import net.castimage.fms_backend.Exception.ConflictException;
+import net.castimage.fms_backend.Exception.ForbiddenException;
 import net.castimage.fms_backend.Mapper.AuthFunctionMapper;
 import net.castimage.fms_backend.Mapper.ReimbursementLineMapper;
 import net.castimage.fms_backend.Mapper.ReimbursementMapper;
 import net.castimage.fms_backend.Mapper.WfDefinitionMapper;
 import net.castimage.fms_backend.Mapper.WfInstanceMapper;
+import net.castimage.fms_backend.Model.dto.ReimbursementRequest;
 import net.castimage.fms_backend.Model.entity.Reimbursement;
 import net.castimage.fms_backend.Service.impl.ExpenseServiceImpl;
 import net.castimage.fms_backend.Utils.JwtRole;
@@ -19,6 +21,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,11 +35,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 报销单过账凭证动作测试，mock Mapper 不连库
+ * 报销单业务动作测试，mock Mapper 不连库
  *
  * 覆盖显式动作 linkReimbursementVoucher 的状态守卫，仅 PAID 可生成，voucher_id 非空即幂等返回
  * 既有凭证且不再触碰凭证与状态，状态推进 CAS 影响 0 行即 40900 并回滚不留孤立凭证，
- * 另覆盖审批路径不生成凭证、付款路径不触碰凭证列
+ * 另覆盖审批路径不生成凭证、付款路径不触碰凭证列，以及修改与删除仅限申请人本人的 40300 校验
  */
 class ExpenseServiceImplTest {
 
@@ -43,7 +47,13 @@ class ExpenseServiceImplTest {
 
     private static final UUID VOUCHER_ID = UuidV7.next();
 
+    private static final UUID CURRENT_USER = UuidV7.next();
+
     private ReimbursementMapper reimbursementMapper;
+
+    private ReimbursementLineMapper lineMapper;
+
+    private AuthFunctionMapper authFunctionMapper;
 
     private VoucherLinkService voucherLinkService;
 
@@ -59,11 +69,13 @@ class ExpenseServiceImplTest {
     @BeforeEach
     void setUp() {
         reimbursementMapper = mock(ReimbursementMapper.class);
+        lineMapper = mock(ReimbursementLineMapper.class);
+        authFunctionMapper = mock(AuthFunctionMapper.class);
         voucherLinkService = mock(VoucherLinkService.class);
-        service = new ExpenseServiceImpl(reimbursementMapper, mock(ReimbursementLineMapper.class),
-                mock(AuthFunctionMapper.class), mock(FileService.class),
+        service = new ExpenseServiceImpl(reimbursementMapper, lineMapper,
+                authFunctionMapper, mock(FileService.class),
                 mock(WfDefinitionMapper.class), mock(WfInstanceMapper.class), voucherLinkService);
-        RequestContext.set(new RequestContext(UuidV7.next(), JwtRole.OPERATOR, null, null, "t"));
+        RequestContext.set(new RequestContext(CURRENT_USER, JwtRole.OPERATOR, null, null, "t"));
     }
 
     @AfterEach
@@ -75,6 +87,7 @@ class ExpenseServiceImplTest {
     private Reimbursement reimb(String status, UUID voucherId) {
         Reimbursement r = new Reimbursement();
         r.setId(REIMB_ID);
+        r.setApplicantId(CURRENT_USER);
         r.setStatus(status);
         r.setVoucherId(voucherId);
         return r;
@@ -201,5 +214,45 @@ class ExpenseServiceImplTest {
 
         verify(voucherLinkService, never()).linkExpense(any());
         verify(reimbursementMapper, never()).update(any(), any());
+    }
+
+    /** 修改仅限申请人本人，非本人草稿直接 40300，不进入明细重写 */
+    @Test
+    void update_rejects_whenNotApplicant() {
+        Reimbursement r = reimb("DRAFT", null);
+        r.setApplicantId(UuidV7.next());
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(r);
+
+        assertThrows(ForbiddenException.class,
+                () -> service.updateReimbursement(REIMB_ID, request()));
+        verify(reimbursementMapper, never()).updateById(any(Reimbursement.class));
+    }
+
+    /** 删除仅限申请人本人，非本人草稿直接 40300，不触碰软删闸口 */
+    @Test
+    void delete_rejects_whenNotApplicant() {
+        Reimbursement r = reimb("DRAFT", null);
+        r.setApplicantId(UuidV7.next());
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(r);
+
+        assertThrows(ForbiddenException.class, () -> service.deleteReimbursement(REIMB_ID));
+        verify(authFunctionMapper, never()).fnSoftDelete(any(), any(), any());
+    }
+
+    /** 申请人本人删除草稿正常放行 */
+    @Test
+    void delete_allowsApplicant() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("DRAFT", null));
+        when(lineMapper.selectList(any())).thenReturn(List.of());
+        when(authFunctionMapper.fnSoftDelete("expense", "reimbursements", REIMB_ID)).thenReturn(true);
+
+        service.deleteReimbursement(REIMB_ID);
+
+        verify(authFunctionMapper).fnSoftDelete("expense", "reimbursements", REIMB_ID);
+    }
+
+    private ReimbursementRequest request() {
+        return new ReimbursementRequest(UuidV7.next(), "t", BigDecimal.TEN, "CNY",
+                UuidV7.next(), List.of());
     }
 }

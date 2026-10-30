@@ -9,6 +9,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.ConflictException;
+import net.castimage.fms_backend.Exception.ForbiddenException;
 import net.castimage.fms_backend.Exception.NotFoundException;
 import net.castimage.fms_backend.Mapper.AuthFunctionMapper;
 import net.castimage.fms_backend.Mapper.ReimbursementLineMapper;
@@ -163,6 +164,9 @@ public class ExpenseServiceImpl implements ExpenseService {
     public ReimbursementDetailView updateReimbursement(UUID id, ReimbursementRequest req) {
         RequestContext.requireWriteRole();
         Reimbursement r = requireReimbursement(id);
+        if (!r.getApplicantId().equals(RequestContext.requireUserId())) {
+            throw new ForbiddenException("仅申请人本人可修改报销单");
+        }
         // DRAFT 可任意修改；REJECTED（驳回退回）经更新路径转回 DRAFT——DB 触发器
         // expense.fn_reimburse_status_check 显式允许 REJECTED 转 DRAFT（"退回后可再提交"），
         // 与前端"修改后重新提交"按钮对齐，避免 REJECTED 在 API 层成为终态死锁
@@ -197,6 +201,9 @@ public class ExpenseServiceImpl implements ExpenseService {
     public void deleteReimbursement(UUID id) {
         RequestContext.requireWriteRole();
         Reimbursement r = requireReimbursement(id);
+        if (!r.getApplicantId().equals(RequestContext.requireUserId())) {
+            throw new ForbiddenException("仅申请人本人可删除报销单");
+        }
         // DRAFT/REJECTED 均可删除（驳回退回单可视同草稿撤销；软删不改状态列，触发器不拦截）
         if (!"DRAFT".equals(r.getStatus()) && !"REJECTED".equals(r.getStatus())) {
             throw new ConflictException("仅 DRAFT/REJECTED 状态报销单可删除（当前 " + r.getStatus() + "）");

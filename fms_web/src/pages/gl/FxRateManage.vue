@@ -209,7 +209,7 @@ onMounted(async () => {
           <n-input-number v-model:value="newRate" :min="0.000001" :precision="6" placeholder="汇率" class="new-rate" />
           <n-button size="small" :loading="adding" @click="addRow">新增</n-button>
         </template>
-        <n-button size="small" type="primary" :loading="adjusting" :disabled="!companyId" @click="runAdjustment">
+        <n-button v-if="canWrite" size="small" type="primary" :loading="adjusting" :disabled="!companyId" @click="runAdjustment">
           执行期末调汇
         </n-button>
       </div>
@@ -217,7 +217,7 @@ onMounted(async () => {
 
     <DataTable :columns="columns" :data="rows" :loading="loading" :scroll-x="760" :bordered="true">
       <template #empty>
-        <span>{{ companyId ? '暂无汇率记录，可新增' : '请先选择公司' }}</span>
+        <span>{{ companyId ? (canWrite ? '暂无汇率记录，可新增' : '暂无汇率记录') : '请先选择公司' }}</span>
       </template>
     </DataTable>
   </div>

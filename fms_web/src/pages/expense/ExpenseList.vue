@@ -17,9 +17,11 @@ import type { FmsColumn } from '@/components/common/DataTable.vue'
 import type { ReimbursementStatus, ReimbursementView } from '@/types/expense'
 import { formatDateTime } from '@/utils/format'
 import { useCanWrite } from '@/utils/perm'
+import { useAuthStore } from '@/stores/auth'
 
 const message = useMessage()
 const router = useRouter()
+const auth = useAuthStore()
 /** 当前会话是否业务写角色，viewer/auditor/report 只读，写按钮统一 v-if="canWrite" */
 const canWrite = useCanWrite()
 
@@ -96,9 +98,9 @@ async function onDelete(id: string) {
   await load()
 }
 
-/** 可编辑态，草稿/被驳回退回 */
+/** 可编辑态，仅申请人本人的草稿/被驳回退回可改删 */
 function editable(r: ReimbursementView): boolean {
-  return r.status === 'DRAFT' || r.status === 'REJECTED'
+  return r.applicantId === auth.user?.id && (r.status === 'DRAFT' || r.status === 'REJECTED')
 }
 
 const columns: FmsColumn<ReimbursementView>[] = [
