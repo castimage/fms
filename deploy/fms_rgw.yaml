@@ -25,6 +25,8 @@ auth:
   # 密钥留空，由 FMS_RGW_JWT_SECRET / FMS_RGW_SIGN_SECRET 注入，仅非空值覆盖；
   # 两者皆空时网关启动校验拒绝。模板的 change-me 占位符会被网关校验拒绝，空串加环境变量注入才是生产形态
   jwt_secret: ""
+  expected_iss: "fms"
+  expected_aud: "fms-gateway"
 
 sign:
   sign_secret: ""

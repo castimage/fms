@@ -90,13 +90,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     rt.block_on(async move { serve(state).await })
 }
 
-/// 启动期密钥强度校验，非空、长度 ≥ 32、非占位值(`CHANGE_ME`等弱形态)，false即启动失败
+/// 启动期密钥强度校验，非空、长度 ≥ 32、非占位值(`CHANGE_ME`/`change-me`/中文模板等弱形态)，false即启动失败
 fn validate_secret(secret: &str) -> bool {
     if secret.is_empty() || secret.len() < 32 {
         return false;
     }
     let lower = secret.to_ascii_lowercase();
-    if lower.contains("change_me") || lower.contains("placeholder") || lower.contains("xxxx") {
+    if lower.contains("change_me")
+        || lower.contains("change-me")
+        || lower.contains("placeholder")
+        || lower.contains("xxxx")
+        || secret.contains("请替换")
+    {
         return false;
     }
     // 全部同一字符，如 "aaaaaaaa..."视为占位弱密钥
@@ -656,6 +661,14 @@ mod tests {
         assert!(
             !validate_secret("change_me_1234567890abcdefghijklmnopqrs"),
             "change_me 子串拒绝"
+        );
+        assert!(
+            !validate_secret("change-me-at-least-32-chars-jwt-secret-0123456789"),
+            "模板 change-me 占位拒绝"
+        );
+        assert!(
+            !validate_secret("<请替换为 openssl rand -hex 32 的输出>"),
+            "中文占位串拒绝"
         );
         assert!(
             validate_secret("k9f2mQ7vLx4pRt8sWz3nYb6cDe1hJg0aU"),

@@ -23,7 +23,7 @@ server:
 
 tls:
   cert: "/app/certs/fms_rgw.pem"
-  key: "/app/certs/fms_rgw-key.pem"
+  key: "/app/certs/fms_rgw_key.pem"
   allow_insecure_fallback: false
 
 upstream:
