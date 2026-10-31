@@ -177,6 +177,34 @@ pub struct AppState {
     pub started_at: Instant,
 }
 
+/// 测试用`AppState`构造，cfg，test 仅测试构建可见，默认密钥非空 + cors白名单非空，
+/// 避免`build_router`启动期panic
+#[cfg(test)]
+pub(crate) fn test_state_with(cfg: Config) -> Arc<AppState> {
+    // 池构造，servers默认空则等价 vec![base_url]，单上游
+    let upstream = UpstreamPool::new(&cfg.upstream).expect("测试上游构造：默认 base_url 合法");
+    let logger = AccessLogger::new(&cfg.log, &cfg.upstream.base_url).expect("仅 stdout 日志");
+    Arc::new(AppState {
+        cfg: Arc::new(cfg),
+        limiter: Arc::new(RateLimiter::new(4, 10_000)) as Arc<dyn RateLimitBackend>,
+        circuit: Arc::new(CircuitBreaker::new(CircuitCfg::default())),
+        upstream: Arc::new(upstream),
+        logger: Arc::new(logger),
+        deny: Arc::new(TokenDenyList::default()),
+        started_at: Instant::now(),
+    })
+}
+
+/// 默认测试状态，jwt/sign密钥非空、cors白名单非空
+#[cfg(test)]
+pub(crate) fn test_state() -> Arc<AppState> {
+    let mut cfg = Config::default();
+    // 补齐密钥与白名单，避免build_router启动期panic
+    cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+    cfg.sign.sign_secret = "test-sign-secret".to_string();
+    cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
+    test_state_with(cfg)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,33 +284,4 @@ mod tests {
         deny.revoke("", now_secs() + 3600).await;
         assert!(!deny.is_revoked("").await, "空 token 忽略");
     }
-}
-
-/// 测试用`AppState`构造，cfg，test 仅测试构建可见，默认密钥非空 + cors白名单非空，
-/// 避免`build_router`启动期panic
-#[cfg(test)]
-pub(crate) fn test_state_with(cfg: Config) -> Arc<AppState> {
-    // 池构造，servers默认空则等价 vec![base_url]，单上游
-    let upstream = UpstreamPool::new(&cfg.upstream).expect("测试上游构造：默认 base_url 合法");
-    let logger = AccessLogger::new(&cfg.log, &cfg.upstream.base_url).expect("仅 stdout 日志");
-    Arc::new(AppState {
-        cfg: Arc::new(cfg),
-        limiter: Arc::new(RateLimiter::new(4, 10_000)) as Arc<dyn RateLimitBackend>,
-        circuit: Arc::new(CircuitBreaker::new(CircuitCfg::default())),
-        upstream: Arc::new(upstream),
-        logger: Arc::new(logger),
-        deny: Arc::new(TokenDenyList::default()),
-        started_at: Instant::now(),
-    })
-}
-
-/// 默认测试状态，jwt/sign密钥非空、cors白名单非空
-#[cfg(test)]
-pub(crate) fn test_state() -> Arc<AppState> {
-    let mut cfg = Config::default();
-    // 补齐密钥与白名单，避免build_router启动期panic
-    cfg.auth.jwt_secret = "test-jwt-secret".to_string();
-    cfg.sign.sign_secret = "test-sign-secret".to_string();
-    cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
-    test_state_with(cfg)
 }
