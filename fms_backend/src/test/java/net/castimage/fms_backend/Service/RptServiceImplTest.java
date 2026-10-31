@@ -3,6 +3,7 @@ package net.castimage.fms_backend.Service;
 import net.castimage.fms_backend.Utils.UuidV7;
 import jakarta.servlet.http.HttpServletResponse;
 import net.castimage.fms_backend.Exception.BadRequestException;
+import net.castimage.fms_backend.Exception.ForbiddenException;
 import net.castimage.fms_backend.Mapper.RptMapper;
 import net.castimage.fms_backend.Model.vo.TrialBalanceRow;
 import net.castimage.fms_backend.Service.impl.RptServiceImpl;
@@ -45,6 +46,7 @@ class RptServiceImplTest {
         response = mock(HttpServletResponse.class);
         out = new StringWriter();
         when(response.getWriter()).thenReturn(new PrintWriter(out));
+        when(rptMapper.canAccessOrg(any())).thenReturn(true);
     }
 
     @Test
@@ -81,6 +83,16 @@ class RptServiceImplTest {
         service.exportCsv("trial-balance", UuidV7.next(), "2026-08", null, response);
         assertTrue(out.toString().contains("\"库存\"\"现金\"\",外币\",DEBIT"),
                 "含逗号/引号字段应引号包裹且引号加倍");
+    }
+
+    /** IMMV 无 RLS，目标公司不在会话范围时报表入口拒绝 */
+    @Test
+    void reportRejectsCompanyOutsideScope() {
+        var companyId = UuidV7.next();
+        when(rptMapper.canAccessOrg(companyId)).thenReturn(false);
+
+        assertThrows(ForbiddenException.class,
+                () -> service.deptExpense(companyId, "2026-08", null));
     }
 
     @Test

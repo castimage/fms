@@ -85,6 +85,40 @@ SELECT pgivm.create_immv(
 COMMENT ON TABLE rpt.cash_flow_daily IS
 '资金日报 IMMV：银行流水按（公司×日期）聚合收入/支出，资金日报与趋势图数据源';
 
+-- IMMV 无行级安全，职责角色不直接授 SELECT；以下属主视图按调用方 GUC 收敛公司，
+-- 报表查询与账龄视图统一走安全视图，IMMV 仅保留给属主函数与增量维护
+CREATE OR REPLACE VIEW rpt.v_budget_actual AS
+    SELECT company_id, period, account_id, dept_id, actual_amount, line_cnt
+      FROM rpt.budget_actual
+     WHERE auth.can_access_org(company_id);
+ALTER VIEW rpt.v_budget_actual OWNER TO fms_admin;
+
+CREATE OR REPLACE VIEW rpt.v_dept_expense AS
+    SELECT company_id, period, dept_id, account_id, amount
+      FROM rpt.dept_expense
+     WHERE auth.can_access_org(company_id);
+ALTER VIEW rpt.v_dept_expense OWNER TO fms_admin;
+
+CREATE OR REPLACE VIEW rpt.v_cash_flow_daily AS
+    SELECT company_id, trx_date, income, expense
+      FROM rpt.cash_flow_daily
+     WHERE auth.can_access_org(company_id);
+ALTER VIEW rpt.v_cash_flow_daily OWNER TO fms_admin;
+
+CREATE OR REPLACE VIEW rpt.v_ar_aging_paid AS
+    SELECT pa.invoice_id, pa.paid_amount
+      FROM rpt.ar_aging_paid pa
+      JOIN ar.invoices i ON i.id = pa.invoice_id
+     WHERE i.deleted_at IS NULL AND auth.can_access_org(i.company_id);
+ALTER VIEW rpt.v_ar_aging_paid OWNER TO fms_admin;
+
+CREATE OR REPLACE VIEW rpt.v_ap_aging_paid AS
+    SELECT pa.invoice_id, pa.paid_amount
+      FROM rpt.ap_aging_paid pa
+      JOIN ap.invoices i ON i.id = pa.invoice_id
+     WHERE i.deleted_at IS NULL AND auth.can_access_org(i.company_id);
+ALTER VIEW rpt.v_ap_aging_paid OWNER TO fms_admin;
+
 -- 核心报表普通 sql 视图，非物化，避免维护成本，利润表/资产负债表/试算平衡表用普通视图 + 基表索引，查询计划走基表索引，全部为汇总级（GROUP BY 聚合），不暴露凭证/分录明细，符合 fms_report 角色"汇总只读、无明细敏感列"定位
 -- 视图属主 fms_admin（SUPERUSER），视图内部对基表的访问不触发 rls，查询者可看到全部公司汇总数，全部视图 ALTER VIEW SET (security_invoker = on)，使基表行级策略按调用者身份生效，与 audit.safe_voucher_view 同模式，防止补授权后跨公司汇总泄漏
 -- rpt.trial_balance 试算平衡表（公司×期间×科目 借/贷/余额）
@@ -175,7 +209,7 @@ SELECT i.company_id,
        COALESCE(a.paid_amount, 0)                 AS paid_amount,
        i.total - COALESCE(a.paid_amount, 0)       AS open_balance
 FROM ar.invoices i
-LEFT JOIN rpt.ar_aging_paid a ON a.invoice_id = i.id
+LEFT JOIN rpt.v_ar_aging_paid a ON a.invoice_id = i.id
 WHERE i.status IN ('ISSUED', 'PARTIAL')
   AND i.deleted_at IS NULL;
 

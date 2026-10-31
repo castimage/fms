@@ -60,7 +60,7 @@ SELECT i.company_id,
        COALESCE(a.paid_amount, 0)                 AS paid_amount,
        i.total - COALESCE(a.paid_amount, 0)       AS open_balance
 FROM ap.invoices i
-LEFT JOIN rpt.ap_aging_paid a ON a.invoice_id = i.id
+LEFT JOIN rpt.v_ap_aging_paid a ON a.invoice_id = i.id
 WHERE i.status IN ('ISSUED', 'PARTIAL')
   AND i.deleted_at IS NULL;
 
@@ -75,7 +75,7 @@ ALTER VIEW rpt.ap_aging SET (security_invoker = on);
 
 -- rpt SELECT 授权（镜像 init/grants_base.sql rpt 段，immv 与视图均为汇总级，四职责角色只读）
 
-GRANT SELECT ON rpt.ap_aging_paid
+GRANT SELECT ON rpt.v_ap_aging_paid
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT SELECT ON rpt.ap_aging
     TO fms_operator, fms_viewer, fms_auditor, fms_report;

@@ -53,7 +53,9 @@ GRANT SELECT (id, voucher_id, line_no, account_id, summary, debit, credit, curre
               dept_id, partner_id, company_id, created_at, updated_at, deleted_at)
     ON gl.voucher_lines TO fms_report;
 -- rpt 报表视图 SELECT，矩阵含 auditor，security_invoker=on 下基表授权各文件已齐
-GRANT SELECT ON rpt.budget_actual, rpt.ar_aging_paid, rpt.dept_expense, rpt.cash_flow_daily
+GRANT SELECT ON rpt.v_budget_actual, rpt.v_ar_aging_paid, rpt.v_dept_expense, rpt.v_cash_flow_daily
+    TO fms_operator, fms_viewer, fms_auditor, fms_report;
+GRANT SELECT ON rpt.v_ap_aging_paid
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT SELECT ON rpt.trial_balance, rpt.income_statement, rpt.balance_sheet,
                 rpt.cash_flow, rpt.ar_aging

@@ -89,7 +89,7 @@ public interface BudgetPlanMapper extends BaseMapper<BudgetPlan> {
               FROM budget.budget_plans p
               JOIN gl.chart_accounts a ON a.id = p.account_id AND a.deleted_at IS NULL
               JOIN org.departments d ON d.id = p.dept_id AND d.deleted_at IS NULL
-              LEFT JOIN rpt.budget_actual b
+              LEFT JOIN rpt.v_budget_actual b
                      ON b.company_id = p.company_id AND b.period = p.period
                     AND b.account_id = p.account_id
                     AND b.dept_id IS NOT DISTINCT FROM p.dept_id

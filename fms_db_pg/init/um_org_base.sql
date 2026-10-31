@@ -711,11 +711,13 @@ GRANT SELECT (id, company_id, login_name, display_name, status, must_change_pwd,
     ON um.users TO fms_viewer, fms_auditor, fms_report;
 -- um.users 的 rls 仅允许本人或管理员可见，业务列表（报销申请人、凭证制单人、流程处理人）
 -- 需要展示他人姓名，故以 fms_admin 属主的视图暴露安全列，视图按属主身份执行，
--- 策略中的 current_user = fms_admin 分支放行；敏感列不进入视图
+-- 策略中的 current_user = fms_admin 分支放行；视图内再按调用方 GUC 的 can_access_org
+-- 收敛公司，敏感列不进入视图
 CREATE OR REPLACE VIEW um.v_user_names AS
     SELECT id, company_id, login_name, display_name
       FROM um.users
-     WHERE deleted_at IS NULL;
+     WHERE deleted_at IS NULL
+       AND auth.can_access_org(company_id);
 ALTER VIEW um.v_user_names OWNER TO fms_admin;
 GRANT SELECT ON um.v_user_names TO fms_operator, fms_viewer, fms_auditor, fms_report;
 -- 参数表最小授权，密钥已移入 sec.app_secrets，其余参数仅供 SECURITY DEFINER 函数（fms_admin 身份）读取，职责角色一律不授 SELECT

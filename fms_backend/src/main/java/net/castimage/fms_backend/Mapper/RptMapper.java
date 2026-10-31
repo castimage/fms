@@ -18,9 +18,15 @@ import java.util.UUID;
  * 报表 Mapper（rpt 域）：非 BaseMapper，纯 B 类手写查询接口（JOIN/聚合/视图引用）。
  * 全部报表 SQL 直查 rpt 视图（rpt.trial_balance/income_statement/balance_sheet/cash_flow/ar_aging，
  * security_invoker=on 行级按调用者 GUC 收敛）与 IMMV（rpt.budget_actual/dept_expense/cash_flow_daily，
- * pg_ivm automatic 提交即一致）——Java 不拼公司白名单，companyId 仅 UI 提示过滤，越权值返回空集。
+ * pg_ivm automatic 提交即一致）；IMMV 无行级安全，服务层先经 can_access_org 校验目标公司。
  */
 public interface RptMapper {
+
+    /**
+     * 公司范围校验，IMMV 无 RLS，报表入口须先按会话范围确认目标公司可访问。
+     */
+    @Select("SELECT auth.can_access_org(#{companyId}::uuid)")
+    boolean canAccessOrg(@Param("companyId") UUID companyId);
 
     /**
      * 试算平衡（rpt.trial_balance 视图）：按（公司×期间）已过账/已冲销凭证分录聚合，科目级
@@ -118,7 +124,7 @@ public interface RptMapper {
             SELECT d.period, d.dept_id, dep.name AS dept_name,
                    d.account_id, ca.code AS account_code, ca.name AS account_name,
                    d.amount
-              FROM rpt.dept_expense d
+              FROM rpt.v_dept_expense d
               LEFT JOIN org.departments dep ON dep.id = d.dept_id AND dep.deleted_at IS NULL
               LEFT JOIN gl.chart_accounts ca ON ca.id = d.account_id
              WHERE d.company_id = #{companyId}::uuid
@@ -138,7 +144,7 @@ public interface RptMapper {
      */
     @Select("""
             SELECT t.trx_date, t.income, t.expense, (t.income - t.expense) AS net
-              FROM rpt.cash_flow_daily t
+              FROM rpt.v_cash_flow_daily t
              WHERE t.company_id = #{companyId}::uuid
                AND t.trx_date BETWEEN #{from} AND #{to}
              ORDER BY t.trx_date
@@ -161,7 +167,7 @@ public interface RptMapper {
                    a.actual_amount,
                    CASE WHEN bp.amount IS NOT NULL AND bp.amount > 0
                         THEN round((a.actual_amount / bp.amount) * 100, 2) ELSE NULL END AS ratio
-              FROM rpt.budget_actual a
+              FROM rpt.v_budget_actual a
               LEFT JOIN budget.v_plan_amount bp ON bp.company_id = a.company_id
                    AND bp.period = a.period AND bp.account_id = a.account_id
                    AND bp.dept_id IS NOT DISTINCT FROM a.dept_id

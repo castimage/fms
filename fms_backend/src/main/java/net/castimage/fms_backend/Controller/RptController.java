@@ -23,8 +23,8 @@ import java.util.UUID;
 
 /**
  * 报表模块 REST 接口（/api/rpt）：试算平衡/利润表/资产负债表/现金流量表/应收账龄/部门费用分析/
- * 看板聚合 + CSV 导出。身份由安全链路保证，报表 SQL 直查 06 视图（security_invoker=on），
- * RLS 决定可见集合——companyId 仅 UI 提示，越权值返回空集；fms_report 可读全部报表。
+ * 看板聚合 + CSV 导出。身份由安全链路保证，报表视图 security_invoker=on 由 RLS 收敛，
+ * IMMV 由服务层 can_access_org 校验目标公司；fms_report 可读全部报表。
  */
 @RestController
 @RequiredArgsConstructor

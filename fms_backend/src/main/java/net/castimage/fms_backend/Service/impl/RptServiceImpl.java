@@ -10,6 +10,7 @@ import net.castimage.fms_backend.Config.FmsProperties;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import net.castimage.fms_backend.Exception.BadRequestException;
+import net.castimage.fms_backend.Exception.ForbiddenException;
 import net.castimage.fms_backend.Mapper.RptMapper;
 import net.castimage.fms_backend.Model.vo.ArAgingRow;
 import net.castimage.fms_backend.Model.vo.BalanceSheetRow;
@@ -44,9 +45,9 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 报表模块业务实现，全部报表直查 rpt 视图/immv（security_invoker=on 行级收敛，Java 不拼公司
- * 白名单，companyId 仅 ui 提示，越权值返回空集），看板聚合，资金日报 immv + 预算执行 top +
- * 应收账龄分桶在 Java 侧组合，导出为 utf-8 BOM csv（无 POI 依赖）。
+ * 报表模块业务实现，报表视图 security_invoker=on 由 RLS 收敛，IMMV 无行级安全，入口先经
+ * can_access_org 校验目标公司，看板聚合，资金日报 immv + 预算执行 top + 应收账龄分桶在
+ * Java 侧组合，导出为 utf-8 BOM csv（无 POI 依赖）。
  */
 @Service
 @Slf4j
@@ -95,6 +96,7 @@ public class RptServiceImpl implements RptService {
         if (companyId == null) {
             throw new BadRequestException("companyId 必填");
         }
+        requireCompanyAccess(companyId);
         String p = normalizePeriod(period);
         List<TrialBalanceRow> rows = rptMapper.selectTrialBalance(companyId, p);
 
@@ -122,6 +124,7 @@ public class RptServiceImpl implements RptService {
     @Override
     @Transactional(readOnly = true)
     public List<IncomeStatementRow> incomeStatement(UUID companyId, String period) {
+        requireCompanyAccess(companyId);
         return rptMapper.selectIncomeStatement(companyId, trim(period));
     }
 
@@ -129,6 +132,7 @@ public class RptServiceImpl implements RptService {
     @Override
     @Transactional(readOnly = true)
     public List<BalanceSheetRow> balanceSheet(UUID companyId, String period) {
+        requireCompanyAccess(companyId);
         return rptMapper.selectBalanceSheet(companyId, trim(period));
     }
 
@@ -136,6 +140,7 @@ public class RptServiceImpl implements RptService {
     @Override
     @Transactional(readOnly = true)
     public List<CashFlowRow> cashFlow(UUID companyId, String period) {
+        requireCompanyAccess(companyId);
         String p = trim(period);
         if (p != null && !p.isEmpty()) {
             validatePeriod(p);
@@ -147,6 +152,7 @@ public class RptServiceImpl implements RptService {
     @Override
     @Transactional(readOnly = true)
     public List<ArAgingRow> arAging(UUID companyId, String period) {
+        requireCompanyAccess(companyId);
         String p = trim(period);
         if (p != null && !p.isEmpty()) {
             validatePeriod(p);
@@ -161,6 +167,7 @@ public class RptServiceImpl implements RptService {
         if (companyId == null) {
             throw new BadRequestException("companyId 必填");
         }
+        requireCompanyAccess(companyId);
         String p = trim(period);
         if (p != null && !p.isEmpty()) {
             validatePeriod(p);
@@ -191,6 +198,7 @@ public class RptServiceImpl implements RptService {
         if (companyId == null) {
             throw new BadRequestException("companyId 必填");
         }
+        requireCompanyAccess(companyId);
         LocalDate day = date == null ? LocalDate.now() : date;
 
         // 资金日报，近 30 日窗口，immv 按日聚合，提交即一致
@@ -236,6 +244,10 @@ public class RptServiceImpl implements RptService {
         if (type == null || !reportTypes.contains(type)) {
             throw new BadRequestException("报表类型非法：" + report + "（白名单 " + String.join("/", fmsProperties.getReport().getEnabledTypes()) + "）");
         }
+        if ("dept-expense".equals(type) && companyId == null) {
+            throw new BadRequestException("companyId 必填");
+        }
+        requireCompanyAccess(companyId);
         LocalDate day = date == null ? LocalDate.now() : date;
         try {
             response.setContentType("text/csv; charset=UTF-8");
@@ -257,6 +269,12 @@ public class RptServiceImpl implements RptService {
             writer.flush();
         } catch (IOException e) {
             throw new net.castimage.fms_backend.Exception.InternalServerException("报表导出失败");
+        }
+    }
+
+    private void requireCompanyAccess(UUID companyId) {
+        if (companyId != null && !rptMapper.canAccessOrg(companyId)) {
+            throw new ForbiddenException("无权访问该公司报表");
         }
     }
 
