@@ -10,8 +10,8 @@
 # 不执行
 # verify/，部署后冒烟校验，只读
 # 执行顺序由 INIT_SCRIPTS 显式数组裁决，不依赖文件名排序。
-# 演示种子的 API Key 调用方凭据依赖 um.api_keys 建表，故 seed_demo 排在 fill_missing 之后，
-# 全新库首轮即有该凭据，不必初始化后再补跑一次。
+# 演示种子的 API Key 调用方凭据依赖 um.api_keys 建表，故 seed_demo 排在 fill_missing 之后；
+# 仅 FMS_LOAD_DEMO=1 时加载，生产默认跳过，避免固定演示账号/API Key 进入生产库。
 
 # 显式顺序数组，白名单
 INIT_SCRIPTS="bootstrap_base.sql um_org_base.sql audit_base.sql gl_base.sql gl_core_functions.sql auth_org_functions.sql ar_ap_cash_base.sql fa_expense_budget_wf_base.sql rpt_log_base.sql queues_cron.sql seed_system.sql notify_base.sql grants_base.sql um_perm.sql fill_missing.sql seed_demo.sql um_params_functions.sql um_param_meta.sql auth_api_key_validate.sql backup_codes_persist.sql dashboard_alerts.sql rpt_ap_aging.sql docs_base.sql um_login_log_query.sql gl_voucher_reject.sql um_user_preferences.sql log_access_batch.sql role_fms_public.sql notify_broadcast.sql gl_fx_rates.sql gl_voucher_link.sql"
@@ -52,6 +52,12 @@ diagnose_00_failure() {
 }
 
 for f in $INIT_SCRIPTS; do
+    # 演示种子含固定账号与 API Key，生产默认不加载；演示/验收环境显式 FMS_LOAD_DEMO=1
+    if [ "$f" = "seed_demo.sql" ] && [ "${FMS_LOAD_DEMO:-0}" != "1" ]; then
+        echo "[fms-init] SKIP: seed_demo.sql（FMS_LOAD_DEMO!=1，生产默认不加载演示账号/API Key）"
+        SKIP_COUNT=$((SKIP_COUNT+1))
+        continue
+    fi
     # queues_cron.sql 以 pg_extension 记录判断 pgmq，未装（记录缺失）即视为
     # 无此功能，跳过队列预创建与最小授权；冒烟与 pg_cron 调度按各自可用性执行，
     # 无 pgmq 时整文件不失败。pg_cron 9 个定时任务 partman-maintenance
@@ -90,7 +96,14 @@ for f in $INIT_SCRIPTS; do
             ABORT=1
         fi
     elif [ "$f" = "seed_system.sql" ]; then
-        echo "[fms-init] SKIP: FMS_MASTER_KEY 为空，master_key 使用 init/seed_system.sql 内建值（仅非生产占位）"
+        if [ "${FMS_ALLOW_DEFAULT_MASTER_KEY:-0}" = "1" ]; then
+            echo "[fms-init] WARN: FMS_MASTER_KEY 为空，显式允许 seed_system.sql 内建占位密钥（仅限联调）"
+        else
+            echo "[fms-init] FAIL: FMS_MASTER_KEY 为空；生产必须注入 64 位随机密钥（联调可显式 FMS_ALLOW_DEFAULT_MASTER_KEY=1）"
+            FAIL_COUNT=$((FAIL_COUNT+1))
+            ABORT=1
+            break
+        fi
     fi
 
     echo "[fms-init] 执行: $f（库: $DBNAME）"
