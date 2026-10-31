@@ -200,8 +200,10 @@ async function loadDetail() {
       return
     }
     detail.value = d
-    // 列表页 ?edit=1 直达草稿编辑，仅本人草稿/被驳回可见该入口
-    if (route.query.edit === '1') startEdit()
+    // 列表页 ?edit=1 直达草稿编辑，仅本人草稿/被驳回可进入，后端仍二次校验
+    const ownEditable = d.applicantId === auth.user?.id
+      && (d.status === 'DRAFT' || d.status === 'REJECTED')
+    if (route.query.edit === '1' && ownEditable) startEdit()
   } finally {
     loading.value = false
   }

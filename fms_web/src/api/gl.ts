@@ -56,7 +56,19 @@ export async function downloadVoucherFile(docId: string): Promise<void> {
   if (!resp.ok) throw new Error(`附件下载失败（HTTP ${resp.status}）`)
   const blob = await resp.blob()
   const disposition = resp.headers.get('Content-Disposition') ?? ''
-  const name = disposition.match(/filename="?([^";]+)"?/)?.[1] ?? `attach_${docId}.bin`
+  // 优先 filename*（RFC 5987），后端中文文件名用 UTF-8'' 百分号编码；退回普通 filename
+  const encoded = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  let name = `attach_${docId}.bin`
+  if (encoded) {
+    try {
+      name = decodeURIComponent(encoded)
+    } catch {
+      name = encoded
+    }
+  } else if (plain) {
+    name = plain
+  }
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

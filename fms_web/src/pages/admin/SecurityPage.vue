@@ -95,7 +95,7 @@ async function submitIssue() {
       name,
       scope: issueForm.value.scope,
       expiresAt: issueForm.value.expiresAt
-        ? dayjs(issueForm.value.expiresAt).format('YYYY-MM-DDTHH:mm:ss')
+        ? dayjs(issueForm.value.expiresAt).format('YYYY-MM-DD HH:mm:ss')
         : null,
     })
     showIssue.value = false

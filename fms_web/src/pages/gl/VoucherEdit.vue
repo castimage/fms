@@ -295,6 +295,7 @@ function createEmptyLine(): EditLine {
     <!-- 附件，收集文件，保存凭证后统一上传关联，VOUCHER 类型，编辑模式回显已关联附件 -->
     <n-form-item label="附件" class="attach-item">
       <n-upload
+        v-if="canWrite"
         v-model:file-list="attachFileList"
         :default-upload="false"
         multiple
@@ -308,7 +309,7 @@ function createEmptyLine(): EditLine {
           <n-button size="tiny" text type="primary" @click="downloadVoucherFile(d.id)">
             {{ d.fileName }}（{{ (d.fileSize / 1024).toFixed(1) }}KB）
           </n-button>
-          <n-button size="tiny" quaternary @click="onRemoveDoc(d.id)">删除</n-button>
+          <n-button v-if="canWrite" size="tiny" quaternary @click="onRemoveDoc(d.id)">删除</n-button>
         </div>
       </div>
     </n-form-item>
