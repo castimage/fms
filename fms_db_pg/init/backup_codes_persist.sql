@@ -54,6 +54,11 @@ BEGIN
     IF p_user_id IS NULL OR p_codes IS NULL OR array_length(p_codes, 1) = 0 THEN
         RAISE EXCEPTION 'issue_backup_codes: user_id 与 codes 必填';
     END IF;
+    IF session_user NOT IN ('fms_admin', 'postgres')
+       AND (auth.current_uid() IS NULL
+            OR (NOT auth.is_self(p_user_id) AND NOT auth.is_admin())) THEN
+        RAISE EXCEPTION 'issue_backup_codes: 仅本人或管理员可签发备用码';
+    END IF;
     UPDATE um.backup_codes
        SET deleted_at = now()
      WHERE user_id = p_user_id AND used_at IS NULL AND deleted_at IS NULL;

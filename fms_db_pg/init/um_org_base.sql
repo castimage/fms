@@ -687,8 +687,9 @@ GRANT EXECUTE ON FUNCTION auth.can_access_org(uuid) TO fms_app, fms_operator, fm
 GRANT EXECUTE ON FUNCTION auth.can_access_dept(uuid) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT EXECUTE ON FUNCTION auth.is_self(uuid) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 GRANT EXECUTE ON FUNCTION auth.has_role(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
-GRANT EXECUTE ON FUNCTION auth.set_session(uuid, uuid[], uuid[]) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
-GRANT EXECUTE ON FUNCTION auth.jwt_sign(jsonb, text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
+-- 会话注入与签发仅后端运行角色可用，只读/审计/报表角色不得直接调用
+GRANT EXECUTE ON FUNCTION auth.set_session(uuid, uuid[], uuid[]) TO fms_app, fms_operator;
+GRANT EXECUTE ON FUNCTION auth.jwt_sign(jsonb, text) TO fms_app, fms_operator;
 GRANT EXECUTE ON FUNCTION auth.jwt_verify(text, text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 -- 解密出口最小授权，仅资金职责角色可执行，fms_app 直连不可达
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
