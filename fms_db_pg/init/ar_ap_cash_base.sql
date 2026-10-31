@@ -339,19 +339,17 @@ BEGIN
                        || '(deleted_at IS NULL AND auth.can_access_org(company_id)) '
                        || 'WITH CHECK (auth.can_access_org(company_id))',
                        tbl || '_update', t);
+        -- 业务表仅软删，物理 DELETE 不授权、不建策略；清理存量策略
         EXECUTE format('DROP POLICY IF EXISTS %I ON %s', tbl || '_delete', t);
-        EXECUTE format('CREATE POLICY %I ON %s FOR DELETE USING '
-                       || '(deleted_at IS NULL AND auth.can_access_org(company_id))',
-                       tbl || '_delete', t);
     END LOOP;
 END $$;
 
 -- 授权（矩阵，operator W / viewer、auditor R / report R，汇总裁剪，bank_accounts 敏感列 account_no_enc/account_no_hash 不授予任何角色）
 GRANT USAGE ON SCHEMA ar, ap, cash TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ar TO fms_operator;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ap TO fms_operator;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA cash TO fms_operator;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA ar TO fms_operator;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA ap TO fms_operator;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA cash TO fms_operator;
 GRANT SELECT ON ALL TABLES IN SCHEMA ar, ap TO fms_viewer, fms_auditor;
 GRANT SELECT ON ALL TABLES IN SCHEMA ar, ap TO fms_report;
 -- cash 只读角色按表授，bank_accounts 密文账号列不授予任何角色（与 auth_org_functions.sql 的 fn_create_bank_account/decrypt_bank_account 对偶，

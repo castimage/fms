@@ -403,9 +403,8 @@ DROP POLICY IF EXISTS gl_accounts_update ON gl.chart_accounts;
 CREATE POLICY gl_accounts_update ON gl.chart_accounts
     FOR UPDATE USING (deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (auth.can_access_org(company_id));
+-- 科目仅软删，物理 DELETE 不授权、不建策略
 DROP POLICY IF EXISTS gl_accounts_delete ON gl.chart_accounts;
-CREATE POLICY gl_accounts_delete ON gl.chart_accounts
-    FOR DELETE USING (deleted_at IS NULL AND auth.can_access_org(company_id));
 
 ALTER TABLE gl.periods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gl.periods FORCE ROW LEVEL SECURITY;
@@ -434,10 +433,8 @@ CREATE POLICY gl_vouchers_update ON gl.vouchers
     FOR UPDATE USING (status IN ('DRAFT','SUBMITTED','APPROVED','REJECTED')
         AND deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (status NOT IN ('POSTED','REVERSED') AND auth.can_access_org(company_id));
+-- 凭证仅软删，物理 DELETE 不授权、不建策略
 DROP POLICY IF EXISTS gl_vouchers_delete ON gl.vouchers;
-CREATE POLICY gl_vouchers_delete ON gl.vouchers
-    FOR DELETE USING (status NOT IN ('POSTED','REVERSED')
-        AND deleted_at IS NULL AND auth.can_access_org(company_id));
 
 ALTER TABLE gl.voucher_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gl.voucher_lines FORCE ROW LEVEL SECURITY;
@@ -451,15 +448,17 @@ DROP POLICY IF EXISTS gl_lines_update ON gl.voucher_lines;
 CREATE POLICY gl_lines_update ON gl.voucher_lines
     FOR UPDATE USING (deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (auth.can_access_org(company_id));
+-- 分录仅随软删，物理 DELETE 不授权、不建策略
 DROP POLICY IF EXISTS gl_lines_delete ON gl.voucher_lines;
-CREATE POLICY gl_lines_delete ON gl.voucher_lines
-    FOR DELETE USING (deleted_at IS NULL AND auth.can_access_org(company_id));
 
 -- 授权（fms_operator 执行业务 DML）
 GRANT USAGE ON SCHEMA gl TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON gl.vouchers, gl.voucher_lines TO fms_operator;
-GRANT SELECT ON gl.vouchers, gl.voucher_lines TO fms_viewer, fms_auditor;
+GRANT SELECT, INSERT, UPDATE ON gl.vouchers, gl.voucher_lines TO fms_operator;
+-- 分录 cost_amount 为敏感成本列，按列授 viewer/auditor，不授整表
+GRANT SELECT (id, voucher_id, line_no, account_id, summary, debit, credit, currency,
+              dept_id, partner_id, company_id, created_at, updated_at, deleted_at)
+    ON gl.voucher_lines TO fms_viewer, fms_auditor;
 GRANT SELECT (id, company_id, period, voucher_no, voucher_date, status, source_type,
               created_by, approved_by, approved_at, total_debit, total_credit,
               note, created_at, updated_at, deleted_at)
@@ -470,8 +469,8 @@ GRANT SELECT (id, voucher_id, line_no, account_id, summary, debit, credit, curre
     ON gl.voucher_lines TO fms_report;
 GRANT SELECT ON gl.chart_accounts, gl.periods
     TO fms_operator, fms_viewer, fms_auditor, fms_report;
--- 科目维护为操作员职责（Java requireWriteRole 允许 OPERATOR，仅 SELECT 会致 42501）
-GRANT INSERT, UPDATE, DELETE ON gl.chart_accounts TO fms_operator;
+-- 科目维护为操作员职责（Java requireWriteRole 允许 OPERATOR，仅 SELECT 会致 42501）；删除走软删，不授 DELETE
+GRANT INSERT, UPDATE ON gl.chart_accounts TO fms_operator;
 
 -- 审计捕获触发器（audit.fn_audit_log 由 init/audit_base.sql 创建）
 DO $$
@@ -653,9 +652,8 @@ CREATE POLICY gl_accounts_update ON gl.chart_accounts
     FOR UPDATE USING (deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (auth.can_access_org(company_id));
 
+-- 科目仅软删，物理 DELETE 不授权、不建策略
 DROP POLICY IF EXISTS gl_accounts_delete ON gl.chart_accounts;
-CREATE POLICY gl_accounts_delete ON gl.chart_accounts
-    FOR DELETE USING (deleted_at IS NULL AND auth.can_access_org(company_id));
 
 DROP POLICY IF EXISTS gl_accounts_write ON gl.chart_accounts;
 

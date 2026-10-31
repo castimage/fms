@@ -74,12 +74,11 @@ DROP POLICY IF EXISTS gl_fx_rates_update ON gl.fx_rates;
 CREATE POLICY gl_fx_rates_update ON gl.fx_rates
     FOR UPDATE USING (deleted_at IS NULL AND auth.can_access_org(company_id))
     WITH CHECK (auth.can_access_org(company_id));
+-- 汇率仅软删，物理 DELETE 不授权、不建策略
 DROP POLICY IF EXISTS gl_fx_rates_delete ON gl.fx_rates;
-CREATE POLICY gl_fx_rates_delete ON gl.fx_rates
-    FOR DELETE USING (deleted_at IS NULL AND auth.can_access_org(company_id));
 
 -- 职责角色授权（gl_base 已授 gl schema USAGE，此处补表级，删除路径经 auth.fn_soft_delete 软删闸口）
-GRANT SELECT, INSERT, UPDATE, DELETE ON gl.fx_rates TO fms_operator;
+GRANT SELECT, INSERT, UPDATE ON gl.fx_rates TO fms_operator;
 GRANT SELECT, INSERT, UPDATE, DELETE ON gl.fx_rates TO fms_admin;
 GRANT SELECT ON gl.fx_rates TO fms_viewer, fms_auditor, fms_report;
 
