@@ -85,6 +85,18 @@ class RptServiceImplTest {
                 "含逗号/引号字段应引号包裹且引号加倍");
     }
 
+    /** 公式前缀字段前置单引号，Excel/WPS 按文本解析，不执行公式 */
+    @Test
+    void formulaPrefixNeutralized() {
+        TrialBalanceRow row = new TrialBalanceRow(UuidV7.next(), "1001", "=HYPERLINK(\"http://x\")", "DEBIT",
+                BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ONE);
+        when(rptMapper.selectTrialBalance(any(), eq("2026-08")))
+                .thenReturn(List.of(row));
+
+        service.exportCsv("trial-balance", UuidV7.next(), "2026-08", null, response);
+        assertTrue(out.toString().contains("'=HYPERLINK"), "公式前缀应前置单引号");
+    }
+
     /** IMMV 无 RLS，目标公司不在会话范围时报表入口拒绝 */
     @Test
     void reportRejectsCompanyOutsideScope() {

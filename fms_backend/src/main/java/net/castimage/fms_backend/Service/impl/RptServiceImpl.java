@@ -29,6 +29,7 @@ import net.castimage.fms_backend.Model.vo.IncomeStatementRow;
 import net.castimage.fms_backend.Model.vo.TrialBalanceRow;
 import net.castimage.fms_backend.Model.vo.TrialBalanceView;
 import net.castimage.fms_backend.Service.RptService;
+import net.castimage.fms_backend.Utils.CsvSafe;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -283,29 +284,34 @@ public class RptServiceImpl implements RptService {
     private void exportTrialBalance(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("科目编码", "科目名称", "方向", "期初余额", "本期借方", "本期贷方", "期末余额");
         for (TrialBalanceRow r : rptMapper.selectTrialBalance(companyId, normalizePeriod(period))) {
-            p.printRecord(r.accountCode(), r.accountName(), r.direction(), ZERO,
-                    r.periodDebit(), r.periodCredit(), r.closingBalance());
+            p.printRecord(CsvSafe.cell(r.accountCode()), CsvSafe.cell(r.accountName()),
+                    CsvSafe.cell(r.direction()), ZERO,
+                    CsvSafe.cell(r.periodDebit()), CsvSafe.cell(r.periodCredit()),
+                    CsvSafe.cell(r.closingBalance()));
         }
     }
 
     private void exportIncomeStatement(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("期间", "收入", "费用", "净利润");
         for (IncomeStatementRow r : rptMapper.selectIncomeStatement(companyId, trim(period))) {
-            p.printRecord(r.period(), r.totalRevenue(), r.totalExpense(), r.netProfit());
+            p.printRecord(CsvSafe.cell(r.period()), CsvSafe.cell(r.totalRevenue()),
+                    CsvSafe.cell(r.totalExpense()), CsvSafe.cell(r.netProfit()));
         }
     }
 
     private void exportBalanceSheet(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("期间", "资产", "负债", "权益");
         for (BalanceSheetRow r : rptMapper.selectBalanceSheet(companyId, trim(period))) {
-            p.printRecord(r.period(), r.totalAsset(), r.totalLiability(), r.totalEquity());
+            p.printRecord(CsvSafe.cell(r.period()), CsvSafe.cell(r.totalAsset()),
+                    CsvSafe.cell(r.totalLiability()), CsvSafe.cell(r.totalEquity()));
         }
     }
 
     private void exportCashFlow(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("期间", "现金流入", "现金流出", "净流量");
         for (CashFlowRow r : rptMapper.selectCashFlow(companyId, trim(period))) {
-            p.printRecord(r.period(), r.cashIn(), r.cashOut(), r.netFlow());
+            p.printRecord(CsvSafe.cell(r.period()), CsvSafe.cell(r.cashIn()),
+                    CsvSafe.cell(r.cashOut()), CsvSafe.cell(r.netFlow()));
         }
     }
 
@@ -313,15 +319,20 @@ public class RptServiceImpl implements RptService {
         p.printRecord("客户编码", "客户名称", "发票号", "发票日期", "到期日", "币种",
                 "发票总额", "已核销", "未核销余额");
         for (ArAgingRow r : rptMapper.selectArAging(companyId, trim(period))) {
-            p.printRecord(r.customerCode(), r.customerName(), r.invoiceNo(), r.invoiceDate(),
-                    r.dueDate(), r.currency(), r.total(), r.paidAmount(), r.openBalance());
+            p.printRecord(CsvSafe.cell(r.customerCode()), CsvSafe.cell(r.customerName()),
+                    CsvSafe.cell(r.invoiceNo()), CsvSafe.cell(r.invoiceDate()),
+                    CsvSafe.cell(r.dueDate()), CsvSafe.cell(r.currency()),
+                    CsvSafe.cell(r.total()), CsvSafe.cell(r.paidAmount()),
+                    CsvSafe.cell(r.openBalance()));
         }
     }
 
     private void exportDeptExpense(CSVPrinter p, UUID companyId, String period) throws IOException {
         p.printRecord("期间", "部门", "科目编码", "科目名称", "金额");
         for (DeptExpenseRow r : rptMapper.selectDeptExpense(companyId, trim(period), null)) {
-            p.printRecord(r.period(), r.deptName(), r.accountCode(), r.accountName(), r.amount());
+            p.printRecord(CsvSafe.cell(r.period()), CsvSafe.cell(r.deptName()),
+                    CsvSafe.cell(r.accountCode()), CsvSafe.cell(r.accountName()),
+                    CsvSafe.cell(r.amount()));
         }
     }
 

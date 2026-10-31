@@ -9,6 +9,7 @@ import net.castimage.fms_backend.Model.PageResult;
 import net.castimage.fms_backend.Model.vo.AuditLogView;
 import net.castimage.fms_backend.Model.vo.ChainCheckView;
 import net.castimage.fms_backend.Service.AuditService;
+import net.castimage.fms_backend.Utils.CsvSafe;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.commons.csv.CSVFormat;
@@ -92,9 +93,12 @@ public class AuditServiceImpl implements AuditService {
                 IPage<AuditLogView> pg = auditLogMapper.selectLogPage(
                         new Page<>(pageNo, exportPageSize), actorId, trim(tableName), recordId, trim(action), from, to);
                 for (AuditLogView r : pg.getRecords()) {
-                    printer.printRecord(r.id(), r.actorId(), r.action(), r.tableName(), r.recordId(),
-                            r.oldValues(), r.newValues(), r.ip(), r.requestId(), r.occurredAt(),
-                            r.prevHash(), r.rowHash());
+                    printer.printRecord(CsvSafe.cell(r.id()), CsvSafe.cell(r.actorId()),
+                            CsvSafe.cell(r.action()), CsvSafe.cell(r.tableName()),
+                            CsvSafe.cell(r.recordId()), CsvSafe.cell(r.oldValues()),
+                            CsvSafe.cell(r.newValues()), CsvSafe.cell(r.ip()),
+                            CsvSafe.cell(r.requestId()), CsvSafe.cell(r.occurredAt()),
+                            CsvSafe.cell(r.prevHash()), CsvSafe.cell(r.rowHash()));
                 }
                 if (pg.getRecords().size() < exportPageSize) {
                     break; // 末页退出游标循环，

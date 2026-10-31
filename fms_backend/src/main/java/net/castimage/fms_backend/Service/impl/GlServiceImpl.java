@@ -38,6 +38,7 @@ import net.castimage.fms_backend.Model.vo.VoucherGapView;
 import net.castimage.fms_backend.Model.vo.VoucherLineView;
 import net.castimage.fms_backend.Model.vo.VoucherListView;
 import net.castimage.fms_backend.Service.GlService;
+import net.castimage.fms_backend.Utils.CsvSafe;
 import net.castimage.fms_backend.Utils.RequestContext;
 import net.castimage.fms_backend.Utils.UuidV7;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -634,9 +635,10 @@ public class GlServiceImpl implements GlService {
             CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT);
             printer.printRecord("科目编码", "科目名称", "方向", "期初余额", "本期借方", "本期贷方", "期末余额");
             for (LedgerView r : voucherLineMapper.selectLedger(companyId, p, accountId)) {
-                printer.printRecord(r.accountCode(), r.accountName(),
+                printer.printRecord(CsvSafe.cell(r.accountCode()), CsvSafe.cell(r.accountName()),
                         "DEBIT".equals(r.direction()) ? "借" : "贷",
-                        r.openingBalance(), r.periodDebit(), r.periodCredit(), r.closingBalance());
+                        CsvSafe.cell(r.openingBalance()), CsvSafe.cell(r.periodDebit()),
+                        CsvSafe.cell(r.periodCredit()), CsvSafe.cell(r.closingBalance()));
             }
             printer.flush();
             writer.flush();
