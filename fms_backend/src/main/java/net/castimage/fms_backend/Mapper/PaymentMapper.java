@@ -14,6 +14,22 @@ import java.util.UUID;
 public interface PaymentMapper extends BaseMapper<Payment> {
 
     /**
+     * 银行账户可用性校验，账户须存在、同公司、启用且 ACTIVE；RLS 已按公司收敛，
+     * 他公司/停用/软删返回 0。
+     */
+    @Select("""
+            SELECT count(*)
+              FROM cash.bank_accounts
+             WHERE id = #{bankAccountId}::uuid
+               AND company_id = #{companyId}::uuid
+               AND is_active
+               AND status = 'ACTIVE'
+               AND deleted_at IS NULL
+            """)
+    int countActiveBankAccount(@Param("companyId") UUID companyId,
+                               @Param("bankAccountId") UUID bankAccountId);
+
+    /**
      * 付款核销入口锁读：SELECT ... FOR UPDATE 锁定付款单行（写事务内使用），
      * 并发核销同一付款单串行化——status 须 PAID 的校验在锁内完成。
      */

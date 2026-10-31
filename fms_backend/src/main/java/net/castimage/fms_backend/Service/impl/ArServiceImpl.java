@@ -418,6 +418,10 @@ public class ArServiceImpl implements ArService {
         if (amount.signum() <= 0) {
             throw new BadRequestException("收款金额必须大于 0");
         }
+        if (req.bankAccountId() != null
+                && receiptMapper.countActiveBankAccount(req.companyId(), req.bankAccountId()) == 0) {
+            throw new ConflictException("银行账户不存在、已停用或不属于本公司");
+        }
 
         // 防重复登记预检，业务键，同公司/同客户/同金额/同日期/同账户，db 侧
         // uk_ar_receipt_dedup 部分唯一索引终审（并发 23505 映射 40900），软删后的同键
@@ -513,6 +517,9 @@ public class ArServiceImpl implements ArService {
         ArInvoice invoice = requireInvoice(req.invoiceId());
         if (!ALLOCABLE_INVOICE_STATUSES.contains(invoice.getStatus())) {
             throw new ConflictException("发票状态不可核销（当前 " + invoice.getStatus() + "，须 ISSUED/PARTIAL）");
+        }
+        if (!receipt.getCompanyId().equals(invoice.getCompanyId())) {
+            throw new ConflictException("收款单与发票公司不一致，禁止跨公司核销");
         }
         BigDecimal amount = money(req.amount());
         if (amount.signum() <= 0) {

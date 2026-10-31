@@ -86,6 +86,7 @@ class ArServiceImplTest {
 
     private Receipt receipt(String status, String amount) {
         Receipt r = mock(Receipt.class);
+        when(r.getCompanyId()).thenReturn(COMPANY_ID);
         when(r.getStatus()).thenReturn(status);
         when(r.getAmount()).thenReturn(new BigDecimal(amount));
         return r;

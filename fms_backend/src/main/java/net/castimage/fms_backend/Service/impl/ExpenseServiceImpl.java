@@ -592,9 +592,10 @@ public class ExpenseServiceImpl implements ExpenseService {
     /**
      * {@inheritDoc}
      *
-     * 写入链路：明细行主键经 RLS 收敛查询（不可见则 40400），随后附件归属校验（须已上传至该
-     * 行名下：business_type=REIMBURSEMENT_LINE、business_id=行 id，否则 40001），随后回填
-     * invoice_file_id（RLS UPDATE 策略行级收敛，影响 0 行即状态异常 40900）。
+     * 写入链路：明细行主键经 RLS 收敛查询（不可见则 40400），父报销单须为当前申请人且处于
+     * DRAFT/REJECTED，随后附件归属校验（须已上传至该行名下：business_type=REIMBURSEMENT_LINE、
+     * business_id=行 id，否则 40001），随后回填 invoice_file_id（RLS UPDATE 策略行级收敛，
+     * 影响 0 行即状态异常 40900）。
      */
     @Override
     @Transactional
@@ -606,6 +607,13 @@ public class ExpenseServiceImpl implements ExpenseService {
         ReimbursementLine line = lineMapper.selectLineById(lineId);
         if (line == null) {
             throw new NotFoundException("报销明细不存在或无权访问");
+        }
+        Reimbursement parent = requireReimbursement(line.getReimbursementId());
+        if (!parent.getApplicantId().equals(RequestContext.requireUserId())) {
+            throw new ForbiddenException("仅申请人本人可绑定报销明细附件");
+        }
+        if (!"DRAFT".equals(parent.getStatus()) && !"REJECTED".equals(parent.getStatus())) {
+            throw new ConflictException("仅 DRAFT/REJECTED 状态报销单可绑定附件（当前 " + parent.getStatus() + "）");
         }
         DocumentView doc = fileService.getDocument(fileId); // RLS 收敛，越权/软删 40400
         if (!"REIMBURSEMENT_LINE".equals(doc.businessType()) || !lineId.equals(doc.businessId())) {

@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import net.castimage.fms_backend.Exception.BadRequestException;
 import net.castimage.fms_backend.Exception.ConflictException;
+import net.castimage.fms_backend.Exception.ForbiddenException;
 import net.castimage.fms_backend.Exception.NotFoundException;
 import net.castimage.fms_backend.Mapper.AuthFunctionMapper;
 import net.castimage.fms_backend.Mapper.BudgetAdjustmentMapper;
@@ -121,6 +122,9 @@ public class BudgetServiceImpl implements BudgetService {
     public BudgetPlanView updatePlan(UUID id, BudgetPlanRequest req) {
         RequestContext.requireWriteRole();
         BudgetPlan p = requirePlan(id);
+        if (!p.getCreatedBy().equals(RequestContext.requireUserId())) {
+            throw new ForbiddenException("仅创建人可修改预算计划");
+        }
         if (!"DRAFT".equals(p.getStatus())) {
             throw new ConflictException("仅 DRAFT 状态预算计划可修改（当前 " + p.getStatus() + "）");
         }
@@ -144,6 +148,9 @@ public class BudgetServiceImpl implements BudgetService {
     public void deletePlan(UUID id) {
         RequestContext.requireWriteRole();
         BudgetPlan p = requirePlan(id);
+        if (!p.getCreatedBy().equals(RequestContext.requireUserId())) {
+            throw new ForbiddenException("仅创建人可删除预算计划");
+        }
         if (!"DRAFT".equals(p.getStatus())) {
             throw new ConflictException("仅 DRAFT 状态预算计划可删除（当前 " + p.getStatus() + "）");
         }
@@ -190,6 +197,9 @@ public class BudgetServiceImpl implements BudgetService {
             throw new ConflictException("仅 SUBMITTED 状态预算计划可审批（当前 " + p.getStatus() + "）");
         }
         UUID userId = RequestContext.requireUserId();
+        if (p.getCreatedBy().equals(userId)) {
+            throw new ForbiddenException("创建人不能审批本人预算计划");
+        }
         BudgetPlan patch = new BudgetPlan();
         patch.setId(id);
         patch.setStatus("APPROVED");

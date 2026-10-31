@@ -432,6 +432,10 @@ public class ApServiceImpl implements ApService {
         if (amount.signum() <= 0) {
             throw new BadRequestException("付款金额必须大于 0");
         }
+        if (req.bankAccountId() != null
+                && paymentMapper.countActiveBankAccount(req.companyId(), req.bankAccountId()) == 0) {
+            throw new ConflictException("银行账户不存在、已停用或不属于本公司");
+        }
 
         // 幂等双闸，预检同公司/供应商/银行账户/金额/付款日期 已存在有效付款单则 40900，防客户端重复提交或重试产生重复付款，uk_ap_payments_dup 部分唯一索引为并发兜底
         UUID dupKey = paymentDupKey(req.companyId(), req.supplierId(), req.bankAccountId(),
@@ -538,6 +542,9 @@ public class ApServiceImpl implements ApService {
             if (!ALLOCABLE_INVOICE_STATUSES.contains(invoice.getStatus())) {
                 throw new ConflictException("发票 " + invoice.getInvoiceNo() + " 状态不可核销（当前 "
                         + invoice.getStatus() + "，须 ISSUED/PARTIAL）");
+            }
+            if (!payment.getCompanyId().equals(invoice.getCompanyId())) {
+                throw new ConflictException("付款单与发票公司不一致，禁止跨公司核销");
             }
             BigDecimal amount = money(item.amount());
             if (amount.signum() <= 0) {

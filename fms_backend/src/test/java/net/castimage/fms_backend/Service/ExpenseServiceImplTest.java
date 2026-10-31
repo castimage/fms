@@ -11,6 +11,7 @@ import net.castimage.fms_backend.Mapper.WfDefinitionMapper;
 import net.castimage.fms_backend.Mapper.WfInstanceMapper;
 import net.castimage.fms_backend.Model.dto.ReimbursementRequest;
 import net.castimage.fms_backend.Model.entity.Reimbursement;
+import net.castimage.fms_backend.Model.entity.ReimbursementLine;
 import net.castimage.fms_backend.Service.impl.ExpenseServiceImpl;
 import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.RequestContext;
@@ -44,6 +45,8 @@ import static org.mockito.Mockito.when;
 class ExpenseServiceImplTest {
 
     private static final UUID REIMB_ID = UuidV7.next();
+
+    private static final UUID LINE_ID = UuidV7.next();
 
     private static final UUID VOUCHER_ID = UuidV7.next();
 
@@ -249,6 +252,37 @@ class ExpenseServiceImplTest {
         service.deleteReimbursement(REIMB_ID);
 
         verify(authFunctionMapper).fnSoftDelete("expense", "reimbursements", REIMB_ID);
+    }
+
+    /** 绑定附件仅限申请人本人的草稿/驳回单，非本人直接 40300 */
+    @Test
+    void bindInvoiceFile_rejects_whenNotApplicant() {
+        Reimbursement r = reimb("DRAFT", null);
+        r.setApplicantId(UuidV7.next());
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(r);
+        when(lineMapper.selectLineById(LINE_ID)).thenReturn(line());
+
+        assertThrows(ForbiddenException.class,
+                () -> service.bindInvoiceFile(LINE_ID, UuidV7.next()));
+        verify(lineMapper, never()).updateInvoiceFileId(any(), any());
+    }
+
+    /** 绑定附件仅限 DRAFT/REJECTED，已付款/已过账单据拒绝 */
+    @Test
+    void bindInvoiceFile_rejects_whenParentNotEditable() {
+        when(reimbursementMapper.selectById(REIMB_ID)).thenReturn(reimb("PAID", null));
+        when(lineMapper.selectLineById(LINE_ID)).thenReturn(line());
+
+        assertThrows(ConflictException.class,
+                () -> service.bindInvoiceFile(LINE_ID, UuidV7.next()));
+        verify(lineMapper, never()).updateInvoiceFileId(any(), any());
+    }
+
+    private ReimbursementLine line() {
+        ReimbursementLine line = new ReimbursementLine();
+        line.setId(LINE_ID);
+        line.setReimbursementId(REIMB_ID);
+        return line;
     }
 
     private ReimbursementRequest request() {
