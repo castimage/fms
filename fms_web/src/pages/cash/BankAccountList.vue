@@ -319,10 +319,10 @@ onMounted(() => {
           <n-input v-model:value="form.bankName" maxlength="100" placeholder="开户行名称" />
         </n-form-item>
         <n-form-item label="银行账号">
-          <n-input v-model:value="form.accountNo" :disabled="!!editingId" placeholder="仅创建时生效，更新忽略" />
+          <n-input v-model:value="form.accountNo" :disabled="!!editingId" placeholder="创建后不可修改" />
         </n-form-item>
         <n-form-item label="账号掩码">
-          <n-input v-model:value="form.accountNoMasked" maxlength="20" placeholder="如 ****1234（仅展示，不落库）" />
+          <n-input v-model:value="form.accountNoMasked" maxlength="20" placeholder="如 ****1234（仅展示尾号）" />
         </n-form-item>
         <FormGrid>
           <n-form-item label="账户类型">

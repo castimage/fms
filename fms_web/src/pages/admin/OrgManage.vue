@@ -212,7 +212,7 @@ const deptColumns: FmsColumn<DepartmentView>[] = [
     render: (r) =>
       h(NPopconfirm, { onPositiveClick: () => removeDepartment(r.id) }, {
         trigger: () => h(NButton, { text: true, type: 'error', size: 'small' }, { default: () => '删除' }),
-        default: () => '确认删除该部门？（有子部门将 40900）',
+        default: () => '确认删除该部门？（存在子部门时不能删除）',
       }),
   },
 ]

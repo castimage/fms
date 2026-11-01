@@ -178,7 +178,7 @@ onBeforeUnmount(closeWs)
 <template>
   <div class="notify-list">
     <n-alert type="info" :bordered="false" class="ws-hint">
-      实时推送端点 {{ NOTIFY_WS_URL }}，握手携带访问令牌，连接建立后服务端即时回推未读数，断线自动重连。
+      新通知会实时推送，未读数自动更新；连接中断后会自动重连。
     </n-alert>
 
     <FormGrid class="filter-grid">

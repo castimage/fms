@@ -52,7 +52,7 @@ async function onSubmit() {
         </n-form-item>
         <n-button type="primary" :loading="submitting" @click="onSubmit">广播公告</n-button>
       </n-form>
-      <p class="hint">发送后全体 ACTIVE 用户将收到系统通知（WebSocket 实时推送）；仅 ADMIN 可操作。</p>
+      <p class="hint">发送后所有启用状态的用户会收到系统通知；仅系统管理员可操作。</p>
     </n-card>
   </div>
 </template>

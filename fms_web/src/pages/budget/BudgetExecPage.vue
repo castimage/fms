@@ -116,7 +116,7 @@ onMounted(() => {
 
     <!-- 超支提示，阻断由 db 触发器承担 -->
     <n-alert v-if="blockCount > 0" type="error" :bordered="false">
-      存在 {{ blockCount }} 项超支科目，超支凭证入账将被 DB 触发器拒绝（40900）
+      存在 {{ blockCount }} 项超支科目，超支凭证提交时将被系统阻止入账
     </n-alert>
 
     <!-- 工具栏，汇总 + 刷新 -->

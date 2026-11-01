@@ -502,7 +502,7 @@ onMounted(async () => {
           <n-switch v-model:value="scopeSubtree" />
         </n-form-item>
         <n-alert type="info" :bordered="false" :show-icon="false" style="margin-top: 4px">
-          保存为全量替换：清单外的公司或部门将被移除；清空表示该维度无可见范围。
+          保存后按当前清单覆盖原范围；清空表示该维度不限制。
         </n-alert>
       </n-form>
       <template #action>

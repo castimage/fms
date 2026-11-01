@@ -103,7 +103,7 @@ async function loadGaps() {
   }
 }
 
-/** 断号提示，后端权威结果优先，gapFrom~gapTo 展开，为空/失败则回退页内推断 */
+/** 断号提示，优先使用服务端结果，为空/失败时回退页内推断 */
 const gapAlert = computed(() => {
   if (serverGaps.value && serverGaps.value.length > 0) {
     const list: number[] = []
@@ -123,11 +123,6 @@ const gapAlert = computed(() => {
   }
   return gaps.slice(0, 5)
 })
-
-/** 断号提示来源，后端权威 / 页内推断兜底，用于文案区分 */
-const gapSource = computed<'backend' | 'infer'>(() =>
-  !!serverGaps.value && serverGaps.value.length > 0 ? 'backend' : 'infer',
-)
 
 /** 关键词防抖（500ms）后重查 */
 const onKeywordSearch = useDebounceFn(() => {
@@ -230,8 +225,7 @@ onMounted(() => void load())
 
     <!-- 工具栏，断号提示，后端 /gl/voucher-gaps 权威结果，失败/空时页内推断兜底 + 新建 -->
     <n-alert v-if="gapAlert.length" type="warning" :bordered="false" class="gap-alert">
-      检测到凭证号断号（{{ gapSource === 'backend' ? '后端断号检测，与 cron 检查同口径' : '页内推断，仅供参考' }}）：
-      {{ gapAlert.join('、') }}
+      检测到凭证号断号：{{ gapAlert.join('、') }}
     </n-alert>
     <div class="toolbar">
       <span class="toolbar-title">凭证列表</span>

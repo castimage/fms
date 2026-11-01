@@ -158,13 +158,13 @@ onMounted(async () => {
         <n-tag v-if="currentStatus" :type="currentStatus === 'OPEN' ? 'success' : 'error'" :bordered="false">
           {{ appStore.period }} {{ currentStatus }}
         </n-tag>
-        <span v-else class="status-unknown">OPEN（未见落库期间行）</span>
+        <span v-else class="status-unknown">OPEN（未单独创建该期间）</span>
       </n-form-item>
     </FormGrid>
 
     <div class="toolbar">
       <span class="toolbar-title">期间列表（{{ year }} 年）</span>
-      <span class="toolbar-hint">状态取自 gl.periods 实际落库行；未创建的月份显示为 OPEN</span>
+      <span class="toolbar-hint">状态以当前公司的期间设置为准；未单独创建的月份按 OPEN 显示</span>
     </div>
 
     <DataTable :columns="columns" :data="periods" :scroll-x="520" local-pagination :bordered="true">
@@ -178,8 +178,8 @@ onMounted(async () => {
       <template v-if="opTarget">
         <p class="op-desc">
           {{ opTarget.action === 'close'
-            ? `期间 ${opTarget.period} 结账后进入 CLOSED 锁定，未完成凭证/断号预检由后端把关（违规 40900）`
-            : `期间 ${opTarget.period} 反结账需原因（审计留痕）+ fms.force_reopen 开关开启，仅支持末位期间` }}
+            ? `期间 ${opTarget.period} 结账后进入 CLOSED 锁定；系统会检查未完成凭证与断号，不满足条件将无法结账`
+            : `期间 ${opTarget.period} 反结账需填写原因并保留审计记录，且仅支持最后一个已结账期间` }}
         </p>
         <n-input
           v-model:value="reason"

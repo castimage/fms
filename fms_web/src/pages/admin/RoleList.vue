@@ -206,7 +206,7 @@ onMounted(() => void loadRoles())
     <!-- 授权 -->
     <n-modal v-model:show="showPerms" preset="card" :title="`授权 - ${permRole?.name ?? ''}`" style="width: min(520px, calc(100vw - 32px))" :bordered="false">
       <n-alert type="info" :bordered="false" class="perm-hint">
-        已绑定权限在打开时已勾选；勾选即授予，取消勾选即回收，保存时按差量提交。
+        打开时已勾选当前权限；勾选即授予，取消勾选即回收，保存后生效。
       </n-alert>
       <n-tree :data="treeData" checkable cascade default-expand-all v-model:checked-keys="checkedKeys" />
       <template #action>

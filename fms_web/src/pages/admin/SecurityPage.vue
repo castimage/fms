@@ -56,8 +56,8 @@ const KEY_STATUS_LABELS: Record<string, string> = {
 }
 
 const SCOPE_LABELS: Record<ApiKeyScope, string> = {
-  read: '只读（fms_viewer）',
-  read_write: '读写（fms_operator）',
+  read: '只读',
+  read_write: '读写',
 }
 
 /** 前缀打码展示，明文本体永不展示 */
@@ -302,8 +302,8 @@ onMounted(() => void load())
         <n-button size="small" type="primary" @click="openIssue">签发密钥</n-button>
       </template>
       <div class="toolbar-hint">
-        API Key 用于系统间集成（X-API-Key 头，网关透传后端校验）：read -> 只读（fms_viewer），read_write -> 读写（fms_operator）。
-        密钥仅当前管理员本人可见/管理；吊销为软删除（行保留），吊销后立即失效。
+        API Key 用于系统间集成：read 仅可读，read_write 可读写。
+        密钥仅当前管理员本人可见和管理；签发后明文仅显示一次，请及时保存；吊销后立即失效。
       </div>
       <DataTable
         v-model:page="keyPage"
@@ -324,7 +324,7 @@ onMounted(() => void load())
     <!-- 签发弹窗 -->
     <n-modal v-model:show="showIssue" preset="card" title="签发 API 密钥" style="width: min(480px, calc(100vw - 32px))" :bordered="false">
       <n-alert type="info" :bordered="false" class="issue-hint">
-        签发后明文仅展示一次（库内只存 HMAC 盲索引），请立即复制保存；scope 决定注入角色，过期时间留空 = 永不过期。
+        签发后明文仅显示一次，请立即复制保存；作用域决定只读或读写权限；过期时间留空表示永不过期。
       </n-alert>
       <n-form label-placement="top" size="small">
         <n-form-item label="密钥名称">
@@ -334,8 +334,8 @@ onMounted(() => void load())
           <n-select
             v-model:value="issueForm.scope"
             :options="[
-              { label: '只读（read -> fms_viewer）', value: 'read' },
-              { label: '读写（read_write -> fms_operator）', value: 'read_write' },
+              { label: '只读', value: 'read' },
+              { label: '读写', value: 'read_write' },
             ]"
           />
         </n-form-item>
@@ -352,7 +352,7 @@ onMounted(() => void load())
     <!-- 签发结果，明文仅此一次 -->
     <n-modal v-model:show="issuedKeyVisible" preset="card" title="签发成功 - 请立即保存" style="width: min(560px, calc(100vw - 32px))" :bordered="false">
       <n-alert type="warning" :bordered="false" class="issue-hint">
-        明文密钥仅此一次展示，关闭后无法再取回（库内仅存 HMAC 盲索引）。请立即复制并妥善保管。
+        明文密钥仅显示一次，关闭后无法再取回。请立即复制并妥善保管。
       </n-alert>
       <div class="key-result">
         <code class="key-text">{{ issuedKey?.apiKey }}</code>
@@ -366,8 +366,7 @@ onMounted(() => void load())
     <!-- 登录日志，登录审计，真实 um.login_log 列表 -->
     <PageCard title="登录日志" :loading="loading">
       <div class="toolbar-hint">
-        登录尝试审计（um.login_log 按月分区，仅追加）：登录名模糊 + 时间范围 + 成功失败 + 锁定触发过滤；
-        失败原因口径：用户不存在/账户锁定/账户停用/密码错误/验证码错误，改密成功亦记一条「改密事件」。
+        登录尝试审计：可按登录名、时间范围、结果和锁定触发筛选；失败原因包括账号不存在、账户锁定、账户停用、密码错误、验证码错误；改密成功也会记录。
       </div>
       <FormGrid class="filter-grid">
         <n-form-item label="登录名">

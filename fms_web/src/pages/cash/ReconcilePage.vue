@@ -148,7 +148,7 @@ async function onConfirm() {
     filename: preview.value.filename,
     rows: preview.value.rows,
   })
-  message.success('对账单已落库')
+  message.success('对账单已导入')
   preview.value = null
   await loadStatements()
 }
@@ -358,13 +358,13 @@ onMounted(() => {
     <n-modal v-model:show="showPreview" preset="card" title="对账单导入预览" style="width: 640px; max-width: 94vw">
       <template v-if="preview">
         <p class="preview-tip">
-          {{ preview.filename }}：共 {{ preview.totalLines }} 行，核对无误后确认落库
+          {{ preview.filename }}：共 {{ preview.totalLines }} 行，核对无误后确认导入
         </p>
         <n-data-table :columns="previewColumns" :data="preview.rows" size="small" :scroll-x="640" max-height="320" />
       </template>
       <template #footer>
         <n-button @click="preview = null">取消</n-button>
-        <n-button v-if="canWrite" type="primary" @click="onConfirm">确认落库</n-button>
+        <n-button v-if="canWrite" type="primary" @click="onConfirm">确认导入</n-button>
       </template>
     </n-modal>
 
