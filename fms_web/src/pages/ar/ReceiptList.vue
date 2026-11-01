@@ -4,7 +4,7 @@
  * RECEIVED 行可核销与删除，选择未核销发票 + 金额，防重由后端 uk_ar_alloc 双闸兜底，
  * RECEIVED/ALLOCATED 行可冲销，置 REVERSED，reason 审计。
  */
-import { h, ref, watch } from 'vue'
+import { h, onMounted, ref, watch } from 'vue'
 import { NButton, NDatePicker, NInput, NInputNumber, NModal, NPopconfirm, NSelect, useMessage } from 'naive-ui'
 import dayjs from 'dayjs'
 import { arApi } from '@/api/ar'
@@ -70,6 +70,7 @@ watch([customerId, status], () => {
   else page.value = 1
 })
 watch([page, size, () => appStore.companyId], () => void load())
+onMounted(() => void load())
 
 // 登记收款弹窗
 const showCreate = ref(false)

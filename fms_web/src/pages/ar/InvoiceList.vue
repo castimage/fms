@@ -3,7 +3,7 @@
  * 发票列表，客户/状态/关键词筛选 + 服务端分页，新建/编辑 n-modal，仅 DRAFT 可改，
  * DRAFT 行可开具（issue）与删除，ISSUED/PARTIAL 行可作废（void），"坏账台账"入口复用 BadDebtModal。
  */
-import { h, ref, watch } from 'vue'
+import { h, onMounted, ref, watch } from 'vue'
 import { NButton, NDatePicker, NInput, NInputNumber, NModal, NPopconfirm, NSelect, useMessage } from 'naive-ui'
 import { useDebounceFn } from '@vueuse/core'
 import dayjs from 'dayjs'
@@ -77,6 +77,7 @@ const onKeywordSearch = useDebounceFn(onFilterChange, 500)
 watch(keyword, () => onKeywordSearch())
 watch([customerId, status], onFilterChange)
 watch([page, size, () => appStore.companyId], () => void load())
+onMounted(() => void load())
 
 // 新建/编辑弹窗，仅 DRAFT 可编辑
 const showModal = ref(false)
