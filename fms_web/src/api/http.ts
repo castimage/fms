@@ -2,7 +2,7 @@
  * http 出口，axios 实例 + 统一解包。
  *
  * 请求，localStorage 取 token 注入 Authorization，anonymous 端点除外，
- * 响应，code=0 返回业务数据，data:null 照常返回，40100/40101 静默 refresh 重放一次，
+ * 响应，code=0 返回业务数据，data:null 照常返回，40101 静默 refresh 重放一次，40100 或刷新失败清态，
  * 失败清态跳登录，42900 提示限流，其他业务码抛 ApiError，后端中文消息直接展示。
  *
  * 非 2xx，后端错误恒带 ApiResponse 壳，40400 映射 http 404、40300 映射 403 等，catch 中同一分发，
@@ -15,6 +15,7 @@ import type { AxiosError, AxiosRequestConfig } from 'axios'
 import { createDiscreteApi } from 'naive-ui'
 import { ApiError, ErrorCode } from '@/types/api'
 import type { ApiResponse } from '@/types/api'
+import type { LoginResponse } from '@/types/auth'
 
 const { message } = createDiscreteApi(['message'])
 
@@ -44,14 +45,36 @@ function toLogin() {
 
 type RetriedConfig = AxiosRequestConfig & { _retried?: boolean }
 
+/** 刷新请求的全局单飞，多个并发 401 共享同一次旋转 */
+let refreshPromise: Promise<LoginResponse> | null = null
+
+async function refreshAccessToken(): Promise<LoginResponse> {
+  if (!refreshPromise) {
+    const refreshToken = localStorage.getItem('fms_refresh_token')
+    if (!refreshToken) throw new Error('缺少 refresh token')
+    refreshPromise = (async () => {
+      const { refresh } = await import('@/api/auth')
+      const res = await refresh(refreshToken)
+      if (!res.accessToken || !res.refreshToken) throw new Error('刷新响应缺少令牌')
+      localStorage.setItem('fms_access_token', res.accessToken)
+      localStorage.setItem('fms_refresh_token', res.refreshToken)
+      return res
+    })().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
+}
+
 /**
  * 按 body.code 统一分发业务码，2xx 与非 2xx 共用一条路径防止分支漂移，
- * 40100/40101 匿名端点直接抛后端消息，其余静默刷新重放一次。
+ * 40100/40101 匿名端点直接抛后端消息，其余 40101 静默刷新重放一次。
  */
 async function dispatchBody<T>(
   body: ApiResponse<T>,
   config: AxiosRequestConfig,
   options?: RequestOptions,
+  sentToken?: string | null,
 ): Promise<T> {
   if (body.code === ErrorCode.OK) return body.data as T
 
@@ -66,9 +89,15 @@ async function dispatchBody<T>(
       }
       throw new ApiError(body.code, body.message || '认证失败', body.traceId)
     }
-    // 40101 且有 refreshToken、本请求非 refresh 且未重试过则静默刷新后重放一次，与后端行为一致
     const refreshToken = localStorage.getItem('fms_refresh_token')
     const cfg = config as RetriedConfig
+    const currentToken = localStorage.getItem('fms_access_token')
+    // 其他请求已刷新出新的 access token，直接用新 token 重放
+    if (!cfg._retried && sentToken && currentToken && sentToken !== currentToken) {
+      cfg._retried = true
+      return await request<T>(config, options)
+    }
+    // 40101 且有 refreshToken、本请求非 refresh 且未重试过则静默刷新后重放一次，与后端行为一致
     if (
       body.code === ErrorCode.TOKEN_EXPIRED &&
       refreshToken &&
@@ -77,10 +106,7 @@ async function dispatchBody<T>(
     ) {
       cfg._retried = true
       try {
-        const { refresh } = await import('@/api/auth')
-        const res = await refresh(refreshToken)
-        localStorage.setItem('fms_access_token', res.accessToken ?? '')
-        localStorage.setItem('fms_refresh_token', res.refreshToken ?? '')
+        await refreshAccessToken()
         return await request<T>(config, options) // 递归重放，token 已换新
       } catch {
         // 刷新失败则走下方清态跳登录
@@ -128,13 +154,13 @@ export async function request<T>(config: AxiosRequestConfig, options?: RequestOp
     // 后端已返回 ApiResponse 壳，http 非 2xx，40400 映射 404、40300 映射 403、40900 映射 409 等
     // 均与 2xx 同走业务码分发，40400「接口不存在」等中文消息不被丢弃
     const errBody = parseErrorBody<T>(e)
-    if (errBody) return await dispatchBody<T>(errBody, config, options)
+    if (errBody) return await dispatchBody<T>(errBody, config, options, token)
     // 无响应体，网络/超时/网关无壳响应，仍按网络异常兜底
     message.error('网络异常，请稍后重试')
     throw new ApiError(-1, '网络异常，请稍后重试')
   }
 
-  return await dispatchBody<T>(resp.data, config, options)
+  return await dispatchBody<T>(resp.data, config, options, token)
 }
 
 export { ApiError, ErrorCode }
