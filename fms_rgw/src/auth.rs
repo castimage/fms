@@ -2,7 +2,7 @@
 //! iss/aud宽松校验，配置了才比对，`mw_auth`为安全链第三层，验签通过后剥离客户端
 //! `X-FMS-*`头、注入身份头、执行用户维度限流，`Claims`写入extensions
 //!
-//! 调用关系，`ws.rs`直接调用`verify_jwt`，ws query token，`log.rs`从extensions取`Claims`
+//! 调用关系，`ws.rs`直接调用`verify_access_jwt`，ws query token，`log.rs`从extensions取`Claims`
 #![forbid(unsafe_code)]
 
 use crate::headers::{inject_identity, strip_client_fms_headers};
@@ -30,7 +30,7 @@ use uuid::Uuid;
 const X_API_KEY: HeaderName = HeaderName::from_static("x-api-key");
 
 /// 解析jwt payload的exp，unix秒，base64url无padding，
-/// 登出请求携带的access令牌已由`verify_jwt`验签，refresh令牌同会话签发，
+/// 登出请求携带的access令牌已由`verify_access_jwt`验签，refresh令牌同会话签发，
 /// 此处仅取exp为黑名单条目定ttl，到期即自动失效，解析失败返回`None`，
 /// 调用方回退默认ttl，绝不因解析失败而放弃撤销，fail-closed。
 fn token_exp_secs(token: &str) -> Option<i64> {
@@ -38,6 +38,16 @@ fn token_exp_secs(token: &str) -> Option<i64> {
     let bytes = base64url_decode(payload)?;
     let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     v.get("exp").and_then(|e| e.as_i64())
+}
+
+/// 解析 token 载荷中的 type，用于区分 access 与 refresh
+fn token_type(token: &str) -> Option<String> {
+    let payload = token.split('.').nth(1)?;
+    let bytes = base64url_decode(payload)?;
+    let v: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    v.get("type")
+        .and_then(|t| t.as_str())
+        .map(str::to_string)
 }
 
 /// 最小base64url解码(RFC 4648 url安全字母表，无padding)，委托 base64 crate
@@ -71,6 +81,8 @@ pub enum AuthError {
     InvalidIssuer,
     /// aud配置了但不符，40100
     InvalidAudience,
+    /// type 不是 access，refresh 令牌不得访问业务接口，40100
+    WrongTokenType,
 }
 
 /// 从`Authorization: Bearer`头验签，严格校验签名 + exp，`leeway`容忍，
@@ -146,6 +158,25 @@ pub fn verify_jwt(
     Ok(claims)
 }
 
+/// 校验 access 类型，refresh 令牌不得访问业务接口与 WebSocket。
+pub fn verify_access_jwt(
+    header: Option<&str>,
+    secret: &[u8],
+    expected_iss: Option<&str>,
+    expected_aud: Option<&str>,
+    leeway_secs: i64,
+) -> Result<Claims, AuthError> {
+    let claims = verify_jwt(header, secret, expected_iss, expected_aud, leeway_secs)?;
+    let token = header
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .filter(|t| !t.is_empty())
+        .ok_or(AuthError::Malformed)?;
+    if token_type(token).as_deref() != Some("access") {
+        return Err(AuthError::WrongTokenType);
+    }
+    Ok(claims)
+}
+
 /// 匿名路径白名单，不要求jwt，`/healthz`、`/api/auth/login`、`/api/auth/refresh`、
 /// `/api/auth/recovery`(含第二步`/api/auth/recovery/reset`)、`/api/auth/totp`/*、
 /// `/api/nt/ws`、`/api/public`/*，登录页背景配置与背景图匿名读取，其余`/api`/** 一律
@@ -216,7 +247,7 @@ pub async fn mw_auth(
             .headers()
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
-            && let Ok(claims) = verify_jwt(
+            && let Ok(claims) = verify_access_jwt(
                 Some(hdr),
                 state.cfg.auth.jwt_secret.as_bytes(),
                 state.cfg.auth.expected_iss.as_deref(),
@@ -275,7 +306,7 @@ pub async fn mw_auth(
         return error_response(GatewayError::TokenExpired, &trace_id);
     }
 
-    let claims = match verify_jwt(
+    let claims = match verify_access_jwt(
         auth_header.as_deref(),
         auth_cfg.jwt_secret.as_bytes(),
         auth_cfg.expected_iss.as_deref(),
@@ -296,7 +327,7 @@ pub async fn mw_auth(
             return error_response(GatewayError::Unauthorized, &trace_id);
         }
         Err(_) => {
-            tracing::warn!(trace_id = %trace_id, path = %req.uri().path(), "认证失败：iss/aud 不符");
+            tracing::warn!(trace_id = %trace_id, path = %req.uri().path(), "认证失败：iss/aud/type 不符");
             return error_response(GatewayError::Unauthorized, &trace_id);
         }
     };
@@ -428,9 +459,15 @@ mod tests {
     use tower::ServiceExt;
 
     fn sign_token(claims: &Claims, secret: &[u8]) -> String {
+        sign_token_with_type(claims, secret, "access")
+    }
+
+    fn sign_token_with_type(claims: &Claims, secret: &[u8], token_type: &str) -> String {
+        let mut payload = serde_json::to_value(claims).expect("测试载荷序列化");
+        payload["type"] = serde_json::Value::String(token_type.to_string());
         encode(
             &Header::new(Algorithm::HS256),
-            claims,
+            &payload,
             &EncodingKey::from_secret(secret),
         )
         .expect("测试 token 签发")
@@ -457,6 +494,35 @@ mod tests {
         .expect("验签通过");
         assert_eq!(out.sub, claims.sub);
         assert_eq!(out.role, "operator");
+    }
+
+    #[test]
+    fn refresh_token_not_accepted_as_access() {
+        let secret = b"test-secret";
+        let claims = Claims {
+            sub: Uuid::now_v7(),
+            role: "operator".to_string(),
+            exp: now_secs() + 3600,
+            iss: None,
+            aud: None,
+        };
+        let access = sign_token_with_type(&claims, secret, "access");
+        assert!(
+            verify_access_jwt(Some(&format!("Bearer {access}")), secret, None, None, 60).is_ok()
+        );
+
+        let refresh = sign_token_with_type(&claims, secret, "refresh");
+        assert_eq!(
+            verify_access_jwt(
+                Some(&format!("Bearer {refresh}")),
+                secret,
+                None,
+                None,
+                60
+            ),
+            Err(AuthError::WrongTokenType)
+        );
+        assert!(verify_jwt(Some(&format!("Bearer {refresh}")), secret, None, None, 60).is_ok());
     }
 
     #[test]

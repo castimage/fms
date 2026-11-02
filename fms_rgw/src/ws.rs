@@ -3,10 +3,10 @@
 //! 用户维度限流 + 熔断，上游重建后send，101 则立即返回并后台双向泵(先101再await升级防死锁，
 //! 升级超时10s清理)，非101透传状态码
 //!
-//! 调用关系，安全链分发调用`ws_handler`，`verify_jwt`/`rate_key`/`is_ready`复用各模块
+//! 调用关系，安全链分发调用`ws_handler`，`verify_access_jwt`/`rate_key`/`is_ready`复用各模块
 #![forbid(unsafe_code)]
 
-use crate::auth::{AuthError, verify_jwt};
+use crate::auth::{AuthError, verify_access_jwt};
 use crate::circuit::CircuitError;
 use crate::headers::{inject_identity, inject_trace, strip_client_fms_headers};
 use crate::proxy::{build_upstream_uri, forward_client_headers, proxy_handler, strip_hop_by_hop_keep};
@@ -90,7 +90,7 @@ fn header_contains_token(
 /// 绕过安全链)，随后 `Origin`校验(cswsh防护，`CorsLayer`不约束ws升级，浏览器握手的
 /// `Origin`必须命中cors白名单，无`Origin`的非浏览器客户端放行，非白名单则回 403)，
 /// 再做认证(query ?token= 优先于`Authorization`头，query token为裸jwt需补 "Bearer "
-/// 前缀，否则`verify_jwt`恒按格式非法401，过期40101，其余40100，角色白名单同`mw_auth`)，
+/// 前缀，否则`verify_access_jwt`恒按格式非法401，过期40101，其余40100，角色白名单同`mw_auth`)，
 /// 随后用户维度限流(ip维度已由`mw_rate_limit`计过一次不重复)，再做熔断检查，随后握手body
 /// 声明长度防御性检查(`mw_sign`对ws升级跳过缓冲，此处兜底413)，然后重建上游请求，
 /// 最后上游握手。
@@ -134,7 +134,7 @@ pub async fn ws_handler(
     }
 
     // 认证，query ?token= 优先，其次Authorization头，query token为裸jwt，
-    // verify_jwt要求 "Bearer " 前缀，需补上，否则按格式非法恒401
+    // verify_access_jwt要求 "Bearer " 前缀，需补上，否则按格式非法恒401
     let token: Option<String> = extract_token_from_query(req.uri())
         .map(|t| format!("Bearer {t}"))
         .or_else(|| {
@@ -152,7 +152,7 @@ pub async fn ws_handler(
         return error_response(GatewayError::TokenExpired, &trace_id);
     }
     let auth_cfg = &state.cfg.auth;
-    let claims = match verify_jwt(
+    let claims = match verify_access_jwt(
         token.as_deref(),
         auth_cfg.jwt_secret.as_bytes(),
         auth_cfg.expected_iss.as_deref(),
@@ -539,9 +539,11 @@ mod tests {
 
     /// 签发测试token，HS256
     fn sign_test_token(claims: &Claims) -> String {
+        let mut payload = serde_json::to_value(claims).expect("测试载荷序列化");
+        payload["type"] = serde_json::Value::String("access".to_string());
         jsonwebtoken::encode(
             &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-            claims,
+            &payload,
             &jsonwebtoken::EncodingKey::from_secret(b"test-jwt-secret"),
         )
         .expect("测试 token 签发")

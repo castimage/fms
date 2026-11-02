@@ -299,9 +299,11 @@ pub fn make_jwt(sub: &str, role: &str, exp_offset_secs: i64, secret: &[u8]) -> S
         iss: None,
         aud: None,
     };
+    let mut payload = serde_json::to_value(&claims).expect("测试载荷序列化");
+    payload["type"] = serde_json::Value::String("access".to_string());
     jsonwebtoken::encode(
         &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &claims,
+        &payload,
         &jsonwebtoken::EncodingKey::from_secret(secret),
     )
     .expect("测试 JWT 签发失败")
@@ -324,9 +326,11 @@ pub fn make_jwt_full(
         iss: iss.map(|s| s.to_string()),
         aud: aud.map(|s| s.to_string()),
     };
+    let mut payload = serde_json::to_value(&claims).expect("测试载荷序列化");
+    payload["type"] = serde_json::Value::String("access".to_string());
     jsonwebtoken::encode(
         &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &claims,
+        &payload,
         &jsonwebtoken::EncodingKey::from_secret(secret),
     )
     .expect("测试 JWT 签发失败")

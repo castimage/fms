@@ -203,6 +203,28 @@ async fn weak_secret_bruteforce_all_rejected() {
 
 // jwt生命周期
 
+/// refresh token 不能访问业务接口。
+/// 预期 401 + 40100 + 上游零到达。
+#[tokio::test]
+async fn refresh_token_rejected_by_api() {
+    let (router, mock) = router_with_mock(|_| {}, None).await;
+    let mut payload = claims_json(SUB, "operator", 3600);
+    payload["type"] = serde_json::Value::String("refresh".to_string());
+    let token = sign_value(&payload, JWT_SECRET);
+    let resp = oneshot(
+        &router,
+        with_ip(
+            with_auth(request("GET", "/api/gl/vouchers"), &token),
+            "127.0.0.1",
+        ),
+    )
+    .await;
+    let (status, _, body) = collect_json(resp).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["code"], 40100);
+    assert_hits(&mock, "/api/gl/vouchers", 0, "refresh token 不得到达上游").await;
+}
+
 /// 【攻击】过期token重放，旧会话劫持。
 /// 【防护层】auth层，exp < now - leeway，60s 则回 `AuthError::Expired`，401 + code 40101。
 /// 【预期】401 + 40101 + 上游零到达。
