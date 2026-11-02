@@ -257,7 +257,7 @@ services:
     # 多机版，仅应用主机启动
     profiles: ["app"]
     build: ./fms_rgw
-    image: fms_rgw:0.2.0
+    image: fms_rgw:0.2.1
     container_name: fms-rgw
     networks:
       - fms-network

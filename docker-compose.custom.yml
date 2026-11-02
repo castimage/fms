@@ -232,7 +232,7 @@ services:
   # 宿主端口/上层 LB，见文件头说明，后端副本扩展已覆盖主要扩容场景）
   fms-rgw:
     build: ./fms_rgw
-    image: fms_rgw:0.2.0
+    image: fms_rgw:0.2.1
     networks:
       - fms-network
     restart: unless-stopped

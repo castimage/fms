@@ -10,7 +10,7 @@
     </parent>
     <groupId>net.castimage</groupId>
     <artifactId>fms_backend</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1</version>
     <name>fms_backend</name>
     <description>FMS 财务管理系统后端服务</description>
 
