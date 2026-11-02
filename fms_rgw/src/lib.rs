@@ -208,6 +208,8 @@ pub fn build_state(cfg: config::Config) -> Result<Arc<AppState>, Box<dyn std::er
 /// 安全链，运行时由外层到内层依次 trace、filter、rate、auth、sign，随后分发
 /// ws/proxy，`/healthz`仅追加trace，不限流不认证，fallback 则交 `static_handler`。
 ///
+/// `/api` 装配完整安全链，`/healthz` 仅装配 trace，静态回退由全局层处理。
+///
 /// `route_layer`后加者在最外层，故按最内层先加的反序添加，filter先于auth拦截攻击，
 /// auth先剥离客户端伪造的`X-FMS-*`并注入身份头，sign最后注入`X-FMS-Signature`
 /// 不被auth剥离逻辑误删，可送达上游验签
@@ -247,23 +249,25 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         None
     };
 
-    let router = Router::new()
+    // /api 装配完整安全链，/healthz 仅装配 trace
+    let api_router = Router::new()
         .route("/api/{*rest}", any(ws::ws_handler))
         .route_layer(sign_mw)
         .route_layer(auth_mw)
         .route_layer(rate_mw)
         .route_layer(filter_mw)
         .route_layer(trace_mw)
-        .route_layer(ip_allowlist_mw) // 最外层，ip白名单最先判定，非白名单直接丢弃
-        // /healthz在安全链route_layer之后注册则豁免限流/认证，下一行route_layer
-        // 作用于其上已注册的全部路由(/api与/healthz)，/healthz获得trace，
-        // /api的trace层被重复套用(幂等，两层复用同一TraceSampled采样判定，
-        // 外层生成/透传后内层重写同值TraceCtx与请求头，无副作用)
+        .route_layer(ip_allowlist_mw); // 最外层，ip 白名单先于 trace 与安全链
+
+    let health_router = Router::new()
         .route("/healthz", get(health_handler))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             types::mw_trace,
-        ))
+        ));
+
+    let router = api_router
+        .merge(health_router)
         .fallback(r#static::static_handler)
         .layer(cors_layer)
         .layer(log_mw)
@@ -616,7 +620,7 @@ mod tests {
     async fn build_router_assembles_and_serves_healthz() {
         let state = state::test_state();
         let app = build_router(state);
-        // 全链装配(compression最外层 + mw_access_log次外层 + cors + /healthz)下healthz可达
+        // 全链装配下 healthz 可达
         let resp = app
             .oneshot(
                 axum::http::Request::builder()
