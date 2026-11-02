@@ -354,7 +354,7 @@ services:
   # auto，配置见下方环境变量；depends_on 指向两个后端实例。
   fms-rgw:
     build: ./fms_rgw
-    image: fms_rgw:0.1.0
+    image: fms_rgw:0.2.0
     container_name: fms-rgw
     networks:
       - fms-network

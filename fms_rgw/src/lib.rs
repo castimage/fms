@@ -584,7 +584,7 @@ pub async fn shutdown_signal(state: Arc<AppState>, shutdown_tx: tokio::sync::wat
     let _ = shutdown_tx.send(());
 }
 
-/// `/healthz`自检，200 {"status":"ok","version":"0.1.0","uptime_secs":N,"circuit":"CLOSED","ts":"RFC3339"}
+/// `/healthz`自检，200 {"status":"ok","version":"0.2.0","uptime_secs":N,"circuit":"CLOSED","ts":"RFC3339"}
 pub async fn health_handler(State(state): State<Arc<AppState>>) -> Response<Body> {
     let body = serde_json::json!({
         "status": "ok",
