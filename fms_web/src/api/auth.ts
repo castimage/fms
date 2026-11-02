@@ -39,9 +39,16 @@ export function refresh(refreshToken: string): Promise<LoginResponse> {
   )
 }
 
-/** 登出，可空体，失败忽略，本地照清 */
+/** 登出，携带双 token 供网关与后端写入黑名单，失败忽略，本地照清 */
 export function logout(): Promise<void> {
-  return request<void>({ url: '/auth/logout', method: 'post' })
+  return request<void>({
+    url: '/auth/logout',
+    method: 'post',
+    data: {
+      accessToken: localStorage.getItem('fms_access_token'),
+      refreshToken: localStorage.getItem('fms_refresh_token'),
+    },
+  })
 }
 
 /** 当前会话，刷新页面/启动时恢复 user */

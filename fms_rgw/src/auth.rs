@@ -384,7 +384,7 @@ pub async fn mw_auth(
     if (path == "/api/auth/logout" || path == "/api/auth/change-password")
         && req.method() == Method::POST
     {
-        // 改密body未携带令牌时的回退注销源，当前Authorization令牌原值
+        // 请求体未携带 access token 时的回退注销源，取当前 Authorization 令牌原值
         let auth_token_owned = auth_header
             .as_deref()
             .and_then(|h| h.strip_prefix("Bearer "))
@@ -407,6 +407,15 @@ pub async fn mw_auth(
                     pending.push((tok.to_string(), exp));
                 }
             }
+        }
+
+        if path == "/api/auth/logout"
+            && let Some(tok) = auth_token_owned.as_deref()
+            && !pending.iter().any(|(t, _)| t == tok)
+        {
+            let exp = token_exp_secs(tok)
+                .unwrap_or_else(|| now_secs() + state.cfg.auth.logout_blacklist_ttl_secs);
+            pending.push((tok.to_string(), exp));
         }
 
         if path == "/api/auth/change-password"
@@ -1091,6 +1100,36 @@ mod tests {
             axum::http::StatusCode::OK,
             "未注销 token 不受影响"
         );
+    }
+
+    #[tokio::test]
+    async fn mw_auth_logout_empty_body_revokes_authorization_token() {
+        let state = test_state();
+        let claims = Claims {
+            sub: Uuid::now_v7(),
+            role: "operator".to_string(),
+            exp: now_secs() + 3600,
+            iss: None,
+            aud: None,
+        };
+        let token = sign_token(&claims, b"test-jwt-secret");
+        let app = auth_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/logout")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+
+        let req2 = Request::builder()
+            .uri("/api/gl/vouchers")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let resp2 = app.clone().oneshot(req2).await.unwrap();
+        assert_eq!(resp2.status(), axum::http::StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
