@@ -85,6 +85,11 @@ fn apply_env_overrides_with(cfg: &mut Config, get_env: &dyn Fn(&str) -> Option<S
     override_str(&mut cfg.auth.jwt_secret, "FMS_RGW_JWT_SECRET", get_env);
     override_str(&mut cfg.sign.sign_secret, "FMS_RGW_SIGN_SECRET", get_env);
     override_str(&mut cfg.auth.deny_store, "FMS_RGW_DENY_STORE", get_env);
+    if let Some(v) = get_env("FMS_RGW_REDIS_URL")
+        && !v.is_empty()
+    {
+        cfg.limits.redis_url = Some(v);
+    }
 
     // 爬虫ua拦截开关，仅解析true/false文本
     if let Some(v) = get_env("FMS_RGW_BLOCK_CRAWLERS")
@@ -460,7 +465,7 @@ pub struct RateLimitCfg {
     pub backend: String,
     /// redis后端连接url，默认空
     ///
-    /// 仅backend=`redis`时必填，backend=`memory`时忽略
+    /// 仅backend=`redis`或deny_store=`redis`时必填，可由`FMS_RGW_REDIS_URL`覆盖
     pub redis_url: Option<String>,
 }
 
@@ -869,6 +874,8 @@ mod tests {
             "FMS_RGW_UPSTREAM_SERVERS" => Some("http://10.0.0.2:9000, http://10.0.0.3:9000".to_string()),
             "FMS_RGW_JWT_SECRET" => Some("env-jwt".to_string()),
             "FMS_RGW_SIGN_SECRET" => Some("env-sign".to_string()),
+            "FMS_RGW_DENY_STORE" => Some("redis".to_string()),
+            "FMS_RGW_REDIS_URL" => Some("redis://127.0.0.1:6379/0".to_string()),
             "FMS_RGW_STATIC_DIR" => Some("./www".to_string()),
             "FMS_RGW_TLS_CERT" => Some("certs/e.crt".to_string()),
             "FMS_RGW_TLS_KEY" => Some("certs/e.key".to_string()),
@@ -892,6 +899,11 @@ mod tests {
         );
         assert_eq!(cfg.auth.jwt_secret, "env-jwt");
         assert_eq!(cfg.sign.sign_secret, "env-sign");
+        assert_eq!(cfg.auth.deny_store, "redis");
+        assert_eq!(
+            cfg.limits.redis_url.as_deref(),
+            Some("redis://127.0.0.1:6379/0")
+        );
         assert_eq!(cfg.static_cfg.dir, "./www");
         assert_eq!(cfg.tls.cert.as_deref(), Some("certs/e.crt"));
         assert_eq!(cfg.tls.key.as_deref(), Some("certs/e.key"));
@@ -929,6 +941,7 @@ mod tests {
         assert!(cfg.upstream.servers.is_empty(), "空 SERVERS 不得覆盖");
         assert_eq!(cfg.tls.cert, None);
         assert_eq!(cfg.log.access_file, None);
+        assert_eq!(cfg.limits.redis_url, None);
         apply_env_overrides_with(&mut cfg, &|_| None);
         assert_eq!(cfg.server.listen, "0.0.0.0:8080", "缺失变量不得覆盖");
     }

@@ -1,6 +1,8 @@
 package net.castimage.fms_backend.Utils;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.data.redis.connection.ExpirationOptions;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisOperations;
@@ -37,6 +39,21 @@ public class RedisCachePort implements CachePort {
 
     private final StringRedisTemplate redisTemplate;
 
+    /** 启动期探测 Redis，连接失败直接失败，避免多实例静默退回单实例语义 */
+    @PostConstruct
+    public void verifyConnection() {
+        if (redisTemplate.getConnectionFactory() == null) {
+            throw new IllegalStateException("fms.session-store=redis 但未配置 Redis 连接");
+        }
+        RedisConnection conn = redisTemplate.getConnectionFactory().getConnection();
+        try {
+            conn.ping();
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("fms.session-store=redis 但 Redis 不可达", e);
+        } finally {
+            conn.close();
+        }
+    }
 
     @Override
     public boolean setIfAbsent(String key, String value, Duration ttl) {

@@ -252,6 +252,9 @@ services:
       FMS_RGW_UPSTREAM: http://fms-backend:8081
       FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+      # 多实例登出撤销共享，连接 fms-redis；缺连接启动失败
+      FMS_RGW_DENY_STORE: redis
+      FMS_RGW_REDIS_URL: "redis://:${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}@fms-redis:6379/0"
       FMS_RGW_STATIC_DIR: /app/static
       FMS_RGW_LOG_FILE: /app/logs/access.log
       FMS_RGW_LOG_TOKEN: ${FMS_INTERNAL_TOKEN:-}

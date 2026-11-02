@@ -34,10 +34,12 @@ pub struct RedisDenyRemote {
 }
 
 impl RedisDenyRemote {
+    /// 启动期建立连接并 PING，Redis 不可达则启动失败
     pub fn new(redis_url: &str) -> Result<Self, redis::RedisError> {
-        Ok(Self {
-            client: redis::Client::open(redis_url)?,
-        })
+        let client = redis::Client::open(redis_url)?;
+        let mut conn = client.get_connection()?;
+        redis::cmd("PING").query::<String>(&mut conn)?;
+        Ok(Self { client })
     }
 }
 

@@ -27,6 +27,8 @@ auth:
   jwt_secret: ""
   expected_iss: "fms"
   expected_aud: "fms-gateway"
+  # 多网关共享撤销，连接由 FMS_RGW_REDIS_URL 注入，缺连接启动失败
+  deny_store: "redis"
 
 sign:
   sign_secret: ""

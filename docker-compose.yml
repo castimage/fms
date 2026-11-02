@@ -326,6 +326,9 @@ services:
       # 与后端共享密钥（网关启动校验不少于 32 字符且非占位符，违者启动失败）
       FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
+      # 多实例登出撤销共享，连接 fms-redis；缺连接启动失败
+      FMS_RGW_DENY_STORE: redis
+      FMS_RGW_REDIS_URL: "redis://:${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}@fms-redis:6379/0"
       FMS_RGW_STATIC_DIR: /app/static
       FMS_RGW_LOG_FILE: /app/logs/access.log
       # PGMQ 审计链路内部 token（X-FMS-Int-Token 请求头值，必须与后端

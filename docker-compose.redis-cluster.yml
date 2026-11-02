@@ -136,3 +136,8 @@ services:
   fms-backend:
     <<: *backend-sentinel
     container_name: fms-backend
+
+  # 哨兵形态网关单实例，登出撤销走进程内表；后端黑名单仍经哨兵 Redis 共享
+  fms-rgw:
+    environment:
+      FMS_RGW_DENY_STORE: memory
