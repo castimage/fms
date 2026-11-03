@@ -40,10 +40,15 @@ services:
       - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD}"
+      - --masterauth
+      - "${FMS_REDIS_PASSWORD}"
       - --appendonly
       - "yes"
+    volumes:
+      # 主节点 AOF 持久化，重建/故障转移后保留当前角色数据
+      - fms-redis-master-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" info replication | grep -qE 'role:master|master_link_status:up'"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -73,13 +78,16 @@ services:
       - "6379"
       - --appendonly
       - "yes"
+    volumes:
+      # 从节点 AOF 持久化，提升为主后可保留已同步数据
+      - fms-redis-replica-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" info replication | grep -qE 'role:master|master_link_status:up'"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # 哨兵，conf 由 entrypoint 动态生成，auth-pass 注入 .env 密码，announce-ip 供
+  # 哨兵，conf 首次生成后持久化，auth-pass 注入 .env 密码，announce-ip 供
   # 客户端跨容器发现，3 哨兵 quorum=2 才能触发故障转移
   fms-redis-sentinel-1: &sentinel
     image: valkey/valkey:8.1.11-alpine
@@ -94,9 +102,11 @@ services:
       SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-1
       FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
     command: >
-      sh -c 'printf "port 26379\nsentinel resolve-hostnames yes\nsentinel monitor fms-redis-master fms-redis-master 6379 2\nsentinel auth-pass fms-redis-master %s\nsentinel announce-ip %s\nsentinel down-after-milliseconds fms-redis-master 5000\nsentinel failover-timeout fms-redis-master 15000\nsentinel parallel-syncs fms-redis-master 1\n" "$$FMS_REDIS_PASSWORD" "$$SENTINEL_ANNOUNCE_IP" > /tmp/sentinel.conf && valkey-sentinel /tmp/sentinel.conf'
+      sh -c 'if [ ! -f /data/sentinel.conf ]; then printf "port 26379\nsentinel resolve-hostnames yes\nsentinel monitor fms-redis-master fms-redis-master 6379 2\nsentinel auth-pass fms-redis-master %s\nsentinel announce-ip %s\nsentinel down-after-milliseconds fms-redis-master 5000\nsentinel failover-timeout fms-redis-master 15000\nsentinel parallel-syncs fms-redis-master 1\n" "$$FMS_REDIS_PASSWORD" "$$SENTINEL_ANNOUNCE_IP" > /data/sentinel.conf; fi; valkey-sentinel /data/sentinel.conf'
+    volumes:
+      - fms-redis-sentinel-1-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -p 26379 sentinel ckquorum fms-redis-master | grep -q OK"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -107,6 +117,8 @@ services:
     environment:
       SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-2
       FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
+    volumes:
+      - fms-redis-sentinel-2-data:/data
 
   fms-redis-sentinel-3:
     <<: *sentinel
@@ -114,6 +126,8 @@ services:
     environment:
       SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-3
       FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
+    volumes:
+      - fms-redis-sentinel-3-data:/data
 
   # 后端切换哨兵连接，compose 合并语义，同名服务 environment 与主编排合并，
   # 集群形态 backend-1/2 与单机形态 backend 均覆盖，未合并本文件则不受影响
@@ -145,3 +159,10 @@ services:
       FMS_RGW_REDIS_SENTINEL_NODES: ${FMS_REDIS_SENTINEL_NODES:-fms-redis-sentinel-1:26379,fms-redis-sentinel-2:26379,fms-redis-sentinel-3:26379}
       FMS_RGW_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
       FMS_RGW_REDIS_SENTINEL_PASSWORD: ${FMS_RGW_REDIS_SENTINEL_PASSWORD:-}
+
+volumes:
+  fms-redis-master-data:
+  fms-redis-replica-data:
+  fms-redis-sentinel-1-data:
+  fms-redis-sentinel-2-data:
+  fms-redis-sentinel-3-data:

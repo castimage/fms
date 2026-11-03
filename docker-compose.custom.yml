@@ -153,6 +153,8 @@ services:
       - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
+      - --masterauth
+      - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
       - --appendonly
       - "yes"
     environment:
@@ -160,7 +162,7 @@ services:
     volumes:
       - fms-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$${FMS_REDIS_PASSWORD}\" info replication | grep -qE 'role:master|master_link_status:up'"]
       interval: 5s
       timeout: 10s
       retries: 10
