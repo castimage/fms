@@ -142,14 +142,15 @@ services:
       start_period: 30s
     logging: *default-logging
 
+  # fms-redis， Valkey 8.1 共享会话存储
   fms-redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis
     networks:
       - fms-network
     restart: unless-stopped
     command:
-      - redis-server
+      - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
       - --appendonly
@@ -159,7 +160,7 @@ services:
     volumes:
       - fms-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 5s
       timeout: 10s
       retries: 10

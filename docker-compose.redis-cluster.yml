@@ -1,4 +1,4 @@
-# FMS Redis 哨兵集群叠加文件，可选增强，按需以集群方式部署 Redis
+# FMS Valkey 哨兵集群叠加文件，可选增强，按需以集群方式部署 Valkey
 #
 # 与主编排合并使用，项目名随主编排：
 # docker compose -f docker-compose.cluster.yml -f docker-compose.redis-cluster.yml up -d
@@ -9,14 +9,14 @@
 #
 # 后端切换方式是本文件经 compose 服务合并为 backend 注入哨兵连接，environment 与主编排
 # 合并追加，SPRING_PROFILES_ACTIVE=sentinel 加载 application-sentinel.yml，经哨兵自动
-# 发现当前主节点；FMS_REDIS_PASSWORD 同时作用于数据节点与哨兵，对应 masterauth 与
+# 发现当前主节点；FMS_REDIS_PASSWORD 同时作用于 Valkey 数据节点与哨兵，对应 masterauth 与
 # sentinel auth-pass。
 #
 # 叠加后单节点 fms-redis 停用（replicas=0），哨兵集群接管数据存储。容量监控在 Web 的
-# 系统管理页，接口为 /api/admin/system-info，后端经哨兵连接，Redis 信息采集同样经哨兵
+# 系统管理页，接口为 /api/admin/system-info，后端经哨兵连接，Valkey 信息采集同样经哨兵
 # 自动发现当前主节点。
 #
-# 内存方面，会话、限流与 nonce 数据量小，Redis 默认不设内存上限，数据量由键容量（nonce
+# 内存方面，会话、限流与 nonce 数据量小，Valkey 默认不设内存上限，数据量由键容量（nonce
 # 10000 与限流表上限）自然约束，故不设 maxmemory。
 
 services:
@@ -26,7 +26,7 @@ services:
       replicas: 0
 
   fms-redis-master:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis-master
     restart: unless-stopped
     networks:
@@ -34,28 +34,28 @@ services:
     environment:
       # 注入供 healthcheck 使用，healthcheck 继承服务 environment，
       # CMD-SHELL 内以 $${FMS_REDIS_PASSWORD} 由容器 shell 展开
-      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?redis 集群必须设置 FMS_REDIS_PASSWORD}
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?Valkey 集群必须设置 FMS_REDIS_PASSWORD}
     # command 用数组形式，密码含 & 等特殊字符时字符串形式会被 shell 解释破坏
     command:
-      - redis-server
+      - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD}"
       - --appendonly
       - "yes"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   fms-redis-replica:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis-replica
     restart: unless-stopped
     networks:
       - fms-network
     environment:
-      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?redis 集群必须设置 FMS_REDIS_PASSWORD}
+      FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?Valkey 集群必须设置 FMS_REDIS_PASSWORD}
     depends_on:
       fms-redis-master:
         condition: service_healthy
@@ -63,7 +63,7 @@ services:
     # 哨兵因此有可提升的从库（无从库时故障转移无法完成）；进入运行后主从角色由
     # 哨兵的 REPLICAOF 指令接管，本行只在哨兵尚未介入时决定初始角色
     command:
-      - redis-server
+      - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD}"
       - --masterauth
@@ -74,7 +74,7 @@ services:
       - --appendonly
       - "yes"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$$FMS_REDIS_PASSWORD\" ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -82,7 +82,7 @@ services:
   # 哨兵，conf 由 entrypoint 动态生成，auth-pass 注入 .env 密码，announce-ip 供
   # 客户端跨容器发现，3 哨兵 quorum=2 才能触发故障转移
   fms-redis-sentinel-1: &sentinel
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis-sentinel-1
     restart: unless-stopped
     networks:
@@ -94,9 +94,9 @@ services:
       SENTINEL_ANNOUNCE_IP: fms-redis-sentinel-1
       FMS_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD}
     command: >
-      sh -c 'printf "port 26379\nsentinel resolve-hostnames yes\nsentinel monitor fms-redis-master fms-redis-master 6379 2\nsentinel auth-pass fms-redis-master %s\nsentinel announce-ip %s\nsentinel down-after-milliseconds fms-redis-master 5000\nsentinel failover-timeout fms-redis-master 15000\nsentinel parallel-syncs fms-redis-master 1\n" "$$FMS_REDIS_PASSWORD" "$$SENTINEL_ANNOUNCE_IP" > /tmp/sentinel.conf && redis-server /tmp/sentinel.conf --sentinel'
+      sh -c 'printf "port 26379\nsentinel resolve-hostnames yes\nsentinel monitor fms-redis-master fms-redis-master 6379 2\nsentinel auth-pass fms-redis-master %s\nsentinel announce-ip %s\nsentinel down-after-milliseconds fms-redis-master 5000\nsentinel failover-timeout fms-redis-master 15000\nsentinel parallel-syncs fms-redis-master 1\n" "$$FMS_REDIS_PASSWORD" "$$SENTINEL_ANNOUNCE_IP" > /tmp/sentinel.conf && valkey-sentinel /tmp/sentinel.conf'
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -p 26379 ping | grep PONG"]
+      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 10

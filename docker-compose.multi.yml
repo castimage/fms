@@ -51,7 +51,7 @@ networks:
 
 volumes:
   # 与单机版一致，数据卷 / 前端产物卷 / 网关访问日志卷 / Redis AOF 卷
-  # （应用主机的共享会话存储，db 主机不启动 fms-redis，卷声明可共存）
+  # （应用主机的 Valkey 共享会话存储，db 主机不启动 fms-redis，卷声明可共存）
   fms-db-data:
   fms-pglog:
   fms-redis-data:
@@ -136,12 +136,12 @@ services:
       start_period: 10s
     logging: *default-logging
 
-  # fms-redis， 共享会话存储（应用主机，--profile app）
+  # fms-redis， Valkey 8.1 共享会话存储（应用主机，--profile app）
   # 与单机版完全一致，不发布端口，仅 fms-network 内被 fms-backend 访问
   fms-redis:
     # 多机版，仅应用主机启动
     profiles: ["app"]
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis
     networks:
       - fms-network
@@ -149,7 +149,7 @@ services:
     # command 内 ${...} 由 compose 解析期从 .env 展开（exec argv 需实值），
     # healthcheck 内 $${...} 双重转义留待容器 shell 展开（见 docker-compose.yml）
     command:
-      - redis-server
+      - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
       - --appendonly
@@ -161,7 +161,7 @@ services:
       # AOF 持久化目录（appendonly yes，会话键不因重启丢失）
       - fms-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 5s
       timeout: 10s
       retries: 10

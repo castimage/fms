@@ -69,7 +69,7 @@ x-backend-env: &backend-env
   FMS_SECURITY_BYPASS_GATEWAY: "false"
   # 网关内部端点 token（可选，默认空 = 内部端点禁用 fail-closed）
   FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
-  # 共享会话存储，双实例 nonce/票据/黑名单/WS 广播经 redis 同步
+  # 共享会话存储，双实例 nonce/票据/黑名单/WS 广播经 Valkey 同步
   #（SPRING_DATA_REDIS_* 宽松绑定环境变量，优先级高于 application.yaml）
   SPRING_DATA_REDIS_HOST: fms-redis
   SPRING_DATA_REDIS_PORT: "6379"
@@ -100,7 +100,7 @@ volumes:
   fms-pglog:
   # 从库数据卷（pg_basebackup 全量副本 + WAL 持久化）
   fms-db-replica-data:
-  # Redis AOF 持久化卷，共享会话存储
+  # Valkey AOF 持久化卷，共享会话存储
   fms-redis-data:
   # 前端构建产物卷（fms-web-build 写入、fms-rgw 只读）
   fms-static:
@@ -203,9 +203,9 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  # fms-redis， 共享会话存储（与 docker-compose.yml 完全一致）
+  # fms-redis， Valkey 8.1 共享会话存储（与 docker-compose.yml 完全一致）
   fms-redis:
-    image: redis:7-alpine
+    image: valkey/valkey:8.1.11-alpine
     container_name: fms-redis
     networks:
       - fms-network
@@ -213,7 +213,7 @@ services:
     # command 内 ${...} 由 compose 解析期从 .env 展开（exec argv 需实值），
     # healthcheck 内 $${...} 双重转义留待容器 shell 展开（见 docker-compose.yml）
     command:
-      - redis-server
+      - valkey-server
       - --requirepass
       - "${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}"
       - --appendonly
@@ -225,7 +225,7 @@ services:
       # AOF 持久化目录（appendonly yes，双实例共享会话不因重启丢失）
       - fms-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "valkey-cli -a \"$${FMS_REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 5s
       timeout: 10s
       retries: 10
@@ -407,8 +407,8 @@ services:
 # 附件卷 fms-files 为单机命名卷，fms-backend-1/2 同机共享可行；若拆分多机，附件须换共享
 # 存储（NFS、S3 或对象存储），并同步改造 FMS_FILE_STORAGE_DIR 的指向。
 #
-# 会话一致性依赖 fms-redis 单点，redis 故障时双后端 fail-closed，timeout 3s 快速失败，
-# 生产集群须为 redis 加哨兵或集群部署。
+# 会话一致性依赖 fms-redis 单点，Valkey 故障时双后端 fail-closed，timeout 3s 快速失败，
+# 生产集群须为 Valkey 加哨兵或集群部署。
 #
 # fms-db 与 fms-db-replica 同机竞争 IO 与内存，仅作演练形态，真生产的主从请参考
 # docker-compose.pg-repl.yml 拆到独立主机。
