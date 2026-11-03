@@ -90,6 +90,30 @@ fn apply_env_overrides_with(cfg: &mut Config, get_env: &dyn Fn(&str) -> Option<S
     {
         cfg.limits.redis_url = Some(v);
     }
+    if let Some(v) = get_env("FMS_RGW_REDIS_SENTINEL_MASTER")
+        && !v.is_empty()
+    {
+        cfg.limits.redis_sentinel_master = Some(v);
+    }
+    if let Some(v) = get_env("FMS_RGW_REDIS_SENTINEL_NODES")
+        && !v.is_empty()
+    {
+        cfg.limits.redis_sentinel_nodes = v
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+    }
+    if let Some(v) = get_env("FMS_RGW_REDIS_SENTINEL_PASSWORD")
+        && !v.is_empty()
+    {
+        cfg.limits.redis_sentinel_password = Some(v);
+    }
+    if let Some(v) = get_env("FMS_RGW_REDIS_PASSWORD")
+        && !v.is_empty()
+    {
+        cfg.limits.redis_password = Some(v);
+    }
 
     // 爬虫ua拦截开关，仅解析true/false文本
     if let Some(v) = get_env("FMS_RGW_BLOCK_CRAWLERS")
@@ -467,6 +491,23 @@ pub struct RateLimitCfg {
     ///
     /// 仅backend=`redis`或deny_store=`redis`时必填，可由`FMS_RGW_REDIS_URL`覆盖
     pub redis_url: Option<String>,
+    /// redis哨兵主节点名，默认空
+    ///
+    /// 非空且`redis_sentinel_nodes`非空时优先于`redis_url`，由
+    /// `FMS_RGW_REDIS_SENTINEL_MASTER`覆盖
+    pub redis_sentinel_master: Option<String>,
+    /// redis哨兵节点列表，host:port
+    ///
+    /// 由`FMS_RGW_REDIS_SENTINEL_NODES`逗号分隔覆盖
+    pub redis_sentinel_nodes: Vec<String>,
+    /// redis哨兵节点密码，默认空
+    ///
+    /// 由`FMS_RGW_REDIS_SENTINEL_PASSWORD`覆盖，空则不对哨兵发送 AUTH
+    pub redis_sentinel_password: Option<String>,
+    /// 哨兵发现的主节点密码，默认空
+    ///
+    /// 由`FMS_RGW_REDIS_PASSWORD`覆盖，仅哨兵模式使用
+    pub redis_password: Option<String>,
 }
 
 /// 限流配置的默认值
@@ -488,6 +529,10 @@ impl Default for RateLimitCfg {
             ],
             backend: "memory".to_string(),
             redis_url: None,
+            redis_sentinel_master: None,
+            redis_sentinel_nodes: Vec::new(),
+            redis_sentinel_password: None,
+            redis_password: None,
         }
     }
 }
@@ -876,6 +921,12 @@ mod tests {
             "FMS_RGW_SIGN_SECRET" => Some("env-sign".to_string()),
             "FMS_RGW_DENY_STORE" => Some("redis".to_string()),
             "FMS_RGW_REDIS_URL" => Some("redis://127.0.0.1:6379/0".to_string()),
+            "FMS_RGW_REDIS_SENTINEL_MASTER" => Some("fms-redis-master".to_string()),
+            "FMS_RGW_REDIS_SENTINEL_NODES" => {
+                Some("s1:26379, s2:26379".to_string())
+            }
+            "FMS_RGW_REDIS_SENTINEL_PASSWORD" => Some("sentinel-pass".to_string()),
+            "FMS_RGW_REDIS_PASSWORD" => Some("redis-pass".to_string()),
             "FMS_RGW_STATIC_DIR" => Some("./www".to_string()),
             "FMS_RGW_TLS_CERT" => Some("certs/e.crt".to_string()),
             "FMS_RGW_TLS_KEY" => Some("certs/e.key".to_string()),
@@ -904,6 +955,19 @@ mod tests {
             cfg.limits.redis_url.as_deref(),
             Some("redis://127.0.0.1:6379/0")
         );
+        assert_eq!(
+            cfg.limits.redis_sentinel_master.as_deref(),
+            Some("fms-redis-master")
+        );
+        assert_eq!(
+            cfg.limits.redis_sentinel_nodes,
+            vec!["s1:26379", "s2:26379"]
+        );
+        assert_eq!(
+            cfg.limits.redis_sentinel_password.as_deref(),
+            Some("sentinel-pass")
+        );
+        assert_eq!(cfg.limits.redis_password.as_deref(), Some("redis-pass"));
         assert_eq!(cfg.static_cfg.dir, "./www");
         assert_eq!(cfg.tls.cert.as_deref(), Some("certs/e.crt"));
         assert_eq!(cfg.tls.key.as_deref(), Some("certs/e.key"));
@@ -942,6 +1006,10 @@ mod tests {
         assert_eq!(cfg.tls.cert, None);
         assert_eq!(cfg.log.access_file, None);
         assert_eq!(cfg.limits.redis_url, None);
+        assert_eq!(cfg.limits.redis_sentinel_master, None);
+        assert!(cfg.limits.redis_sentinel_nodes.is_empty());
+        assert_eq!(cfg.limits.redis_sentinel_password, None);
+        assert_eq!(cfg.limits.redis_password, None);
         apply_env_overrides_with(&mut cfg, &|_| None);
         assert_eq!(cfg.server.listen, "0.0.0.0:8080", "缺失变量不得覆盖");
     }

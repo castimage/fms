@@ -137,7 +137,11 @@ services:
     <<: *backend-sentinel
     container_name: fms-backend
 
-  # 哨兵形态网关单实例，登出撤销走进程内表；后端黑名单仍经哨兵 Redis 共享
+  # 哨兵形态网关同样经哨兵发现主节点，登出黑名单与后端共享
   fms-rgw:
     environment:
-      FMS_RGW_DENY_STORE: memory
+      FMS_RGW_DENY_STORE: redis
+      FMS_RGW_REDIS_SENTINEL_MASTER: ${FMS_REDIS_SENTINEL_MASTER:-fms-redis-master}
+      FMS_RGW_REDIS_SENTINEL_NODES: ${FMS_REDIS_SENTINEL_NODES:-fms-redis-sentinel-1:26379,fms-redis-sentinel-2:26379,fms-redis-sentinel-3:26379}
+      FMS_RGW_REDIS_PASSWORD: ${FMS_REDIS_PASSWORD:?请在 .env 设置 FMS_REDIS_PASSWORD}
+      FMS_RGW_REDIS_SENTINEL_PASSWORD: ${FMS_RGW_REDIS_SENTINEL_PASSWORD:-}

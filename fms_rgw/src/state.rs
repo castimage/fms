@@ -13,8 +13,9 @@ use crate::ratelimit::RateLimitBackend;
 #[cfg(test)]
 use crate::ratelimit::RateLimiter;
 use crate::types::now_secs;
+use redis::sentinel::{SentinelClient, SentinelClientBuilder, SentinelServerType};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Instant;
 use tokio::sync::Mutex;
 
@@ -27,10 +28,16 @@ pub trait DenyRemote: Send + Sync {
     fn get(&self, key: &str) -> Result<bool, String>;
 }
 
+/// Redis 直连或哨兵客户端，哨兵模式每次操作重新发现主节点
+enum DenyBackend {
+    Direct(redis::Client),
+    Sentinel(StdMutex<SentinelClient>),
+}
+
 /// Redis登出黑名单共享实现，SET key 1 EX ttl / GET key，任意网关实例写入、
 /// 全部实例可见，ttl与进程内到期语义对齐，令牌剩余寿命
 pub struct RedisDenyRemote {
-    client: redis::Client,
+    backend: DenyBackend,
 }
 
 impl RedisDenyRemote {
@@ -38,14 +45,85 @@ impl RedisDenyRemote {
     pub fn new(redis_url: &str) -> Result<Self, redis::RedisError> {
         let client = redis::Client::open(redis_url)?;
         let mut conn = client.get_connection()?;
-        redis::cmd("PING").query::<String>(&mut conn)?;
-        Ok(Self { client })
+        ping(&mut conn)?;
+        Ok(Self {
+            backend: DenyBackend::Direct(client),
+        })
     }
+
+    /// 哨兵模式启动期发现主节点并 PING，失败则启动失败
+    pub fn new_sentinel(
+        master: &str,
+        nodes: &[String],
+        redis_password: Option<&str>,
+        sentinel_password: Option<&str>,
+    ) -> Result<Self, redis::RedisError> {
+        let addrs = nodes
+            .iter()
+            .map(|n| parse_sentinel_node(n))
+            .collect::<Result<Vec<_>, redis::RedisError>>()?;
+        let mut builder = SentinelClientBuilder::new(addrs, master, SentinelServerType::Master)?;
+        if let Some(p) = redis_password {
+            builder = builder.set_client_to_redis_password(p);
+        }
+        if let Some(p) = sentinel_password {
+            builder = builder.set_client_to_sentinel_password(p);
+        }
+        let mut client = builder.build()?;
+        let mut conn = client.get_connection()?;
+        ping(&mut conn)?;
+        Ok(Self {
+            backend: DenyBackend::Sentinel(StdMutex::new(client)),
+        })
+    }
+
+    fn connection(&self) -> Result<redis::Connection, String> {
+        match &self.backend {
+            DenyBackend::Direct(client) => client.get_connection().map_err(|e| e.to_string()),
+            DenyBackend::Sentinel(client) => client
+                .lock()
+                .map_err(|_| "redis sentinel lock poisoned".to_string())?
+                .get_connection()
+                .map_err(|e| e.to_string()),
+        }
+    }
+}
+
+/// 启动期 PING，响应内容不参与判定
+fn ping(conn: &mut redis::Connection) -> Result<(), redis::RedisError> {
+    redis::cmd("PING").query::<String>(conn).map(|_| ())
+}
+
+/// 解析 host:port 或 redis://host:port，哨兵节点不支持路径与 query
+fn parse_sentinel_node(node: &str) -> Result<redis::ConnectionAddr, redis::RedisError> {
+    let raw = node
+        .strip_prefix("redis://")
+        .unwrap_or(node)
+        .trim_end_matches('/');
+    let (host, port) = raw.rsplit_once(':').ok_or_else(|| {
+        redis::RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "redis sentinel node 缺少 host:port",
+        ))
+    })?;
+    let port = port.parse::<u16>().map_err(|_| {
+        redis::RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "redis sentinel node 端口非法",
+        ))
+    })?;
+    if host.is_empty() {
+        return Err(redis::RedisError::from((
+            redis::ErrorKind::InvalidClientConfig,
+            "redis sentinel node 主机为空",
+        )));
+    }
+    Ok(redis::ConnectionAddr::Tcp(host.to_string(), port))
 }
 
 impl DenyRemote for RedisDenyRemote {
     fn set(&self, key: &str, expire_secs: i64) -> Result<(), String> {
-        let mut conn = self.client.get_connection().map_err(|e| e.to_string())?;
+        let mut conn = self.connection()?;
         redis::cmd("SET")
             .arg(key)
             .arg("1")
@@ -56,7 +134,7 @@ impl DenyRemote for RedisDenyRemote {
     }
 
     fn get(&self, key: &str) -> Result<bool, String> {
-        let mut conn = self.client.get_connection().map_err(|e| e.to_string())?;
+        let mut conn = self.connection()?;
         let v: Option<String> = redis::cmd("GET")
             .arg(key)
             .query(&mut conn)
@@ -239,6 +317,25 @@ mod tests {
         fn get(&self, _key: &str) -> Result<bool, String> {
             Err("redis down".to_string())
         }
+    }
+
+    #[test]
+    fn parse_sentinel_node_accepts_host_port_and_url() {
+        assert!(matches!(
+            parse_sentinel_node("127.0.0.1:26379"),
+            Ok(redis::ConnectionAddr::Tcp(host, 26379)) if host == "127.0.0.1"
+        ));
+        assert!(matches!(
+            parse_sentinel_node("redis://sentinel:26379/"),
+            Ok(redis::ConnectionAddr::Tcp(host, 26379)) if host == "sentinel"
+        ));
+    }
+
+    #[test]
+    fn parse_sentinel_node_rejects_invalid() {
+        assert!(parse_sentinel_node("sentinel").is_err());
+        assert!(parse_sentinel_node("sentinel:not-a-port").is_err());
+        assert!(parse_sentinel_node(":26379").is_err());
     }
 
     #[tokio::test]

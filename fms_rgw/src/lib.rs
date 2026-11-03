@@ -154,24 +154,52 @@ pub fn build_state(cfg: config::Config) -> Result<Arc<AppState>, Box<dyn std::er
         Box::<dyn std::error::Error>::from(format!("server.ip_allowlist 非法: {e}"))
     })?;
 
-    // 登出撤销后端装配，memory，进程内，默认| redis(多网关实例共享撤销，复用
-    // limits.redis_url连接)，redis缺url或非法backend启动失败，fail-closed，
-    // 与限流后端同模式，运行期Redis不可达为尽力而为，进程内表兜底
+    // 登出撤销后端装配，memory，进程内，默认| redis(多网关实例共享撤销，
+    // 哨兵配置优先于 limits.redis_url)，连接或探活失败启动失败，fail-closed，
+    // 运行期Redis不可达为尽力而为，进程内表兜底
+    let sentinel_master = cfg
+        .limits
+        .redis_sentinel_master
+        .as_deref()
+        .filter(|m| !m.is_empty());
+    let sentinel_nodes = &cfg.limits.redis_sentinel_nodes;
     let deny: Arc<state::TokenDenyList> = match cfg.auth.deny_store.as_str() {
         "memory" => Arc::new(state::TokenDenyList::new()),
         "redis" => {
-            let url = cfg
-                .limits
-                .redis_url
-                .as_deref()
-                .filter(|u| !u.is_empty())
-                .ok_or_else(|| {
+            let remote = if sentinel_master.is_some() || !sentinel_nodes.is_empty() {
+                let master = sentinel_master.ok_or_else(|| {
                     Box::<dyn std::error::Error>::from(
-                        "auth.deny_store=redis 但 limits.redis_url 为空(fail-closed)",
+                        "redis哨兵已配置节点但缺少主节点名(fail-closed)",
                     )
                 })?;
-            let remote = state::RedisDenyRemote::new(url).map_err(|e| {
-                Box::<dyn std::error::Error>::from(format!("redis 登出撤销后端初始化失败: {e}"))
+                if sentinel_nodes.is_empty() {
+                    return Err(Box::<dyn std::error::Error>::from(
+                        "redis哨兵已配置主节点名但节点列表为空(fail-closed)",
+                    ));
+                }
+                state::RedisDenyRemote::new_sentinel(
+                    master,
+                    sentinel_nodes,
+                    cfg.limits.redis_password.as_deref(),
+                    cfg.limits.redis_sentinel_password.as_deref(),
+                )
+            } else {
+                let url = cfg
+                    .limits
+                    .redis_url
+                    .as_deref()
+                    .filter(|u| !u.is_empty())
+                    .ok_or_else(|| {
+                        Box::<dyn std::error::Error>::from(
+                            "auth.deny_store=redis 但 limits.redis_url 为空(fail-closed)",
+                        )
+                    })?;
+                state::RedisDenyRemote::new(url)
+            }
+            .map_err(|e| {
+                Box::<dyn std::error::Error>::from(format!(
+                    "redis 登出撤销后端初始化失败: {e}"
+                ))
             })?;
             Arc::new(state::TokenDenyList::with_remote(Some(Arc::new(remote))))
         }

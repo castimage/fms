@@ -28,7 +28,7 @@ hex = "0.4"
 chrono = "0.4"
 dashmap = "6"
 noyalib = { version = "0.0.5", default-features = false, features = ["std", "compat-serde-yaml"] }
-redis = "1"
+redis = { version = "1", features = ["sentinel"] }
 thiserror = "2.0.20"
 base64 = "0.23"
 fnv = "1"
