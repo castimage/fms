@@ -302,7 +302,7 @@ services:
   # 探测 /healthz，compose 不重复定义。
   fms-rgw:
     build: ./fms_rgw
-    image: fms_rgw:0.2.1
+    image: fms_rgw:0.2.2
     container_name: fms-rgw
     networks:
       - fms-network
