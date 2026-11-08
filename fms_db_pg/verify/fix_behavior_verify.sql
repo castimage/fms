@@ -7,12 +7,18 @@
 
 -- 解密出口按 current_user 身份校验
 
+-- 从当前有效账户动态取样本，避免写死种子 UUID 后因测试数据漂移误报
+SELECT set_config('fms.verify_bank_account',
+       COALESCE((SELECT id::text FROM cash.bank_accounts
+                  WHERE status = 'ACTIVE' AND deleted_at IS NULL
+                  ORDER BY created_at, id LIMIT 1), ''), false);
+
 -- fms_app 直调必须失败（insufficient privilege）
 BEGIN;
 SET ROLE fms_app;
 DO $$
 BEGIN
-    PERFORM auth.decrypt_bank_account('019fe2de-8c97-7d49-bb65-18a7bb305be2');
+    PERFORM auth.decrypt_bank_account(current_setting('fms.verify_bank_account')::uuid);
     RAISE NOTICE 'CHK1a FAIL: fms_app direct decrypt succeeded';
 EXCEPTION WHEN insufficient_privilege OR others THEN
     RAISE NOTICE 'CHK1a PASS: fms_app direct decrypt rejected (%)', SQLERRM;
@@ -24,7 +30,7 @@ BEGIN;
 SET ROLE fms_report;
 DO $$
 BEGIN
-    PERFORM auth.decrypt_bank_account('019fe2de-8c97-7d49-bb65-18a7bb305be2');
+    PERFORM auth.decrypt_bank_account(current_setting('fms.verify_bank_account')::uuid);
     RAISE NOTICE 'CHK1b FAIL: fms_report decrypt succeeded';
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'CHK1b PASS: fms_report decrypt rejected (%)', SQLERRM;
@@ -35,8 +41,11 @@ ROLLBACK;
 BEGIN;
 SET ROLE fms_operator;
 SELECT 'CHK1c' AS chk,
-       auth.decrypt_bank_account('019fe2de-8c97-7d49-bb65-18a7bb305be2') AS acct;
+       auth.decrypt_bank_account(current_setting('fms.verify_bank_account')::uuid) AS acct;
 ROLLBACK;
+
+-- 清理临时 GUC，避免影响后续检查
+SELECT set_config('fms.verify_bank_account', '', false);
 
 -- 伪造 guc 注入 LOCKED 用户则 current_uid 恒 NULL
 
