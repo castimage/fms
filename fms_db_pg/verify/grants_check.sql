@@ -46,7 +46,7 @@ EXCEPTION WHEN OTHERS THEN
     INSERT INTO grant_check_results VALUES ('grants_base-五schema表级SELECT', false);
 END $$;
 
--- rpt.* 可达（report/operator/viewer）+ security_invoker
+-- rpt.* 可达（report/operator/viewer）+ security_invoker；budget_actual 走对外视图
 DO $$
 DECLARE v_ok boolean := true;
 BEGIN
@@ -56,7 +56,7 @@ BEGIN
         RETURN;
     END IF;
     IF NOT has_table_privilege('fms_report', 'rpt.trial_balance', 'SELECT') THEN v_ok := false; END IF;
-    IF NOT has_table_privilege('fms_operator', 'rpt.budget_actual', 'SELECT') THEN v_ok := false; END IF;
+    IF NOT has_table_privilege('fms_operator', 'rpt.v_budget_actual', 'SELECT') THEN v_ok := false; END IF;
     IF NOT (SELECT reloptions IS NOT NULL AND 'security_invoker=on' = ANY(reloptions)
             FROM pg_class WHERE oid = 'rpt.trial_balance'::regclass) THEN
         v_ok := false;
