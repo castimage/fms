@@ -49,23 +49,12 @@ SELECT 'CHK2b' AS chk, auth.current_uid() IS NULL AS locked_returns_null;
 UPDATE um.users SET status = 'ACTIVE' WHERE login_name = 'operator01';
 ROLLBACK;
 
--- jwt 签发/验签往返（委托 pgjwt.sign/verify，HS256）
-
--- jwt_sign 强制注入 iat/exp，pgjwt.verify 仅在载荷携带 exp/nbf 时才做时间窗校验，缺失即无界放行恒真，RFC 7519 要求 exp
+-- 旧 JWT 信任面已清理：数据库不再签发/验签 JWT，pgjwt 扩展与 jwt.secret 均不存在
 BEGIN;
-SET ROLE fms_admin;
-SELECT 'CHK3a' AS chk, left(auth.jwt_sign('{"sub":"admin","role":"operator"}'::jsonb), 30) AS token_prefix;
-SELECT 'CHK3b' AS chk, auth.jwt_verify(auth.jwt_sign('{"sub":"admin","role":"operator"}'::jsonb))->>'sub' AS payload_sub;
-SELECT 'CHK3d' AS chk,
-       (auth.jwt_verify(auth.jwt_sign('{"sub":"admin"}'::jsonb))->>'exp')::bigint > (extract(epoch from now()))::bigint AS has_future_exp,
-       (auth.jwt_verify(auth.jwt_sign('{"sub":"admin"}'::jsonb))->>'iat') IS NOT NULL AS has_iat;
-DO $$
-BEGIN
-    PERFORM auth.jwt_verify('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiJ9.bad_signature');
-    RAISE NOTICE 'CHK3c FAIL: tampered token accepted';
-EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'CHK3c PASS: tampered token rejected (%)', SQLERRM;
-END $$;
+SELECT 'CHK3a' AS chk, to_regprocedure('auth.jwt_sign(jsonb,text)') IS NULL AS jwt_sign_removed;
+SELECT 'CHK3b' AS chk, to_regprocedure('auth.jwt_verify(text,text)') IS NULL AS jwt_verify_removed;
+SELECT 'CHK3c' AS chk, NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgjwt') AS pgjwt_removed;
+SELECT 'CHK3d' AS chk, NOT EXISTS (SELECT 1 FROM sec.app_secrets WHERE code = 'jwt.secret') AS jwt_secret_removed;
 ROLLBACK;
 
 -- 经 auth.fn_soft_delete 软删除，operator 上下文
@@ -105,7 +94,7 @@ SET ROLE fms_viewer;
 DO $$
 DECLARE v_c int;
 BEGIN
-    SELECT count(*) INTO v_c FROM um.params WHERE code IN ('pgcrypto.master_key','jwt.secret');
+    SELECT count(*) INTO v_c FROM um.params WHERE code IN ('pgcrypto.master_key');
     RAISE NOTICE 'CHK5 FAIL: viewer read um.params keys (count=%)', v_c;
 EXCEPTION WHEN OTHERS THEN
     RAISE NOTICE 'CHK5 PASS: viewer cannot read um.params keys (%)', SQLERRM;

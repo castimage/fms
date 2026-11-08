@@ -3,7 +3,7 @@
 //! 覆盖，
 //! jwt算法混淆，alg:none空签名、HS256用RS256公钥字节作hmac密钥、弱密钥穷举
 //! jwt生命周期，过期 / 未来时间 / 空sub / 超长sub
-//! pgjwt兼容，无iss/aud宽松放行，iss/aud不匹配且未配置则宽松，配置后严格
+//! 旧版 HS256 令牌兼容性，无iss/aud宽松放行，iss/aud不匹配且未配置则宽松，配置后严格
 //! 签名重放，原样重放，网关语义、t超窗、nonce重用去重、body/method/path篡改、客户端伪造签名头被替换
 //! 签名头全变体，缺失/空/单字段/malformed后端校验拒绝 + 网关剥离注入
 //! 身份头伪造，`X-FMS-*`剥离重写(值取自`Claims`)，xff/`X-Real-IP`伪造不影响限流key
@@ -30,7 +30,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000001";
-const JWT_SECRET: &[u8] = b"test-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"test-jwt-secret";
 const SIGN_SECRET: &[u8] = b"test-sign-secret";
 
 // 恶意token构造工具
@@ -133,7 +133,7 @@ fn sign_value_with_alg(payload_json: &str, alg: jsonwebtoken::Algorithm) -> Stri
     jsonwebtoken::encode(
         &jsonwebtoken::Header::new(alg),
         &v,
-        &jsonwebtoken::EncodingKey::from_secret(JWT_SECRET),
+        &jsonwebtoken::EncodingKey::from_secret(LEGACY_HS256_SECRET),
     )
     .expect("测试 token 签发")
 }
@@ -154,8 +154,8 @@ fn sign_value_rsa(payload_json: &str) -> String {
 
 /// 【攻击】算法混淆经典打法，若服务端误把RS256公钥当hmac密钥验签HS256，
 /// 攻击者用公开的RS256公钥字节作hmac密钥签发HS256 token即可伪造任意身份。
-/// 【防护层】auth层，`verify_jwt`固定HS256 + 独立`jwt_secret`，test-jwt-secret，
-/// 公钥字节 ≠ 真实密钥则 hmac 重算不匹配，回 401/40100。
+/// 【防护层】auth层，`verify_jwt`固定RS256，不把 RSA 公钥当 HMAC 密钥，
+/// HS256 令牌没有 RS256 签名，直接回 401/40100。
 /// 【预期】401 + 40100 + 上游零到达。
 #[tokio::test]
 async fn hs256_with_rsa_public_key_as_secret_rejected() {
@@ -245,7 +245,7 @@ async fn refresh_token_rejected_by_api() {
 #[tokio::test]
 async fn expired_token_rejected_40101() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let token = make_jwt(SUB, "operator", -3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", -3600, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_ip(
@@ -261,13 +261,13 @@ async fn expired_token_rejected_40101() {
 }
 
 /// 【攻击】签发"永不过期"的未来exp，100年后，观察网关是否强制最大有效期。
-/// 【防护层】auth层，无最大exp上限，标准jwt语义，与pgjwt兼容，该token合法通过。
+/// 【防护层】auth层，无最大exp上限，标准jwt语义，与旧版 HS256 令牌兼容性，该token合法通过。
 /// 【预期】200 + 上游收到1次且身份头正确，语义记录，业务侧需自行缩短exp签发期，
 /// 网关不做"过期期限过长"限制。
 #[tokio::test]
 async fn future_exp_far_future_accepted() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let token = make_jwt(SUB, "operator", 3600 * 24 * 365 * 100, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600 * 24 * 365 * 100, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_ip(
@@ -328,15 +328,15 @@ async fn oversized_sub_rejected() {
     assert_hits(&mock, "/api/gl/vouchers", 0, "超长 sub 不得到达上游").await;
 }
 
-// pgjwt兼容
+// 旧版 HS256 令牌兼容性
 
-/// 【攻击】pgjwt签发的token，无iss/aud必须可用，兼容性反向断言，若网关误拒则业务全断。
-/// 【防护层】auth层，iss/aud未配置时宽松(`claims.iss`/aud为`None`直接放行，与pgjwt一致)。
+/// 【攻击】旧版 HS256 签发的token，无iss/aud必须可用，兼容性反向断言，若网关误拒则业务全断。
+/// 【防护层】auth层，iss/aud未配置时宽松(`claims.iss`/aud为`None`直接放行，与旧版 HS256一致)。
 /// 【预期】200 + 上游1次。
 #[tokio::test]
 async fn no_iss_aud_lenient_pass() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_ip(
@@ -348,13 +348,13 @@ async fn no_iss_aud_lenient_pass() {
     assert_eq!(
         resp.status(),
         StatusCode::OK,
-        "无 iss/aud 的合法 token 必须通过(pgjwt 兼容)"
+        "无 iss/aud 的合法 token 必须通过(旧版 HS256 兼容)"
     );
     assert_hits(&mock, "/api/gl/vouchers", 1, "兼容 token 应转发到上游").await;
 }
 
 /// 【攻击】攻击者自签iss="evil" 的token，网关未配置`expected_iss`/aud 则宽松放行。
-/// 【防护层】auth层，宽松策略是设计语义，pgjwt签发可能省略iss/aud，配置了才比对，
+/// 【防护层】auth层，宽松策略是设计语义，旧版 HS256 签发可能省略iss/aud，配置了才比对，
 /// 该场景"放行"即预期行为，真实防护依赖运维配置`expected_iss`/aud，a3下一用例验证严格模式。
 /// 【预期】200 + 上游1次，宽松语义被断言，防未来误改。
 #[tokio::test]
@@ -366,7 +366,7 @@ async fn mismatched_iss_aud_lenient_when_unconfigured() {
         now_secs() + 3600,
         Some("evil-issuer"),
         Some("evil-aud"),
-        JWT_SECRET,
+        LEGACY_HS256_SECRET,
     );
     let resp = oneshot(
         &router,
@@ -379,7 +379,7 @@ async fn mismatched_iss_aud_lenient_when_unconfigured() {
     assert_eq!(
         resp.status(),
         StatusCode::OK,
-        "未配置 iss/aud 时宽松放行(pgjwt 兼容语义)"
+        "未配置 iss/aud 时宽松放行(旧版 HS256 兼容语义)"
     );
     assert_hits(&mock, "/api/gl/vouchers", 1, "宽松模式应转发").await;
 }
@@ -405,7 +405,7 @@ async fn iss_aud_strict_when_configured() {
             now_secs() + 3600,
             Some("evil"),
             Some("fms-gateway"),
-            JWT_SECRET,
+            LEGACY_HS256_SECRET,
         ),
         make_jwt_full(
             SUB,
@@ -413,9 +413,9 @@ async fn iss_aud_strict_when_configured() {
             now_secs() + 3600,
             Some("fms"),
             Some("evil-aud"),
-            JWT_SECRET,
+            LEGACY_HS256_SECRET,
         ),
-        make_jwt_full(SUB, "operator", now_secs() + 3600, None, None, JWT_SECRET),
+        make_jwt_full(SUB, "operator", now_secs() + 3600, None, None, LEGACY_HS256_SECRET),
     ];
     for token in bad_cases {
         let resp = oneshot(
@@ -442,7 +442,7 @@ async fn iss_aud_strict_when_configured() {
         now_secs() + 3600,
         Some("fms"),
         Some("fms-gateway"),
-        JWT_SECRET,
+        LEGACY_HS256_SECRET,
     );
     let resp = oneshot(
         &router,
@@ -466,7 +466,7 @@ async fn iss_aud_strict_when_configured() {
 #[tokio::test]
 async fn exact_replay_passes_with_fresh_signature() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     for i in 0..2 {
         // 两次构造字节完全相同的请求(Body非Clone，每次重建)
         let mut req = with_auth(request("POST", "/api/gl/vouchers"), &jwt);
@@ -745,7 +745,7 @@ async fn method_path_tamper_rejected() {
 #[tokio::test]
 async fn client_forged_signature_stripped_and_replaced() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let mut req = with_auth(request("POST", "/api/gl/vouchers"), &jwt);
     req.headers_mut()
         .insert("content-type", "application/json".parse().unwrap());
@@ -875,7 +875,7 @@ async fn signature_header_all_variants_rejected() {
     // 网关侧，客户端携带上述变体请求则网关剥离并注入自己的有效签名
     // 这些POST请求体为空则网关注入的签名基于 sha256，对 "" 计算
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let empty_hash = fms_rgw::sign::compute_body_hash(b"");
     for (i, variant) in ["", "t=1", "sig=x", "garbage!!!t=nope"].iter().enumerate() {
         let mut req = with_auth(request("POST", "/api/gl/vouchers"), &jwt);
@@ -925,7 +925,7 @@ async fn signature_header_all_variants_rejected() {
 #[tokio::test]
 async fn client_fms_identity_forgery_stripped() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let mut req = with_auth(request("GET", "/api/gl/vouchers"), &jwt);
     req.headers_mut().insert(
         "x-fms-userid",
@@ -973,7 +973,7 @@ async fn xff_xrealip_forgery_cannot_move_ratelimit_key() {
         None,
     )
     .await;
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     for xff in ["1.1.1.1", "2.2.2.2"] {
         let mut req = with_auth(request("GET", "/api/gl/vouchers"), &jwt);
         req.headers_mut()
@@ -1232,7 +1232,7 @@ async fn anonymous_whitelist_passes_without_token() {
     }
     // /api/nt/ws，真正的ws升级请求 + 有效query token则放行并转发
     // (无token的升级请求由ws_handler 401，非升级http请求须走jwt，)
-    let jwt = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let mut ws_req = request("GET", &format!("/api/nt/ws?token={jwt}"));
     ws_req
         .headers_mut()
@@ -1272,7 +1272,7 @@ async fn anonymous_whitelist_passes_without_token() {
 #[tokio::test]
 async fn valid_token_reaches_upstream() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
-    let jwt = make_jwt(SUB, "viewer", 3600, JWT_SECRET);
+    let jwt = make_jwt(SUB, "viewer", 3600, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_ip(

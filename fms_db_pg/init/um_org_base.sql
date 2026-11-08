@@ -12,9 +12,9 @@ SET ROLE fms_admin;
 CREATE SCHEMA IF NOT EXISTS auth;
 COMMENT ON SCHEMA auth IS 'RLS 统一策略函数族 + 上下文注入（SECURITY DEFINER 读 fms.* GUC）';
 
--- 密钥保护 schema，列加密主密钥/jwt 密钥等机密收敛到无任何角色授权的 sec.app_secrets，仅 fms_admin，超级用户与 SECURITY DEFINER 函数可读
+-- 密钥保护 schema，列加密主密钥与盲索引密钥收敛到无任何角色授权的 sec.app_secrets，仅 fms_admin，超级用户与 SECURITY DEFINER 函数可读
 CREATE SCHEMA IF NOT EXISTS sec AUTHORIZATION fms_admin;
-COMMENT ON SCHEMA sec IS '机密参数保护 schema：列加密主密钥/JWT 密钥（仅 fms_admin 可读，无任何角色授权）';
+COMMENT ON SCHEMA sec IS '机密参数保护 schema：列加密主密钥与盲索引密钥（仅 fms_admin 可读，无任何角色授权）';
 CREATE TABLE IF NOT EXISTS sec.app_secrets (
     code       text        PRIMARY KEY,
     value      jsonb       NOT NULL,
@@ -22,16 +22,14 @@ CREATE TABLE IF NOT EXISTS sec.app_secrets (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE sec.app_secrets IS
-'应用机密（code 唯一）：pgcrypto.master_key（列加密主密钥）/ jwt.secret（JWT HMAC 密钥）/ pgcrypto.blind_key（盲索引 HMAC 密钥）；不对任何角色 GRANT（含 fms_app），仅 SECURITY DEFINER 函数以 fms_admin 身份读取；生产可替换为 KMS/外部密钥服务，本表为数据库内收敛的落地形态';
+'应用机密（code 唯一）：pgcrypto.master_key（列加密主密钥）/ pgcrypto.blind_key（盲索引 HMAC 密钥）；不对任何角色 GRANT（含 fms_app），仅 SECURITY DEFINER 函数以 fms_admin 身份读取；生产可替换为 KMS/外部密钥服务，本表为数据库内收敛的落地形态';
 -- 显式声明，不向任何角色授权，含 PUBLIC 默认无权限，防止未来授权遗漏
 REVOKE ALL ON TABLE sec.app_secrets FROM PUBLIC;
 
 -- 盲索引用带密钥 hmac（encode(hmac(value, blind_key,'sha256'),'hex')），纯 digest 无防字典攻击能力，低熵卡面值可被持库只读者秒级离线爆破，密钥与密文同库存放属已知设计约束，生产可换外部 KMS 注入
 -- 本段 blind_key 仅首写（DO NOTHING），重放不覆盖已部署密钥，覆盖后旧密文
 -- （api_keys key_hash / id_card_hash / bank_accounts 等）全部失配不可解密，
--- 与 seed_system 对 jwt.secret 的防覆盖语义一致。
--- 注，防覆盖仅限本首写段，的 master_key/blind_key 写入为 DO UPDATE（重放收敛回
--- 本文件声明常量、仅 jwt.secret 被 WHERE 排除）
+-- 防覆盖仅限本首写段，后文 master_key/blind_key 写入为 DO UPDATE（重放收敛回本文件声明常量）。
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
     ('pgcrypto.blind_key', '{"v":"FMS_BLIND_2026_9c4e2f7a1b6d4c3e8f5a2b7d9c4e6f8a1b3d5c7e9f"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now())
@@ -302,71 +300,6 @@ END $$;
 COMMENT ON FUNCTION auth.set_session(uuid, uuid[], uuid[])
     IS '沙箱上下文注入：校验用户后 SET LOCAL 注入 fms.user_id/org_ids/dept_ids（uuid 文本，事务级）';
 
--- jwt 签发/校验（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets）
--- 签发强制注入 iat/exp，默认 24h，调用方已提供则尊重其值，pgjwt.verify 仅对携带 exp/nbf 的载荷做时间窗校验，无 exp 令牌永不过期，RFC 7519 要求 exp，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
--- 能力边界，pgjwt 0.2.0 仅支持 hmac 系，FMS 硬编码 HS256 且签发/验签同密钥，无算法混淆面，HS256 共享密钥须在所有验签方（rgw 网关 + db）间安全分发
--- 密钥存续约束，jwt.secret/pgcrypto.master_key 以明文 jsonb 存于库内 sec.app_secrets，库被攻破即密文+密钥同失，官方 pgcrypto 文档明示若无法信任 DBA 则加密应放客户端，沙箱环境接受该约束，生产化路径为外部 KMS/密钥服务注入
--- 参数，p_payload 为 jwt 载荷 jsonb，调用方提供业务 claims，如 sub/role/type，p_secret 缺省 NULL 时读 sec.app_secrets 的 jwt.secret，参数优先，测试可注入独立密钥
--- 行为，载荷缺 iat/exp 时强制注入（iat=当前时刻、exp=+24h，已提供则尊重原值），jsonb::text 序列化在键值分隔处带空格（'": ' 与 ', "' 仅出现在分隔处，值内字符串不含该引号邻接，替换安全），先紧凑化再交 pgjwt.sign，输出标准紧凑 jwt，与网关 jsonwebtoken 严格互操作
--- 错误，密钥未配置（参数与 sec.app_secrets 均缺失）则 RAISE，算法固定 HS256（pgjwt 0.2.0 仅 hmac 系，无算法混淆面），签发/验签同密钥，须在所有验签方（rgw 网关 + db）间安全分发
--- 安全语义，强制注入 iat/exp 是签发侧的防呆约束，pgjwt.verify 仅对携带 exp/nbf 的载荷做时间窗校验，无 exp 令牌永不过期，RFC 7519 要求 exp，签发时不补 exp 等于发了一张永不过期的通行证
-CREATE OR REPLACE FUNCTION auth.jwt_sign(p_payload jsonb, p_secret text DEFAULT NULL)
-RETURNS text
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = auth, public
-AS $$
-DECLARE
-    v_secret text := COALESCE(p_secret,
-                   (SELECT value->>'v' FROM sec.app_secrets WHERE code = 'jwt.secret'));
-    v_compact text;
-BEGIN
-    IF v_secret IS NULL OR NULLIF(btrim(v_secret), '') IS NULL THEN
-        RAISE EXCEPTION 'jwt_sign: 密钥未配置（参数或 sec.app_secrets.jwt.secret）';
-    END IF;
-    IF NOT (p_payload ? 'iat') THEN
-        p_payload := p_payload || jsonb_build_object('iat', extract(epoch from now())::bigint);
-    END IF;
-    IF NOT (p_payload ? 'exp') THEN
-        -- 兜底缺省 24h（调用方未带 exp 时），期望值由后端 yaml fms.jwt.expiry（默认 24h）登记，与 fms.jwt.access-ttl 联动评估，
-        -- 非协议值，issuer/audience/算法不动（铁律仅涉有效期），后端签发恒显式注入 exp，本兜底缺省按配置值保留
-        p_payload := p_payload || jsonb_build_object('exp',
-            extract(epoch from now() + interval '24 hours')::bigint);
-    END IF;
-    -- jsonb::text 序列化在键值分隔处带空格，先紧凑化（'": ' 与 ', "' 仅出现在分隔处，值内字符串不含该引号邻接，替换安全）再传 pgjwt.sign，输出标准紧凑 jwt，与网关 jsonwebtoken 严格互操作
-    v_compact := replace(replace(p_payload::text, '": ', '":'), ', "', ',"');
-    RETURN pgjwt.sign(v_compact::json, v_secret, 'HS256');
-END $$;
-
--- jwt 验签（HS256，委托 pgjwt 扩展，密钥读 sec.app_secrets，与 jwt_sign 对称）
--- 参数，p_token 待验紧凑 jwt，三段式，p_secret 缺省 NULL 时读 sec.app_secrets 的 jwt.secret，须与签发侧同密钥
--- 行为，委托 pgjwt.verify 做签名验证 + 时间窗校验，仅对携带 exp/nbf 的载荷生效，签发侧已强制注入 exp，无 exp 令牌永不过期问题被签发约束封堵，校验通过返回 payload jsonb
--- 边界与错误，签名失败/令牌被篡改/密钥不匹配则 RAISE，保持错误语义，调用方不可继续处理，密钥未配置则 RAISE，pgjwt 无时钟偏移容差，网关与 db 时钟须同步
--- 调用约定，后端 refresh 路径经本函数验签（AuthServiceImpl.verifyRefreshToken），与网关 auth.verify_jwt 同密钥同算法，令牌跨网关/后端双端互验，任一端签发的令牌另一端可验证
-CREATE OR REPLACE FUNCTION auth.jwt_verify(p_token text, p_secret text DEFAULT NULL)
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = auth, public
-AS $$
-DECLARE
-    v_secret text := COALESCE(p_secret,
-                   (SELECT value->>'v' FROM sec.app_secrets WHERE code = 'jwt.secret'));
-    v_result record;
-BEGIN
-    IF v_secret IS NULL OR NULLIF(btrim(v_secret), '') IS NULL THEN
-        RAISE EXCEPTION 'jwt_verify: 密钥未配置（参数或 sec.app_secrets.jwt.secret）';
-    END IF;
-    -- 委托 pgjwt.verify，签名失败/篡改则 valid=false，RAISE，保持错误语义
-    SELECT * INTO v_result FROM pgjwt.verify(p_token, v_secret, 'HS256');
-    IF NOT v_result.valid THEN
-        RAISE EXCEPTION 'jwt_verify: 签名校验失败（令牌被篡改或密钥不匹配）';
-    END IF;
-    RETURN v_result.payload::jsonb;
-END $$;
-
 -- 银行账号解密（唯一出口，SECURITY DEFINER，仅 fms_admin 与资金职责角色）
 -- 参数，p_id 目标银行账户 id（cash.bank_accounts 主键）
 -- 行为，读 sec.app_secrets 的 pgcrypto.master_key，库内密钥收敛点，后 pgp_sym_decrypt 解 cash.bank_accounts.account_no_enc 密文，返回明文账号，显式 cipher-algo=aes256，默认 aes128，OpenPGP 数据包自带算法标识，存量 aes128 密文照常可解
@@ -415,7 +348,7 @@ CREATE TABLE IF NOT EXISTS um.params (
     deleted_at  timestamptz,
     CONSTRAINT uk_params_code UNIQUE (code)
 );
-COMMENT ON TABLE um.params IS '系统参数（JSONB 值；预算开关/阈值、SMTP、JWT、列加密主密钥）';
+COMMENT ON TABLE um.params IS '系统参数（JSONB 值；预算开关/阈值、SMTP 等非敏感配置）';
 
 -- um.users（seed_system.sql 种子契约，login_name 唯一、login_name_hash 盲索引、列加密 email/phone + 盲索引，id=ADMIN_UID 常量显式注入）
 CREATE TABLE IF NOT EXISTS um.users (
@@ -689,8 +622,6 @@ GRANT EXECUTE ON FUNCTION auth.is_self(uuid) TO fms_app, fms_operator, fms_viewe
 GRANT EXECUTE ON FUNCTION auth.has_role(text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 -- 会话注入与签发仅后端运行角色可用，只读/审计/报表角色不得直接调用
 GRANT EXECUTE ON FUNCTION auth.set_session(uuid, uuid[], uuid[]) TO fms_app, fms_operator;
-GRANT EXECUTE ON FUNCTION auth.jwt_sign(jsonb, text) TO fms_app, fms_operator;
-GRANT EXECUTE ON FUNCTION auth.jwt_verify(text, text) TO fms_app, fms_operator, fms_viewer, fms_auditor, fms_report;
 -- 解密出口最小授权，仅资金职责角色可执行，fms_app 直连不可达
 GRANT EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) TO fms_operator;
 
@@ -763,21 +694,17 @@ BEGIN
 END $$;
 
 -- 写入旋转后的密钥（幂等，master_key/blind_key 重放时经 DO UPDATE 收敛回本文件声明常量，本段为
--- 密钥权威写入点，覆盖上文 L32 首写，jwt.secret 被 WHERE 排除仅首次落库，防重放覆盖已旋转值），
--- pgcrypto.blind_key（盲索引 hmac 密钥，本文件上文 L32 已首写同值），盲索引必须带密钥，
--- 纯 digest 可被持库只读者对低熵值离线字典爆破
+-- 密钥权威写入点，master_key/blind_key 重放时收敛回本文件声明常量，防重放覆盖已旋转值；
+-- pgcrypto.blind_key（盲索引 hmac 密钥）必须带密钥，纯 digest 可被持库只读者对低熵值离线字典爆破
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
     ('pgcrypto.master_key', '{"v":"FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now()),
-    ('jwt.secret', '{"v":"FMS_JWT_2026_a9f3c8e2b7d14f6a9e3c8b2d7f4a6e9c8b2d7f4a6e9c3b8d2f7a4e6c9b8d2f7a4"}'::jsonb,
-     '00000000-0000-7000-0000-000000000001', now()),   -- jwt.secret 仅首次兜底（权威 .env 对齐段）
     ('pgcrypto.blind_key', '{"v":"FMS_BLIND_2026_9c4e2f7a1b6d4c3e8f5a2b7d9c4e6f8a1b3d5c7e9f"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now())
-ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-  WHERE sec.app_secrets.code <> 'jwt.secret';
+ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 -- 敏感参数移出 um.params（密钥收敛，职责角色已由 grants_base 收表权限）
-DELETE FROM um.params WHERE code IN ('jwt.secret', 'pgcrypto.master_key');
+DELETE FROM um.params WHERE code IN ('pgcrypto.master_key');
 
 -- auth.* 函数族
 -- auth.current_uid，LOCKED/DISABLED 账户在 rls 层即失效（二次校验 status='ACTIVE'）

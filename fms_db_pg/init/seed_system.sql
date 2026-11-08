@@ -8,7 +8,7 @@
 SET ROLE fms_admin;
 
 -- um.params 系统参数（值统一 jsonb，标量参数直接存 json 标量，对象参数用 {"v": ...} 结构）
--- jwt.secret / pgcrypto.master_key 存于 sec.app_secrets，无任何角色授权，本表仅保留非敏感业务参数
+-- pgcrypto.master_key 存于 sec.app_secrets，无任何角色授权，本表仅保留非敏感业务参数
 INSERT INTO um.params (code, value, updated_by)
 VALUES
     ('budget.warn.ratio',   '0.8'::jsonb,                              '00000000-0000-7000-0000-000000000001'),  -- 预算预警阈值 80%
@@ -40,9 +40,7 @@ ON CONFLICT (code) DO NOTHING;
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at)
 VALUES
     ('pgcrypto.master_key', '{"v":"FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c"}'::jsonb,
-     '00000000-0000-7000-0000-000000000001', now()),   -- 列加密主密钥，已旋转，仅首写
-    ('jwt.secret', '{"v":"FMS_JWT_2026_a9f3c8e2b7d14f6a9e3c8b2d7f4a6e9c8b2d7f4a6e9c3b8d2f7a4e6c9b8d2f7a4"}'::jsonb,
-     '00000000-0000-7000-0000-000000000001', now())    -- jwt HS256 密钥，仅首次兜底，权威在 init 脚本对齐段 .env
+     '00000000-0000-7000-0000-000000000001', now())    -- 列加密主密钥，已旋转，仅首写
 ON CONFLICT (code) DO NOTHING;
 
 -- rbac 种子，um.roles，8 个业务角色

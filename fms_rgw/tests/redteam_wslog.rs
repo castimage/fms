@@ -8,7 +8,7 @@ use common::*;
 use fms_rgw::config::Config;
 use std::path::PathBuf;
 
-const JWT_SECRET: &[u8] = b"retest-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"retest-jwt-secret";
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000002";
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn ws_token_log_masking_variant_check() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let token_frag = &token[..24]; // 用前缀做日志泄漏指纹
     //规范路径应被脱敏
 

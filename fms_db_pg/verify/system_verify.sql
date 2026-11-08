@@ -100,7 +100,6 @@ DECLARE
     v_fns text[] := ARRAY['auth.current_uid()','auth.can_access_org(uuid)',
         'auth.can_access_dept(uuid)','auth.is_self(uuid)',
         'auth.set_session(uuid,uuid[],uuid[])',
-        'auth.jwt_sign(jsonb,text)','auth.jwt_verify(text,text)',
         'auth.decrypt_bank_account(uuid)'];
     v_f    text;
     v_miss text := '';
@@ -325,26 +324,7 @@ BEGIN
     END IF;
 END $$;
 
--- jwt 委托断言，auth.jwt_sign 必须委托 pgjwt.sign，防原生实现静默覆盖
-DO $$
-DECLARE
-    v_def text;
-    v_ok  boolean;
-BEGIN
-    SELECT pg_get_functiondef('auth.jwt_sign(jsonb,text)'::regprocedure) INTO v_def;
-    v_ok := v_def IS NOT NULL AND v_def LIKE '%pgjwt.sign%';
-    IF v_ok THEN
-        RAISE NOTICE 'PASS: JWT-委托 pgjwt.sign（函数体含 pgjwt.sign）';
-        INSERT INTO verify_results VALUES ('JWT委托pgjwt', true);
-    ELSE
-        RAISE NOTICE 'FAIL: JWT-委托 pgjwt.sign（函数体不含 pgjwt.sign，可能被原生实现覆盖）';
-        INSERT INTO verify_results VALUES ('JWT委托pgjwt', false);
-    END IF;
-EXCEPTION WHEN OTHERS THEN
-    -- 断言自身报错一律落 FAIL，不让异常冒泡使该断言整条消失
-    RAISE NOTICE 'FAIL: JWT委托pgjwt（异常：%）', SQLERRM;
-    INSERT INTO verify_results VALUES ('JWT委托pgjwt', false);
-END $$;
+
 
 -- pg_ivm 5 个增量物化视图（rpt，budget_actual/ar_aging_paid/ap_aging_paid/dept_expense/cash_flow_daily，ap_aging_paid 为 AP 账龄，pgivm.create_immv 实现，与 AR 同构）
 DO $$
@@ -420,7 +400,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- 通知闸口幂等与串行化，函数体必含 ON CONFLICT DO NOTHING，广播闸口另含 pg_advisory_xact_lock
--- 函数体包含式断言，与上文 jwt 委托断言同款，防后续实现被静默替换成裸 INSERT
+-- 函数体包含式断言，防后续实现被静默替换成裸 INSERT
 DO $$
 DECLARE
     v_bcast text;
@@ -1299,7 +1279,7 @@ END $$;
 -- 条数守卫，结果表行数须等于断言总数，少于总数即说明有断言整条丢失
 -- 该类丢失只表现为计数变小，看的人无从察觉，故一并报出并以 FAIL 措辞提示
 DO $$
-DECLARE v_ok int; v_fail int; v_expect int := 28;
+DECLARE v_ok int; v_fail int; v_expect int := 27;
 BEGIN
     SELECT count(*) FILTER (WHERE ok), count(*) FILTER (WHERE NOT ok)
       INTO v_ok, v_fail FROM verify_results;

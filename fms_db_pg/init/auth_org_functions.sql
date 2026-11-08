@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/auth_org_functions），闸口函数，auth/org 敏感写入 SECURITY DEFINER 函数族
 
--- 内容，decrypt_bank_account，current_user 职责身份守卫 + 密钥读 sec.app_secrets、jwt 委托断言、
+-- 内容，decrypt_bank_account，current_user 职责身份守卫 + 密钥读 sec.app_secrets、
 -- 解密出口授权收口，fms_app 不可执行、闸口守卫，update_user 白名单补 display_name、
 -- 非本人须 is_admin、record_login_failure 原子化、recovery_lookup/set_password/update_user
 -- 只读角色补发、pass_hash 列授权 + set_mfa 只读角色补发
@@ -722,21 +722,7 @@ BEGIN
     RETURN v_no;
 END $$;
 
--- jwt 委托断言，标准 jwt 签发/验签由 pgjwt 扩展统一实现，部署后断言
--- auth.jwt_sign 函数体委托 pgjwt.sign，无原生实现覆盖，断言不通过仅 WARNING，不阻断 apply 链
-DO $$
-DECLARE
-    v_def text;
-BEGIN
-    SELECT pg_get_functiondef('auth.jwt_sign(jsonb,text)'::regprocedure) INTO v_def;
-    IF v_def IS NULL THEN
-        RAISE WARNING 'security_hardening_fix: auth.jwt_sign 缺失（init/um_org_base.sql 未执行？），JWT 委托断言未验证';
-    ELSIF v_def LIKE '%pgjwt.sign%' THEN
-        RAISE NOTICE 'security_hardening_fix: PASS——auth.jwt_sign 委托 pgjwt.sign（无原生实现覆盖）';
-    ELSE
-        RAISE WARNING 'security_hardening_fix: FAIL——auth.jwt_sign 函数体不含 pgjwt.sign（被原生实现覆盖？），JWT 委托链路受损';
-    END IF;
-END $$;
+
 
 -- 解密出口授权收口，fms_app 不可执行
 REVOKE EXECUTE ON FUNCTION auth.decrypt_bank_account(uuid) FROM PUBLIC, fms_app;

@@ -19,7 +19,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 /// 与`common::test_config`一致的测试密钥
-const JWT_SECRET: &[u8] = b"test-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"test-jwt-secret";
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000002";
 /// 与`StaticFixture`写入的`index.html`标记一致
 const INDEX_MARKER: &str = "INDEX-MARKER";
@@ -27,7 +27,7 @@ const INDEX_MARKER: &str = "INDEX-MARKER";
 const ENV_SECRET: &str = "SECRET=leak-me";
 
 fn admin_token() -> String {
-    make_jwt(SUB, "operator", 3600, JWT_SECRET)
+    make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET)
 }
 
 // sql注入
@@ -936,7 +936,7 @@ async fn ws_invalid_token_query_401() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let bad_tokens = [
         "not.a.jwt",
-        &make_jwt(SUB, "operator", -3600, JWT_SECRET), // 过期
+        &make_jwt(SUB, "operator", -3600, LEGACY_HS256_SECRET), // 过期
     ];
     for t in bad_tokens {
         let resp = oneshot(&router, ws_upgrade_req(&format!("/api/nt/ws?token={t}"))).await;
@@ -996,7 +996,7 @@ async fn ws_upgrade_origin_not_validated() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let mut req = ws_upgrade_req(&format!(
         "/api/nt/ws?token={}",
-        make_jwt(SUB, "operator", 3600, JWT_SECRET)
+        make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET)
     ));
     req.headers_mut()
         .insert("origin", "https://evil.example.com".parse().unwrap());

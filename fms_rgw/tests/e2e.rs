@@ -17,7 +17,7 @@ use hyper_util::rt::TokioExecutor;
 use serde_json::Value;
 use uuid::Uuid;
 
-const JWT_SECRET: &[u8] = b"e2e-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"e2e-jwt-secret";
 const SIGN_SECRET: &[u8] = b"e2e-sign-secret";
 const INDEX_MARKER: &str = "INDEX-MARKER";
 const RATE_LOGIN_LIMIT: u32 = 5;
@@ -176,7 +176,7 @@ async fn valid_jwt_full_chain_200() {
     let env = env();
     let client = http_client().await;
     let sub = Uuid::now_v7().to_string();
-    let token = make_jwt(&sub, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(&sub, "operator", 3600, LEGACY_HS256_SECRET);
     let trace_id = Uuid::now_v7().to_string();
     let body = r#"{"action":"ping","n":1}"#;
     let path = format!("/api/e2e/chain-{}", Uuid::now_v7());
@@ -277,7 +277,7 @@ async fn forged_jwt_401() {
 async fn expired_jwt_40101() {
     let env = env();
     let client = http_client().await;
-    let token = make_jwt(&Uuid::now_v7().to_string(), "operator", -3600, JWT_SECRET);
+    let token = make_jwt(&Uuid::now_v7().to_string(), "operator", -3600, LEGACY_HS256_SECRET);
     let (status, _, body) = call(
         &client,
         "GET",
@@ -364,7 +364,7 @@ async fn sql_injection_400() {
 async fn ws_query_token_redacted_in_access_log() {
     let env = env();
     let client = http_client().await;
-    let token = make_jwt(&Uuid::now_v7().to_string(), "operator", 3600, JWT_SECRET);
+    let token = make_jwt(&Uuid::now_v7().to_string(), "operator", 3600, LEGACY_HS256_SECRET);
     let trace_id = Uuid::now_v7().to_string();
     // 语义，非升级http请求访问/api/nt/ws必须携带jwt(Authorization)，
     // 本用例聚焦ws query token脱敏，用真实ws升级请求(Upgrade+Connection双头，

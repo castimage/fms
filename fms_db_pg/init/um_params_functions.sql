@@ -66,7 +66,7 @@ BEGIN
         RAISE EXCEPTION '参数编码必填';
     END IF;
     v_lower := lower(p_code);
-    IF v_lower LIKE 'jwt.%' OR v_lower LIKE 'pgcrypto.%'
+    IF v_lower LIKE 'pgcrypto.%'
        OR v_lower LIKE '%secret%' OR v_lower LIKE '%password%'
        OR v_lower LIKE '%token%' OR v_lower LIKE '%master_key%'
        OR v_lower LIKE '%blind_key%' THEN
@@ -103,7 +103,7 @@ BEGIN
         RETURN p_default;
     END IF;
     v_lower := lower(p_code);
-    IF v_lower LIKE 'jwt.%' OR v_lower LIKE 'pgcrypto.%'
+    IF v_lower LIKE 'pgcrypto.%'
        OR v_lower LIKE '%secret%' OR v_lower LIKE '%password%'
        OR v_lower LIKE '%token%' OR v_lower LIKE '%master_key%'
        OR v_lower LIKE '%blind_key%' THEN

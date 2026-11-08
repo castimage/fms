@@ -80,8 +80,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
       # init 脚本（fms_init.sh）末尾以该值 ALTER ROLE fms_app 对齐 .env 密码
       FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
-      # init 脚本以该值对齐 sec.app_secrets.jwt.secret（PG 签发/后端/网关三处同值）
-      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       # 列加密主密钥外部注入（可选，空 = seed 内建占位值，注入须早于种子数据加密写入）
       FMS_MASTER_KEY: ${FMS_MASTER_KEY:-}
     volumes:

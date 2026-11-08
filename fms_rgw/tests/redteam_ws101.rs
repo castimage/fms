@@ -8,7 +8,7 @@ mod common;
 use common::*;
 use fms_rgw::config::Config;
 
-const JWT_SECRET: &[u8] = b"retest-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"retest-jwt-secret";
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000002";
 
 #[tokio::test]
@@ -62,7 +62,7 @@ async fn ws_101_upgrade_deadlock_check() {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     assert!(ready, "网关未就绪");
-    let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let raw = format!(
         "GET /api/nt/ws?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n"
     );

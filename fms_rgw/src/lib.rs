@@ -686,7 +686,7 @@ mod tests {
     fn validate_secret_strength_policy() {
         // 拒绝空值 / 占位值 / 过短 / 全同字符，接受32+ 随机密钥
         assert!(!validate_secret(""), "空值拒绝");
-        assert!(!validate_secret("CHANGE_ME_JWT_SECRET"), "占位值拒绝");
+        assert!(!validate_secret("CHANGE_ME_SIGN_SECRET"), "占位值拒绝");
         assert!(!validate_secret("CHANGE_ME_SIGN_SECRET"), "占位值拒绝");
         assert!(!validate_secret("short-key"), "过短拒绝");
         assert!(!validate_secret("a".repeat(40).as_str()), "全同字符拒绝");

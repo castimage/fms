@@ -61,7 +61,7 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'fms')\gexec
 \c fms
 SET ROLE fms_admin;
 
--- 扩展安装（全部 IF NOT EXISTS 幂等，ltree/pg_trgm/pgcrypto/pgaudit/dblink/pg_ivm/zhparser 本环境已可装，pg_cron/pg_partman/pgjwt 按下方适配段处理）
+-- 扩展安装（全部 IF NOT EXISTS 幂等，ltree/pg_trgm/pgcrypto/pgaudit/dblink/pg_ivm/zhparser 本环境已可装，pg_cron/pg_partman 按下方适配段处理）
 CREATE EXTENSION IF NOT EXISTS ltree;       -- 科目树/部门树 path LTREE 类型 + GIST 索引 + <@ 子树查询
 CREATE EXTENSION IF NOT EXISTS pg_trgm;     -- similarity + GIN trgm_ops，银行对账模糊匹配/检索
 CREATE EXTENSION IF NOT EXISTS pgcrypto;    -- digest('sha256') 审计哈希链 / pgp_sym_encrypt 列加密 + 盲索引 / gen_random_bytes
@@ -85,20 +85,6 @@ SET ROLE fms_admin;
 -- pg_partman 安装到专用 schema partman（init/queues_cron.sql cron 以 CALL partman.run_maintenance_proc 调用，5.x 中 run_maintenance_proc 是 PROCEDURE 必须 CALL）
 CREATE SCHEMA IF NOT EXISTS partman AUTHORIZATION fms_admin;
 CREATE EXTENSION IF NOT EXISTS pg_partman WITH SCHEMA partman;
-
--- pgjwt 安装到专用 schema pgjwt（init/auth_org_functions.sql 以 pgjwt.sign / pgjwt.verify 限定名包装 HS256 签发/验签）
-CREATE SCHEMA IF NOT EXISTS pgjwt AUTHORIZATION fms_admin;
-CREATE EXTENSION IF NOT EXISTS pgjwt WITH SCHEMA pgjwt;
-
--- pgjwt 0.2.0 安装脚本缺失 pgjwt.hmac 导致 sign/verify 运行时必失败，此处幂等补建包装函数（委托 pgcrypto.hmac，public schema）使扩展恢复可用，输出标准紧凑 base64url HS256 jwt，与 rgw 网关 jsonwebtoken 互操作
-CREATE OR REPLACE FUNCTION pgjwt.hmac(message text, key text, algo text)
-RETURNS bytea
-LANGUAGE sql IMMUTABLE
-AS $$
-    SELECT public.hmac(message, key, algo)
-$$;
-GRANT EXECUTE ON FUNCTION pgjwt.hmac(text, text, text) TO PUBLIC;
--- 包装函数不受扩展管理（DROP EXTENSION pgjwt 后残留，升级 pgjwt 时需复查扩展脚本是否覆盖），可选加固，收回 PUBLIC EXECUTE（auth.jwt_sign/verify 为 SECURITY DEFINER，无需 PUBLIC）或改 CREATE EXTENSION pgcrypto WITH SCHEMA pgjwt
 
 -- pgmq 幂等处理，先尝试 CREATE EXTENSION IF NOT EXISTS pgmq，可用性以 pg_extension 扩展记录为唯一依据，
 -- 无记录即视为未安装，相关队列/授权/cron 由后续文件按同一口径跳过，不再探测 schema/函数确认实际功能
@@ -189,11 +175,11 @@ CREATE SCHEMA IF NOT EXISTS log     AUTHORIZATION fms_admin;  -- 应用/访问/�
 -- SECURITY DEFINER 函数属主 fms_admin，函数体以超级用户身份执行、绕过 rls，审计写入/过账/领单等由函数统一闸口，文件末尾不执行 RESET ROLE，psql 进程退出即恢复
 -- 例外，软删除出口 auth.fn_soft_delete 与 auth.fn_soft_delete_v 保持 postgres 属主，两函数体内以 current_user <> 'fms_admin' 判定调用方，而 SECURITY DEFINER 下 current_user 即属主，属主为 fms_admin 会令该判定恒假、拒绝分支永不触发
 
--- 文件末尾自查，对象计数（配合 -v ON_ERROR_STOP=1 确认执行完整，pg_cron 受 cron.database_name 约束装在 postgres 库，fms 库扩展计数不含它，预期 9 项 + pgmq 仅探测函数）
+-- 文件末尾自查，对象计数（配合 -v ON_ERROR_STOP=1 确认执行完整，pg_cron 受 cron.database_name 约束装在 postgres 库，fms 库扩展计数不含它，预期 8 项 + pgmq 仅探测函数）
 SELECT 'bootstrap_base' AS file_name,
        (SELECT count(*) FROM pg_extension
          WHERE extname IN ('ltree','pg_trgm','pgcrypto','pgaudit','dblink','pg_partman',
-                           'pg_ivm','pgjwt','zhparser')) AS ext_cnt,
+                           'pg_ivm','zhparser')) AS ext_cnt,
        (SELECT count(*) FROM pg_namespace
          WHERE nspname IN ('um','org','gl','ar','ap','cash','fa','expense',
                            'budget','wf','rpt','audit','log')) AS business_schema_cnt,

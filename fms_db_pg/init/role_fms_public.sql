@@ -1,7 +1,7 @@
 -- FMS 财务系统（init/role_fms_public，执行库，postgres + fms），fms_public 公开只读角色 + fms_app 最小权限收敛
 
 -- fms_app 为沙箱连接角色，仅保留 CONNECT 与认证函数（auth.* 认证族
--- EXECUTE，登录/2fa/jwt 签发为连接角色认证职责），禁止业务/公开类函数 EXECUTE。
+-- EXECUTE，登录/2fa 为连接角色认证职责），禁止业务/公开类函数 EXECUTE。
 
 -- 收敛，新角色 fms_public（NOLOGIN），公开读口（/api/public/**）匿名请求经
 -- SandboxSessionInterceptor 注入，仅 EXECUTE fn_get_param_value / fn_public_document_meta

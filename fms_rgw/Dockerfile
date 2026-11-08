@@ -45,8 +45,8 @@ COPY --from=builder /build/target/release/fms_rgw /usr/local/bin/fms_rgw
 COPY config /app/config
 
 # 目录布局，配置项里的相对路径均以工作目录 /app 解析
-# config/fms_rgw.yaml 为配置模板且不含密钥，启动前经环境变量 FMS_RGW_JWT_SECRET 与
-# FMS_RGW_SIGN_SECRET 注入强密钥，或挂载覆盖该文件，空值与占位值与过短密钥一律拒绝启动
+# config/fms_rgw.yaml 为配置模板且不含密钥，启动前经环境变量 FMS_RGW_JWT_PUBLIC_KEY_PATH 与
+# FMS_RGW_SIGN_SECRET 注入公钥路径和签名密钥，或挂载覆盖该文件，缺失或占位值一律拒绝启动
 # static 存前端 spa 构建产物，以卷挂载
 # logs 存访问日志，jsonl 格式
 # certs 存 tls 证书，以卷挂载，镜像配置 allow_insecure_fallback=false，

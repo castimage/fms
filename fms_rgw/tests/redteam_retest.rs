@@ -12,7 +12,7 @@ use common::*;
 use fms_rgw::config::Config;
 use std::sync::Arc;
 
-const JWT_SECRET: &[u8] = b"retest-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"retest-jwt-secret";
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000002";
 const INDEX_MARKER: &str = "INDEX-MARKER";
 
@@ -83,7 +83,7 @@ fn bearer(token: &str) -> Vec<u8> {
 async fn redteam_retest_all_replayed_attacks() {
     let gw = start_gw().await;
     let port = gw.port;
-    let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
 
     // 双编码sql注入打 /api/x 则必须 400，不透传
     {

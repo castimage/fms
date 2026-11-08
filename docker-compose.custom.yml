@@ -25,7 +25,7 @@
 # Redis 与网关双上游自动切换，均与集群形态一致。
 #
 # 环境变量同 docker-compose.cluster.yml，.env 必填 FMS_DB_PASSWORD、FMS_REPL_PASSWORD、
-# FMS_REDIS_PASSWORD、FMS_JWT_SECRET（仅 DB 初始化遗留）与 FMS_SIGN_SECRET；RS256 密钥对放 deploy/secrets。
+# FMS_REDIS_PASSWORD 与 FMS_SIGN_SECRET；RS256 密钥对放 deploy/secrets。
 
 name: fms-custom
 
@@ -82,7 +82,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 设置 POSTGRES_PASSWORD}
       FMS_DB_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
-      FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
       FMS_MASTER_KEY: ${FMS_MASTER_KEY:-}
       FMS_REPL_PASSWORD: ${FMS_REPL_PASSWORD:?请在 .env 设置 FMS_REPL_PASSWORD}
     volumes:

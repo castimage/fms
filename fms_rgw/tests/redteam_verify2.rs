@@ -4,7 +4,7 @@ mod common;
 use common::*;
 use fms_rgw::config::Config;
 
-const JWT_SECRET: &[u8] = b"retest-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"retest-jwt-secret";
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000002";
 
 #[tokio::test]
@@ -60,7 +60,7 @@ async fn ws_http_unauth_forward_and_json_sqli() {
     //json body携带sql注入载荷则 400(，json body同样扫描，Content-Type切换不可绕过)
 
     {
-        let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+        let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
         let payload = r#"{"query":"admin'; drop table users;--"}"#;
         let body_hex = payload.len();
         let raw = format!(

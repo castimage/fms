@@ -17,7 +17,7 @@ use http_body_util::BodyExt;
 use uuid::Uuid;
 
 const SUB: &str = "3f9a2c1d-0000-4000-8000-000000000001";
-const JWT_SECRET: &[u8] = b"test-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"test-jwt-secret";
 const SIGN_SECRET: &[u8] = b"test-sign-secret";
 /// 与`common::StaticFixture`写入的`index.html`内容标记一致
 const INDEX_MARKER: &[u8] = b"INDEX-MARKER";
@@ -73,7 +73,7 @@ async fn filter_body_too_large_413() {
     // Content-Length声明超限，11MB > 10MB则 413，不等body，安全链sign层拦截
     let mut req = with_auth(
         request("POST", "/api/gl/vouchers"),
-        &make_jwt(SUB, "operator", 3600, JWT_SECRET),
+        &make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET),
     );
     req.headers_mut()
         .insert("content-type", "application/json".parse().unwrap());
@@ -172,7 +172,7 @@ async fn auth_forged_key_401() {
 #[tokio::test]
 async fn auth_expired_token_40101() {
     let (router, _mock) = router_with_mock(|_| {}, None).await;
-    let token = make_jwt(SUB, "operator", -3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", -3600, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_auth(request("GET", "/api/gl/vouchers"), &token),
@@ -189,7 +189,7 @@ async fn auth_expired_token_40101() {
 async fn proxy_chain_injects_identity_and_valid_signature() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let sub = SUB;
-    let token = make_jwt(sub, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(sub, "operator", 3600, LEGACY_HS256_SECRET);
     let body = r#"{"action":"create","amount":100}"#;
     // 客户端伪造X-FMS-*，必须被剥离，不得直达上游
     let mut req = with_json_body("/api/gl/vouchers?page=2", body);
@@ -270,7 +270,7 @@ async fn proxy_passthrough_status_headers_and_trace() {
         ];
         r.body = br#"{"upstream":"alive"}"#.to_vec();
     }
-    let token = make_jwt(SUB, "operator", 3600, JWT_SECRET);
+    let token = make_jwt(SUB, "operator", 3600, LEGACY_HS256_SECRET);
     let resp = oneshot(
         &router,
         with_auth(request("GET", "/api/gl/vouchers"), &token),

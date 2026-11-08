@@ -42,7 +42,7 @@ diagnose_00_failure() {
         echo "[fms-init][bootstrap_base] 缺失扩展：$MISSING"
         echo "[fms-init][bootstrap_base] 修复途径："
         echo "[fms-init][bootstrap_base]   1) 使用定制镜像 deploy/pg/Dockerfile（全部扩展均源码"
-        echo "[fms-init][bootstrap_base]      make install：pgaudit/pg_cron/pg_partman/pgjwt/pg_ivm/"
+        echo "[fms-init][bootstrap_base]      make install：pgaudit/pg_cron/pg_partman/pg_ivm/"
         echo "[fms-init][bootstrap_base]      zhparser/pgmq），重建后重试；"
         echo "[fms-init][bootstrap_base]   2) 手工源码安装：zhparser（github.com/amutu/zhparser，"
         echo "[fms-init][bootstrap_base]      依赖 scws）、pg_ivm（github.com/sraoss/pg_ivm，"
@@ -83,7 +83,6 @@ for f in $INIT_SCRIPTS; do
     # 仅当现值仍为种子默认值时覆盖，存量库已旋转/已注入密钥则 WHERE 不命中跳过，
     # 防止覆盖后既有密文全部不可解密，行不存在则 INSERT，seed_system.sql 的
     # ON CONFLICT DO NOTHING 保留注入值。
-    # jwt.secret 无加密列依赖，仍由循环后对齐段统一处理。
     if [ "$f" = "seed_system.sql" ] && [ -n "${FMS_MASTER_KEY:-}" ]; then
         MK_ESCAPED=$(printf '%s' "${FMS_MASTER_KEY}" | sed "s/'/''/g")
         if psql -v ON_ERROR_STOP=1 -U postgres -d fms \
@@ -138,23 +137,6 @@ if [ -n "${FMS_DB_PASSWORD:-}" ]; then
     fi
 else
     echo "[fms-init] WARN: 环境变量 FMS_DB_PASSWORD 为空，跳过 ALTER ROLE fms_app（.env 未配置？）"
-fi
-
-# 以 .env 的 FMS_JWT_SECRET 对齐 pg 侧 jwt.secret，init/seed_system.sql 内建值仅非生产占位，
-# pg auth.jwt_sign 签发、后端校验、网关验签三者必须同值，.env 为唯一密钥源
-if [ -n "${FMS_JWT_SECRET:-}" ]; then
-    JWT_ESCAPED=$(printf '%s' "${FMS_JWT_SECRET}" | sed "s/'/''/g")
-    if psql -v ON_ERROR_STOP=1 -U postgres -d fms \
-        -c "INSERT INTO sec.app_secrets (code, value, updated_at) VALUES ('jwt.secret', jsonb_build_object('v', '${JWT_ESCAPED}'), now()) ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now()" \
-        > /tmp/fms_init_jwt.log 2>&1; then
-        echo "[fms-init] PASS: sec.app_secrets.jwt.secret 已对齐 .env 值"
-    else
-        echo "[fms-init] FAIL: jwt.secret 对齐失败（详见 /tmp/fms_init_jwt.log）"
-        FAIL_COUNT=$((FAIL_COUNT+1))
-        ABORT=1
-    fi
-else
-    echo "[fms-init] WARN: 环境变量 FMS_JWT_SECRET 为空，跳过 jwt.secret 对齐（PG 侧将用 init/seed_system.sql 内建值）"
 fi
 
 # replication 角色与 pg_hba 授权，从库 pg_basebackup 前置条件

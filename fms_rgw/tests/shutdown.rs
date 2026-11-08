@@ -52,14 +52,14 @@ async fn raw_http_slow(port: u16, raw: &[u8]) -> (u16, Vec<u8>) {
     (status, buf)
 }
 
-const JWT_SECRET: &[u8] = b"test-jwt-secret";
+const LEGACY_HS256_SECRET: &[u8] = b"test-jwt-secret";
 
 fn jwt_for(role: &str) -> String {
     common::make_jwt(
         "00000000-0000-7000-0000-000000000001",
         role,
         3600,
-        JWT_SECRET,
+        LEGACY_HS256_SECRET,
     )
 }
 

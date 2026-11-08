@@ -1,11 +1,11 @@
 # FMS 定制 PostgreSQL 18 镜像，tag 为 fms-postgres:18
 # 基于官方 postgres:18，全部 pg 扩展采用下载源码 make install 的方式安装，
-# 含 pgaudit 数据库审计，pg_cron 定时任务，pg_partman 分区维护，pgjwt 的 jwt 验签，
+# 含 pgaudit 数据库审计，pg_cron 定时任务，pg_partman 分区维护，
 # pg_ivm 增量物化视图，zhparser 中文分词，pgmq 消息队列
 # 不安装任何 pgdg 二进制扩展包，pgdg apt 源仅保留用于安装构建依赖，
 # postgresql-server-dev-18 提供 server 头文件与 pg_config，官方 postgres:18 镜像不含 dev 文件，源码编译 pg 扩展必需
 # shared_preload_libraries 基线写入 postgresql.conf.sample，initdb 以该样例生成运行时配置，
-# 基线为 pgaudit,pg_cron,pg_partman_bgw，zhparser 与 pgjwt 与 pgmq 无需 preload
+# 基线为 pgaudit,pg_cron,pg_partman_bgw，zhparser 与 pgmq 无需 preload
 
 FROM postgres:18
 
@@ -52,12 +52,6 @@ RUN git clone --depth 1 https://github.com/pgpartman/pg_partman /tmp/pg_partman 
     && cd /tmp/pg_partman && make && make install \
     && echo "OK: pg_partman 源码安装成功" \
     || echo "WARN: pg_partman 源码安装失败（bootstrap_base 将失败）"
-
-# pgjwt 的 jwt 验签，纯 sql 扩展，建库时以 CREATE EXTENSION pgjwt WITH SCHEMA pgjwt 安装
-RUN git clone --depth 1 https://github.com/michelp/pgjwt /tmp/pgjwt \
-    && cd /tmp/pgjwt && make && make install \
-    && echo "OK: pgjwt 源码安装成功" \
-    || echo "WARN: pgjwt 源码安装失败（pgjwt.sign/verify 将不可用，bootstrap_base 失败时 init 诊断会提示）"
 
 # pg_ivm 增量物化视图
 # 仅当整条命令成功时才把 pg_ivm 追加进 shared_preload_libraries，即用 sed 改写上文追加的那行，
