@@ -375,7 +375,7 @@ mod tests {
         // rate=0，禁用trace记录，不透传客户端合法uuid、不生成新id，
         // TraceCtx.trace_id空串(日志req_id / 错误响应traceId兜底空串)
         let mut cfg = Config::default();
-        cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+        cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
         cfg.sign.sign_secret = "test-sign-secret".to_string();
         cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
         cfg.trace.sample_rate = 0;
@@ -457,7 +457,7 @@ mod tests {
 
     fn trace_router() -> axum::Router {
         let mut cfg = Config::default();
-        cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+        cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
         cfg.sign.sign_secret = "test-sign-secret".to_string();
         cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
         // 透传/生成用例须全量采样，默认10%会随机性漏采样

@@ -622,7 +622,7 @@ mod tests {
     #[tokio::test]
     async fn mw_access_log_applies_security_headers_and_strips_fms() {
         let mut cfg = Config::default();
-        cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+        cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
         cfg.sign.sign_secret = "test-sign-secret".to_string();
         cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
         cfg.trace.sample_rate = 100; // 本用例断言响应必带X-Trace-Id，须全量采样
@@ -667,7 +667,7 @@ mod tests {
         // 全局采样序号被并发测试交错消费，集成层只验证开关语义，确定性，不依赖序号
         for (rate, expect_traced) in [(0u32, 0usize), (100u32, 20usize)] {
             let mut cfg = Config::default();
-            cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+            cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
             cfg.sign.sign_secret = "test-sign-secret".to_string();
             cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
             cfg.trace.sample_rate = rate;

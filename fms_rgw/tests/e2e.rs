@@ -27,7 +27,7 @@ const RATE_LOGIN_LIMIT: u32 = 5;
 fn env() -> &'static RealGw {
     real_gateway_with(|cfg| {
         cfg.limits.login_per_window = RATE_LOGIN_LIMIT;
-        cfg.auth.jwt_secret = String::from_utf8_lossy(JWT_SECRET).into_owned();
+        cfg.auth.jwt_public_key = common::TEST_JWT_PUBLIC_KEY.to_string();
         cfg.sign.sign_secret = String::from_utf8_lossy(SIGN_SECRET).into_owned();
     })
 }
@@ -248,7 +248,18 @@ async fn valid_jwt_full_chain_200() {
 async fn forged_jwt_401() {
     let env = env();
     let client = http_client().await;
-    let token = make_jwt(&Uuid::now_v7().to_string(), "operator", 3600, b"wrong-key");
+    let payload = serde_json::json!({
+        "sub": Uuid::now_v7().to_string(),
+        "role": "operator",
+        "exp": now_secs() + 3600,
+        "type": "access"
+    });
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &payload,
+        &jsonwebtoken::EncodingKey::from_secret(b"wrong-key"),
+    )
+    .expect("伪造 token 签发");
     let (status, _, body) = call(
         &client,
         "GET",

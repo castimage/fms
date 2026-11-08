@@ -146,7 +146,7 @@ async fn h2_and_http1_over_tls_alpn() {
     cfg.tls.cert = Some(cert_path.display().to_string());
     cfg.tls.key = Some(key_path.display().to_string());
     cfg.tls.allow_insecure_fallback = false;
-    cfg.auth.jwt_secret = "h2-e2e-jwt-secret".to_string();
+    cfg.auth.jwt_public_key = include_str!("jwt-test-public.txt").to_string();
     cfg.sign.sign_secret = "h2-e2e-sign-secret".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     cfg.upstream.base_url = "http://127.0.0.1:18099".to_string(); // healthz不达上游
@@ -206,3 +206,4 @@ async fn h2_and_http1_over_tls_alpn() {
     let _ = std::fs::remove_dir_all(&dir);
     println!("=== H2 E2E PASSED (ALPN h2 -> HTTP/2 200; ALPN http/1.1 -> HTTP/1.1 200) ===");
 }
+

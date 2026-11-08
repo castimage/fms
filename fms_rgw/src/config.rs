@@ -61,6 +61,26 @@ pub fn load_from(path: &Path) -> Result<Config, ConfigError> {
     Ok(noyalib::compat::serde_yaml::from_str(&text)?)
 }
 
+/// 解析网关 JWT 公钥，内联 PEM 优先，否则读取只读文件
+pub fn resolve_jwt_public_key(cfg: &mut Config) -> Result<(), ConfigError> {
+    if cfg.auth.jwt_public_key.trim().is_empty() {
+        if cfg.auth.jwt_public_key_path.trim().is_empty() {
+            return Err(ConfigError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                "未配置 JWT 公钥，需设置 jwt_public_key_path 或 FMS_RGW_JWT_PUBLIC_KEY_PATH",
+            )));
+        }
+        cfg.auth.jwt_public_key = std::fs::read_to_string(&cfg.auth.jwt_public_key_path)?;
+    }
+    if !cfg.auth.jwt_public_key.contains("BEGIN PUBLIC KEY") {
+        return Err(ConfigError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "JWT 公钥不是 PEM 公钥",
+        )));
+    }
+    Ok(())
+}
+
 /// 环境变量覆盖，仅非空环境变量生效
 ///
 /// 优先级，环境变量 > yaml > 默认值
@@ -82,7 +102,8 @@ fn apply_env_overrides_with(cfg: &mut Config, get_env: &dyn Fn(&str) -> Option<S
             .filter(|s| !s.is_empty())
             .collect();
     }
-    override_str(&mut cfg.auth.jwt_secret, "FMS_RGW_JWT_SECRET", get_env);
+    override_str(&mut cfg.auth.jwt_public_key_path, "FMS_RGW_JWT_PUBLIC_KEY_PATH", get_env);
+    override_str(&mut cfg.auth.jwt_public_key, "FMS_RGW_JWT_PUBLIC_KEY", get_env);
     override_str(&mut cfg.sign.sign_secret, "FMS_RGW_SIGN_SECRET", get_env);
     override_str(&mut cfg.auth.deny_store, "FMS_RGW_DENY_STORE", get_env);
     if let Some(v) = get_env("FMS_RGW_REDIS_URL")
@@ -377,8 +398,10 @@ impl Default for UpstreamCfg {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AuthCfg {
-    /// jwt验签密钥，必填，为空则main启动报错退出
-    pub jwt_secret: String,
+    /// RSA公钥 PEM 文件路径，网关只读挂载，私钥不下发网关
+    pub jwt_public_key_path: String,
+    /// RSA公钥 PEM 内容，优先于文件路径，供测试或密钥注入使用
+    pub jwt_public_key: String,
     /// iss校验，默认为None，不校验iss
     pub expected_iss: Option<String>,
     /// aud校验，默认为None，不校验aud
@@ -421,7 +444,8 @@ pub struct AuthCfg {
 impl Default for AuthCfg {
     fn default() -> Self {
         Self {
-            jwt_secret: String::new(),
+            jwt_public_key_path: String::new(),
+            jwt_public_key: String::new(),
             expected_iss: None,
             expected_aud: None,
             leeway_secs: 60,
@@ -830,7 +854,7 @@ mod tests {
         let path = dir.join(format!("fms_rgw-cfg-test-{}.yaml", std::process::id()));
         std::fs::write(
             &path,
-            "server:\n  listen: \"127.0.0.1:9999\"\nauth:\n  jwt_secret: \"j\"\nsign:\n  sign_secret: \"s\"\nstatic:\n  dir: \"./web\"\n",
+            "server:\n  listen: \"127.0.0.1:9999\"\nauth:\n  jwt_public_key: \"j\"\nsign:\n  sign_secret: \"s\"\nstatic:\n  dir: \"./web\"\n",
         )
         .expect("测试配置写入");
         let cfg = load_from(&path).expect("解析成功");
@@ -917,7 +941,7 @@ mod tests {
             "FMS_RGW_UPSTREAM" => Some("http://10.0.0.2:9000".to_string()),
             "FMS_RGW_UPSTREAM_MODE" => Some("least-conn".to_string()),
             "FMS_RGW_UPSTREAM_SERVERS" => Some("http://10.0.0.2:9000, http://10.0.0.3:9000".to_string()),
-            "FMS_RGW_JWT_SECRET" => Some("env-jwt".to_string()),
+            "FMS_RGW_JWT_PUBLIC_KEY" => Some("env-jwt".to_string()),
             "FMS_RGW_SIGN_SECRET" => Some("env-sign".to_string()),
             "FMS_RGW_DENY_STORE" => Some("redis".to_string()),
             "FMS_RGW_REDIS_URL" => Some("redis://127.0.0.1:6379/0".to_string()),
@@ -948,7 +972,7 @@ mod tests {
             vec!["http://10.0.0.2:9000", "http://10.0.0.3:9000"],
             "FMS_RGW_UPSTREAM_SERVERS 逗号分隔覆盖 servers(去空白)"
         );
-        assert_eq!(cfg.auth.jwt_secret, "env-jwt");
+        assert_eq!(cfg.auth.jwt_public_key, "env-jwt");
         assert_eq!(cfg.sign.sign_secret, "env-sign");
         assert_eq!(cfg.auth.deny_store, "redis");
         assert_eq!(

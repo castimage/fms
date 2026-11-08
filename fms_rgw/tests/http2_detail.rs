@@ -25,7 +25,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 /// 基础配置，强密钥、cors白名单、不达上游的`base_url`(`/healthz`用例无需上游)
 fn base_cfg() -> Config {
     let mut cfg = Config::default();
-    cfg.auth.jwt_secret = "h2-detail-jwt-secret-0123456789abcdef".to_string();
+    cfg.auth.jwt_public_key = common::TEST_JWT_PUBLIC_KEY.to_string();
     cfg.sign.sign_secret = "h2-detail-sign-secret-0123456789abcdef".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     cfg.upstream.base_url = "http://127.0.0.1:18099".to_string();

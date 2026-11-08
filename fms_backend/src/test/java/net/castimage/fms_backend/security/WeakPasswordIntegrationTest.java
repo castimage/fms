@@ -72,6 +72,7 @@ class WeakPasswordIntegrationTest {
     }
 
     private AuthServiceImpl newAuthService(FmsProperties props, WeakPasswordFilter filter) {
+        props.getJwt().setPrivateKeyPath("src/test/resources/jwt-test-private.txt");
         // 会话态经 CachePort 收敛，构造器第 6 参，邮件服务第 7 参 mock（props 默认 mail.enabled=false，
         // recovery 流程不会触碰 sender，仅构造签名占位）
         return new AuthServiceImpl(userMapper, roleMapper, authFunctionMapper, props, filter,
@@ -190,7 +191,6 @@ class WeakPasswordIntegrationTest {
         when(authFunctionMapper.setLocalUserId(any())).thenReturn(null);
         when(userMapper.selectById(UID)).thenReturn(activeUser("alice", password));
         when(roleMapper.selectRolesByUserId(UID)).thenReturn(List.of());
-        when(authFunctionMapper.jwtSign(anyString())).thenReturn("eyJ.fake.sig");
         return authService.login(new LoginRequest("alice", password), "1.2.3.4", "UA");
     }
 

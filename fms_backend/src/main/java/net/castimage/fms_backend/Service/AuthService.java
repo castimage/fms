@@ -15,7 +15,7 @@ import net.castimage.fms_backend.Model.dto.TotpSetupResponse;
 import net.castimage.fms_backend.Model.dto.TotpVerifyRequest;
 import net.castimage.fms_backend.Model.vo.UserSessionView;
 
-/** 认证模块业务接口（登录/刷新/登出/2FA/找回/会话）：登录先 BCrypt 校验，再做锁定/禁用检查，随后 auth.jwt_sign 签发或两步票据；refresh 验签断言 type=refresh 后重签；登出令牌写入 CachePort 黑名单 */
+/** 认证模块业务接口（登录/刷新/登出/2FA/找回/会话）：登录先 BCrypt 校验，再做锁定/禁用检查，随后后端 RS256 私钥签发或两步票据；refresh 公钥验签断言 type=refresh 后重签；登出令牌写入 CachePort 黑名单 */
 public interface AuthService {
 
     /**
@@ -41,7 +41,7 @@ public interface AuthService {
     LoginResponse verifyTotp(TotpVerifyRequest req, String ip, String userAgent);
 
     /**
-     * 令牌刷新（匿名端点）：refresh 验签（auth.jwt_verify + type=refresh）通过后重签令牌对。
+     * 令牌刷新（匿名端点）：refresh RS256 验签且 type=refresh 通过后重签令牌对。
      *
      * @param req 刷新请求
      * @return 新令牌对

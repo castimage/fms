@@ -34,6 +34,11 @@ use tokio::net::TcpListener;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+/// 测试 RS256 私钥，仅测试使用，生产私钥只在后端只读挂载
+pub const TEST_JWT_PRIVATE_KEY: &str = include_str!("../jwt-test-private.txt");
+/// 测试 RS256 公钥，与测试私钥配对
+pub const TEST_JWT_PUBLIC_KEY: &str = include_str!("../jwt-test-public.txt");
+
 /// 上游收到的请求记录
 #[derive(Debug, Clone)]
 pub struct RecordedRequest {
@@ -201,7 +206,7 @@ async fn serve_connection(
 /// 明文降级开、静态目录指向调用方注入
 pub fn test_config() -> Config {
     let mut cfg = Config::default();
-    cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+    cfg.auth.jwt_public_key = TEST_JWT_PUBLIC_KEY.to_string();
     cfg.sign.sign_secret = "test-sign-secret".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     cfg.limits.ip_per_window = 10_000;
@@ -290,8 +295,8 @@ pub async fn collect_json(resp: Response<Body>) -> (StatusCode, HeaderMap, serde
     (status, headers, v)
 }
 
-/// 签发测试 jwt(HS256，与 fms_rgw::auth::Claims 结构一致)
-pub fn make_jwt(sub: &str, role: &str, exp_offset_secs: i64, secret: &[u8]) -> String {
+/// 签发测试 jwt(RS256，与 fms_rgw::auth::Claims 结构一致，测试私钥固定)
+pub fn make_jwt(sub: &str, role: &str, exp_offset_secs: i64, _secret: &[u8]) -> String {
     let claims = fms_rgw::auth::Claims {
         sub: Uuid::parse_str(sub).expect("测试 sub 必须为 uuid 文本"),
         role: role.to_string(),
@@ -302,22 +307,22 @@ pub fn make_jwt(sub: &str, role: &str, exp_offset_secs: i64, secret: &[u8]) -> S
     let mut payload = serde_json::to_value(&claims).expect("测试载荷序列化");
     payload["type"] = serde_json::Value::String("access".to_string());
     jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
         &payload,
-        &jsonwebtoken::EncodingKey::from_secret(secret),
+        &jsonwebtoken::EncodingKey::from_rsa_pem(TEST_JWT_PRIVATE_KEY.as_bytes())
+            .expect("测试私钥"),
     )
     .expect("测试 JWT 签发失败")
 }
 
-/// 签发带自定义 iss/aud 与绝对 exp 的测试 jwt(HS256，Claims 全字段可控，
-/// 供安全测试构造 pgjwt 兼容 / iss-aud 严格校验场景)
+/// 签发带自定义 iss/aud 与绝对 exp 的测试 jwt(RS256，Claims 全字段可控)
 pub fn make_jwt_full(
     sub: &str,
     role: &str,
     exp: i64,
     iss: Option<&str>,
     aud: Option<&str>,
-    secret: &[u8],
+    _secret: &[u8],
 ) -> String {
     let claims = fms_rgw::auth::Claims {
         sub: Uuid::parse_str(sub).expect("测试 sub 必须为 uuid 文本"),
@@ -329,9 +334,10 @@ pub fn make_jwt_full(
     let mut payload = serde_json::to_value(&claims).expect("测试载荷序列化");
     payload["type"] = serde_json::Value::String("access".to_string());
     jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
         &payload,
-        &jsonwebtoken::EncodingKey::from_secret(secret),
+        &jsonwebtoken::EncodingKey::from_rsa_pem(TEST_JWT_PRIVATE_KEY.as_bytes())
+            .expect("测试私钥"),
     )
     .expect("测试 JWT 签发失败")
 }
@@ -472,7 +478,7 @@ async fn init_real_gateway(
     cfg.server.listen = format!("127.0.0.1:{port}");
     cfg.tls.allow_insecure_fallback = true;
     cfg.upstream.base_url = mock.base_url.clone();
-    cfg.auth.jwt_secret = "sec-web-jwt-secret".to_string();
+    cfg.auth.jwt_public_key = TEST_JWT_PUBLIC_KEY.to_string();
     cfg.sign.sign_secret = "sec-web-sign-secret".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     cfg.limits.ip_per_window = 100_000;

@@ -31,6 +31,7 @@ import net.castimage.fms_backend.Model.entity.User;
 import net.castimage.fms_backend.Model.vo.UserSessionView;
 import net.castimage.fms_backend.Service.AuthService;
 import net.castimage.fms_backend.Utils.CachePort;
+import net.castimage.fms_backend.Utils.JwtRsa;
 import net.castimage.fms_backend.Utils.JwtRole;
 import net.castimage.fms_backend.Utils.MailService;
 import net.castimage.fms_backend.Utils.PasswordUtils;
@@ -45,12 +46,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.sql.SQLException;
 
-/** 认证服务实现，登录/刷新/登出/2fa/找回/会话，匿名端点先 SET ROLE fms_operator 再查 um.users（当前 users_select 对匿名恒空集，闭环依赖登录闸口），jwt 由 pg auth.jwt_sign 签发，密钥 sec.app_secrets 权威，2fa 票据/黑名单等会话态经 CachePort 收敛，in-memory|redis 双实现，fms.session-store 切换，任意实例写入全局可见 */
+/** 认证服务实现，登录/刷新/登出/2fa/找回/会话，匿名端点先 SET ROLE fms_operator 再查 um.users（当前 users_select 对匿名恒空集，闭环依赖登录闸口），jwt 由后端 RS256 私钥签发，网关只持公钥验签，2fa 票据/黑名单等会话态经 CachePort 收敛，in-memory|redis 双实现，fms.session-store 切换，任意实例写入全局可见 */
 @Service
 @Slf4j
 public class AuthServiceImpl implements AuthService {
@@ -258,13 +260,13 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * refresh token 换新令牌对，旋转语义，黑名单命中直接抛 TokenExpiredException，否则
-     * 经 auth.jwt_verify 严格验签，签名/exp 由 pg 侧把关，验签失败按过期统一处理并断言
+     * 经 RS256 公钥严格验签，签名/exp 由后端把关，验签失败按过期统一处理并断言
      * type=refresh、sub 为合法 uuid，按 sub 重查用户（已删则 40100）。通过后签发新令牌对，
      * 并把旧 refresh 原值立即入黑名单，旋转后旧令牌在剩余 ttl 内失效，防旧令牌重放。
      * 期间注入本用户 guc 满足 rls 自读。
      *
      * 安全语义，刷新是新会话的重新授权点，黑名单在验签之前检查，被撤销的令牌
-     * 即使签名仍有效也立即拒绝，pg 侧 jwt_verify 严格校验签名与 exp（后端无 jwt
+     * 即使签名仍有效也立即拒绝，RS256 公钥严格校验签名与 exp（后端不信任客户端 jwt
      * 密钥副本，权威在 db），验签失败统一按 TokenExpiredException 处理（40100 语义，
      * 不区分"伪造"与"过期"，不给攻击者反馈差异），载荷断言 type=refresh（access
      * 令牌不可用于刷新，防 access 泄漏被滥用为长期会话）、sub 为合法 uuid。
@@ -581,7 +583,7 @@ public class AuthServiceImpl implements AuthService {
     // 内部实现
 
     /**
-     * 签发 access/refresh 令牌对，pg auth.jwt_sign，role 由用户角色集合解析，无弱密码标记。
+     * 签发 access/refresh 令牌对，RS256 私钥签发，role 由用户角色集合解析，无弱密码标记。
      */
     private LoginResponse issueLogin(User user) {
         return issueLogin(user, false);
@@ -603,7 +605,7 @@ public class AuthServiceImpl implements AuthService {
         return LoginResponse.success(access, refresh, toSessionView(user, role), mustChange);
     }
 
-    /** 调用 pg auth.jwt_sign 签发，载荷含 sub/role/exp/iss/aud/type，json 序列化交由 fastjson2，pg 侧按键名读取不依赖字段序 */
+    /** RS256 私钥签发，载荷含 sub/role/exp/iss/aud/type，序列化交由 fastjson2 */
     private String signToken(UUID userId, JwtRole role, Duration ttl, String type) {
         long exp = Instant.now().plus(ttl).getEpochSecond();
         JSONObject payload = new JSONObject();
@@ -613,34 +615,49 @@ public class AuthServiceImpl implements AuthService {
         payload.put("iss", fmsProperties.getJwt().getIssuer());
         payload.put("aud", fmsProperties.getJwt().getAudience());
         payload.put("type", type);
-        return authFunctionMapper.jwtSign(payload.toJSONString());
+        return JwtRsa.sign(payload.toJSONString(), fmsProperties.getJwt().getPrivateKeyPath());
     }
 
-    /** refresh 验签，auth.jwt_verify（签名/exp 严格校验）通过则断言 type=refresh */
+    /** refresh 验签，公钥由私钥推导，签名通过后再校验 exp、iss、aud 与 type */
     private JwtClaims verifyRefreshToken(String token) {
         String payload;
         try {
-            payload = authFunctionMapper.jwtVerify(token);
+            payload = JwtRsa.verify(token, fmsProperties.getJwt().getPrivateKeyPath());
         } catch (RuntimeException e) {
-            // pgjwt 验签失败 RAISE，经 Spring 包装为 DataAccessException，统一按过期处理
-            throw new TokenExpiredException("refresh token 无效或已过期", unwrap(e));
+            throw new TokenExpiredException("refresh token 无效或已过期", e);
         }
         JSONObject fields;
         try {
             fields = payload == null || payload.isBlank()
                     ? new JSONObject() : JSON.parseObject(payload);
         } catch (RuntimeException e) {
-            // 防御，jwt_verify 正常只返回受控紧凑 json，解析失败即 40100
             throw new UnauthorizedException("令牌载荷非法");
         }
         if (!"refresh".equals(fields.getString("type"))) {
             throw new UnauthorizedException("令牌类型错误");
+        }
+        if (!fmsProperties.getJwt().getIssuer().equals(fields.getString("iss"))
+                || !fmsProperties.getJwt().getAudience().equals(claimText(fields, "aud"))) {
+            throw new UnauthorizedException("令牌签发方或受众不符");
+        }
+        Long exp = fields.getLong("exp");
+        if (exp == null || exp <= Instant.now().getEpochSecond()) {
+            throw new TokenExpiredException("refresh token 已过期");
         }
         try {
             return new JwtClaims(UUID.fromString(fields.getString("sub")));
         } catch (RuntimeException e) {
             throw new UnauthorizedException("令牌载荷非法");
         }
+    }
+
+    /** 读取 JWT 文本 claim，JJWT 会把标准 aud 解析为列表，这里统一取首值 */
+    private String claimText(JSONObject fields, String name) {
+        Object value = fields.get(name);
+        if (value instanceof Collection<?> values) {
+            return values.isEmpty() ? null : String.valueOf(values.iterator().next());
+        }
+        return value == null ? null : String.valueOf(value);
     }
 
     /** 角色集合映射 jwt role 短名（fms_admin_role/sys_admin 归 admin，accountant/approver/cashier 归 operator，auditor 归 auditor，report_viewer 归 report，其余归 viewer） */

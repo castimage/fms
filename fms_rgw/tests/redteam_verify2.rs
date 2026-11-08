@@ -18,7 +18,7 @@ async fn ws_http_unauth_forward_and_json_sqli() {
     cfg.server.listen = format!("127.0.0.1:{port}");
     cfg.tls.allow_insecure_fallback = true;
     cfg.upstream.base_url = mock.base_url.clone();
-    cfg.auth.jwt_secret = String::from_utf8_lossy(JWT_SECRET).into_owned();
+    cfg.auth.jwt_public_key = common::TEST_JWT_PUBLIC_KEY.to_string();
     cfg.sign.sign_secret = "retest-sign-secret".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     cfg.limits.ip_per_window = 1_000_000;

@@ -146,8 +146,19 @@ async fn auth_missing_token_401() {
 #[tokio::test]
 async fn auth_forged_key_401() {
     let (router, _mock) = router_with_mock(|_| {}, None).await;
-    // 用错误密钥签发的token，网关密钥为test-jwt-secret
-    let token = make_jwt(SUB, "operator", 3600, b"wrong-secret");
+    // 用错误密钥签发的 HS256 token，网关只接受 RS256 私钥签名
+    let payload = serde_json::json!({
+        "sub": SUB,
+        "role": "operator",
+        "exp": now_secs() + 3600,
+        "type": "access"
+    });
+    let token = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &payload,
+        &jsonwebtoken::EncodingKey::from_secret(b"wrong-secret"),
+    )
+    .expect("伪造 token 签发");
     let resp = oneshot(
         &router,
         with_auth(request("GET", "/api/gl/vouchers"), &token),

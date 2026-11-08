@@ -138,6 +138,20 @@ fn sign_value_with_alg(payload_json: &str, alg: jsonwebtoken::Algorithm) -> Stri
     .expect("测试 token 签发")
 }
 
+/// 用测试私钥签发 RS256 token，payload 全字段可控
+fn sign_value_rsa(payload_json: &str) -> String {
+    let v: serde_json::Value = serde_json::from_str(payload_json).expect("payload 为 JSON");
+    jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
+        &v,
+        &jsonwebtoken::EncodingKey::from_rsa_pem(
+            common::TEST_JWT_PRIVATE_KEY.as_bytes(),
+        )
+        .expect("测试私钥"),
+    )
+    .expect("测试 token 签发")
+}
+
 /// 【攻击】算法混淆经典打法，若服务端误把RS256公钥当hmac密钥验签HS256，
 /// 攻击者用公开的RS256公钥字节作hmac密钥签发HS256 token即可伪造任意身份。
 /// 【防护层】auth层，`verify_jwt`固定HS256 + 独立`jwt_secret`，test-jwt-secret，
@@ -210,7 +224,7 @@ async fn refresh_token_rejected_by_api() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let mut payload = claims_json(SUB, "operator", 3600);
     payload["type"] = serde_json::Value::String("refresh".to_string());
-    let token = sign_value(&payload, JWT_SECRET);
+    let token = sign_value_rsa(&payload.to_string());
     let resp = oneshot(
         &router,
         with_ip(
@@ -275,7 +289,7 @@ async fn future_exp_far_future_accepted() {
 async fn empty_sub_rejected() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     for sub in ["", "not-a-uuid", "3f9a2c1d"] {
-        let token = sign_value(&claims_json(sub, "admin", 3600), JWT_SECRET);
+        let token = sign_value_rsa(&claims_json(sub, "admin", 3600).to_string());
         let resp = oneshot(
             &router,
             with_ip(
@@ -299,7 +313,7 @@ async fn empty_sub_rejected() {
 async fn oversized_sub_rejected() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let huge = "a".repeat(10_000);
-    let token = sign_value(&claims_json(&huge, "admin", 3600), JWT_SECRET);
+    let token = sign_value_rsa(&claims_json(&huge, "admin", 3600).to_string());
     let resp = oneshot(
         &router,
         with_ip(

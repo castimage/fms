@@ -280,7 +280,7 @@ pub(crate) fn test_state_with(cfg: Config) -> Arc<AppState> {
 pub(crate) fn test_state() -> Arc<AppState> {
     let mut cfg = Config::default();
     // 补齐密钥与白名单，避免build_router启动期panic
-    cfg.auth.jwt_secret = "test-jwt-secret".to_string();
+    cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
     cfg.sign.sign_secret = "test-sign-secret".to_string();
     cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
     test_state_with(cfg)

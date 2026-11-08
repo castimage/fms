@@ -29,9 +29,10 @@ async fn smoke_healthz_and_fake_jwt() {
         cfg.tls.allow_insecure_fallback,
         "YAML 必须解析出 allow_insecure_fallback=true"
     );
+    cfg.auth.jwt_public_key = include_str!("jwt-test-public.txt").to_string();
     assert!(
-        cfg.auth.jwt_secret.len() >= 32,
-        "YAML 密钥必须满足启动强度校验"
+        cfg.auth.jwt_public_key.contains("BEGIN PUBLIC KEY"),
+        "测试公钥必须为 PEM"
     );
     assert!(
         cfg.sign.sign_secret.len() >= 32,

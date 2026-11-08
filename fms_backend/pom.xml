@@ -22,6 +22,8 @@
         <otp-java.version>2.1.0</otp-java.version>
         <uuid-creator.version>6.0.0</uuid-creator.version>
         <commons-csv.version>1.14.0</commons-csv.version>
+        <jjwt.version>0.13.0</jjwt.version>
+        <gson.version>2.13.2</gson.version>
     </properties>
 
     <dependencies>
@@ -95,6 +97,29 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <!-- JJWT：RS256 JWT 签发与 refresh 验签，私钥只留后端 -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-gson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
         </dependency>
 
         <!-- Guava：BloomFilter 供弱密码布隆预筛（替换 WeakPasswordFilter 自研位数组/双哈希） -->

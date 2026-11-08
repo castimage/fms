@@ -154,7 +154,7 @@ pub async fn ws_handler(
     let auth_cfg = &state.cfg.auth;
     let claims = match verify_access_jwt(
         token.as_deref(),
-        auth_cfg.jwt_secret.as_bytes(),
+        auth_cfg.jwt_public_key.as_bytes(),
         auth_cfg.expected_iss.as_deref(),
         auth_cfg.expected_aud.as_deref(),
         auth_cfg.leeway_secs,
@@ -537,14 +537,17 @@ mod tests {
         }
     }
 
-    /// 签发测试token，HS256
+    /// 签发测试 token，RS256
     fn sign_test_token(claims: &Claims) -> String {
         let mut payload = serde_json::to_value(claims).expect("测试载荷序列化");
         payload["type"] = serde_json::Value::String("access".to_string());
         jsonwebtoken::encode(
-            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256),
             &payload,
-            &jsonwebtoken::EncodingKey::from_secret(b"test-jwt-secret"),
+            &jsonwebtoken::EncodingKey::from_rsa_pem(
+                crate::auth::TEST_JWT_PRIVATE_KEY.as_bytes(),
+            )
+            .expect("测试私钥"),
         )
         .expect("测试 token 签发")
     }

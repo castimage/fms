@@ -95,12 +95,11 @@ fms:
       false-positive-rate: 0.01       # 误判率（误判仅多一次 HashSet 查询，无拒绝风险）
       mark-on-login: true             # 登录命中弱密码即标记 requirePasswordChange
   jwt:
-    secret: ${FMS_JWT_SECRET:change-me-at-least-32-chars-0123456789abcdef}        # 与 fms_rgw auth.jwt_secret 及 PG sec.app_secrets 的 jwt.secret 同值；后端签发由 DB 函数读库内密钥，本项为配置占位
+    private-key-path: ${FMS_JWT_PRIVATE_KEY_PATH:}  # 后端只读挂载的 PKCS#8 PEM 私钥，网关只持对应公钥
     issuer: fms                       # 与 fms_rgw expected_iss 对齐
     audience: fms-gateway             # 与 fms_rgw expected_aud 对齐
     access-ttl: 2h                    # access token 有效期（会话 TTL 已配置化）
     refresh-ttl: 7d                   # refresh token 有效期
-    expiry: 24h                       # DB 侧 auth.jwt_sign 兜底签发有效期（init/um_org_base.sql 缺省 interval '24 hours'）；后端签发恒显式注入 exp，issuer/audience/算法不变
   mfa:
     issuer: FMS                       # totp otpauth URI issuer
     ticket-ttl: 5m                    # 2FA 两步登录票据有效期

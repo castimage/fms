@@ -60,7 +60,7 @@ public class AuthController {
     }
 
     /**
-     * 令牌刷新（匿名）：refresh 验签（auth.jwt_verify + type=refresh）通过后重签。
+     * 令牌刷新（匿名）：refresh RS256 验签且 type=refresh 通过后重签。
      */
     @PostMapping("/refresh")
     public ApiResponse<LoginResponse> refresh(@RequestBody @Valid RefreshRequest req) {

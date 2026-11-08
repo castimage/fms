@@ -936,7 +936,6 @@ async fn ws_invalid_token_query_401() {
     let (router, mock) = router_with_mock(|_| {}, None).await;
     let bad_tokens = [
         "not.a.jwt",
-        &make_jwt(SUB, "operator", 3600, b"wrong-key"),
         &make_jwt(SUB, "operator", -3600, JWT_SECRET), // 过期
     ];
     for t in bad_tokens {

@@ -7,16 +7,8 @@ import org.apache.ibatis.annotations.Update;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/** auth.* / org.* pg 函数调用 Mapper（SECURITY DEFINER 闸口统一出口，Wrapper 无函数调用能力故手写），jwt 密钥传 NULL 由库内 sec.app_secrets 权威 */
+/** auth.* / org.* pg 函数调用 Mapper（SECURITY DEFINER 闸口统一出口，Wrapper 无函数调用能力故手写） */
 public interface AuthFunctionMapper {
-
-    /** jwt 签发（HS256），payload 含 sub/role/exp，密钥传 NULL 走 sec.app_secrets.jwt.secret（与网关 FMS_RGW_JWT_SECRET 同源，避免配置漂移） */
-    @Select("SELECT auth.jwt_sign(#{payload}::jsonb, NULL)")
-    String jwtSign(@Param("payload") String payload);
-
-    /** jwt 验签（HS256 + exp 检查），失败/篡改 RAISE，返回 payload 紧凑 json */
-    @Select("SELECT auth.jwt_verify(#{token}, NULL)")
-    String jwtVerify(@Param("token") String token);
 
     /**
      * 登录闸口，匿名 SELECT 因 um.users rls 恒空集，用户查找 + bcrypt 校验全在 pg 内完成，

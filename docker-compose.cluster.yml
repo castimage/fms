@@ -61,8 +61,8 @@ x-backend-env: &backend-env
   # 写事务与非事务查询走主库，由 RoutingDataSource 按事务只读标志路由
   FMS_DATASOURCE_RO_ENABLED: "true"
   FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
-  # 与网关共享的 HMAC 对称密钥（FMS_JWT_SECRET/FMS_RGW_JWT_SECRET 同值）
-  FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+  # RS256 私钥只读挂载，网关只持公钥
+  FMS_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
   # 与网关共享的请求签名密钥（FMS_SIGN_SECRET/FMS_RGW_SIGN_SECRET 同值）
   FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
   # 恒为 false，签名校验必须前置网关，禁止绕过
@@ -246,6 +246,8 @@ services:
     restart: unless-stopped
     environment: *backend-env
     volumes:
+      # RS256 私钥只读挂载，两个后端实例共用同一私钥文件
+      - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
       # 附件存储命名卷，两实例挂同一命名卷，单机共享可行，多机需换共享存储，
       # 见文件末的运维约束一节
       - fms-files:/app/data/files
@@ -276,6 +278,7 @@ services:
     restart: unless-stopped
     environment: *backend-env
     volumes:
+      - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
       - fms-files:/app/data/files
     depends_on:
       fms-pgbouncer:
@@ -371,6 +374,8 @@ services:
       - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
       # TLS 自签证书只读挂载，缺失即启动失败，不依赖 HEALTHCHECK 兜底
       - ./deploy/certs:/app/certs:ro
+      # RS256 公钥只读挂载，网关不接触私钥
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       # 访问日志命名卷
       - fms-logs:/app/logs
     environment:
@@ -383,8 +388,8 @@ services:
       # 实例探测，故障实例自动摘除）
       FMS_RGW_UPSTREAM_MODE: auto
       FMS_RGW_UPSTREAM_SERVERS: http://fms-backend-1:8081,http://fms-backend-2:8081
-      # 与后端共享密钥（网关启动校验不少于 32 字符且非占位符，违者启动失败）
-      FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      # RS256 公钥只读挂载，网关不接触私钥
+      FMS_RGW_JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
       # 多实例登出撤销共享，连接 fms-redis；缺连接启动失败
       FMS_RGW_DENY_STORE: redis

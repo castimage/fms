@@ -50,16 +50,16 @@ use tracing::{error, info, warn};
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut cfg = config::load()?;
     config::apply_env_overrides(&mut cfg);
+    config::resolve_jwt_public_key(&mut cfg)?;
 
-    // 必填密钥校验，启动期失败eprintln + exit，拒绝空值、占位值与 <32字符弱密钥，
-    // 占位密钥可被伪造jwt与X-FMS-Signature完全绕过认证与后端验签
-    let jwt_ok = validate_secret(&cfg.auth.jwt_secret);
+    // 签名密钥校验，启动期失败 eprintln + exit，拒绝空值、占位值与过短弱密钥，
+    // 占位密钥可被伪造 X-FMS-Signature 绕过后端验签
     let sign_ok = validate_secret(&cfg.sign.sign_secret);
-    if !jwt_ok || !sign_ok {
+    if !sign_ok {
         eprintln!(
-            "[fms_rgw] 启动失败：[auth].jwt_secret 与 [sign].sign_secret 必须配置强密钥 \
+            "[fms_rgw] 启动失败：[sign].sign_secret 必须配置强密钥 \
              (≥32 字符随机字节，禁止空值/占位符/过短值；\
-             config/fms_rgw.yaml 或环境变量 FMS_RGW_JWT_SECRET / FMS_RGW_SIGN_SECRET)"
+             config/fms_rgw.yaml 或环境变量 FMS_RGW_SIGN_SECRET)"
         );
         std::process::exit(1);
     }
@@ -664,11 +664,11 @@ mod tests {
     #[test]
     fn build_state_assembles_all_components() {
         let mut cfg = config::Config::default();
-        cfg.auth.jwt_secret = "j".to_string();
+        cfg.auth.jwt_public_key = "j".to_string();
         cfg.sign.sign_secret = "s".to_string();
         cfg.upstream.base_url = "http://127.0.0.1:8081".to_string();
         let state = build_state(cfg).expect("合法配置可组装 AppState");
-        assert_eq!(state.cfg.auth.jwt_secret, "j");
+        assert_eq!(state.cfg.auth.jwt_public_key, "j");
         assert!(
             state
                 .limiter

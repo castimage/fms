@@ -149,14 +149,14 @@ public class FmsProperties {
     }
 
     /**
-     * jwt 配置，secret 与网关 auth.jwt_secret 及 pg sec.app_secrets 的 jwt.secret 三方一致，access 2h / refresh 7d。
+     * jwt 配置，后端 RS256 私钥签发，网关仅持公钥验签，access 2h / refresh 7d。
      */
     @Getter
     @Setter
     public static class Jwt {
 
-        /** 与网关 jwt_secret 及 pg sec.app_secrets.jwt.secret 一致 */
-        private String secret;
+        /** PKCS#8 PEM 私钥文件，后端只读挂载，私钥不下发网关 */
+        private String privateKeyPath;
 
         /** 签发者，与 fms_rgw expected_iss 对齐 */
         private String issuer = "fms";
@@ -169,9 +169,6 @@ public class FmsProperties {
 
         /** refresh 令牌有效期，默认 7d */
         private Duration refreshTtl = Duration.ofDays(7);
-
-        /** db 侧 auth.jwt_sign 兜底签发有效期期望值（默认 24h，与 init/um_org_base.sql 缺省 interval '24 hours' 一致，非协议值，后端签发恒显式注入 exp，db 兜底缺省按本配置保留） */
-        private Duration expiry = Duration.ofHours(24);
 
     }
 

@@ -25,7 +25,7 @@
 # Redis 与网关双上游自动切换，均与集群形态一致。
 #
 # 环境变量同 docker-compose.cluster.yml，.env 必填 FMS_DB_PASSWORD、FMS_REPL_PASSWORD、
-# FMS_REDIS_PASSWORD、FMS_JWT_SECRET 与 FMS_SIGN_SECRET。
+# FMS_REDIS_PASSWORD、FMS_JWT_SECRET（仅 DB 初始化遗留）与 FMS_SIGN_SECRET；RS256 密钥对放 deploy/secrets。
 
 name: fms-custom
 
@@ -41,7 +41,7 @@ x-backend-env: &backend-env
   SPRING_DATASOURCE_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
   FMS_DATASOURCE_RO_ENABLED: "true"
   FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
-  FMS_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+  FMS_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
   FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
   FMS_SECURITY_BYPASS_GATEWAY: "false"
   FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
@@ -215,6 +215,7 @@ services:
     restart: unless-stopped
     environment: *backend-env
     volumes:
+      - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
       - fms-files:/app/data/files
     depends_on:
       fms-pgbouncer:
@@ -245,6 +246,7 @@ services:
       - fms-static:/app/static:ro
       - ./deploy/fms_rgw.yaml:/app/config/fms_rgw.yaml:ro
       - ./deploy/certs:/app/certs:ro
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       - fms-logs:/app/logs
     environment:
       FMS_RGW_CONFIG: /app/config/fms_rgw.yaml
@@ -253,7 +255,7 @@ services:
       # 后端副本地址由 compose DNS 解析，fms-backend 服务名解析为全部副本 IP，
       # 配合 least-conn 与自动健康管理，单 URL 也由 DNS 轮询覆盖多副本
       FMS_RGW_UPSTREAM: http://fms-backend:8081
-      FMS_RGW_JWT_SECRET: ${FMS_JWT_SECRET:?请在 .env 设置 FMS_JWT_SECRET}
+      FMS_RGW_JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
       FMS_RGW_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
       # 多实例登出撤销共享，连接 fms-redis；缺连接启动失败
       FMS_RGW_DENY_STORE: redis

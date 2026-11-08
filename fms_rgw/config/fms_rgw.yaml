@@ -37,7 +37,7 @@ upstream:
   health_timeout_secs: 2
 
 auth:
-  jwt_secret: "change-me-at-least-32-chars-jwt-secret-0123456789"
+  jwt_public_key_path: ""
   expected_iss: "fms"
   expected_aud: "fms-gateway"
   leeway_secs: 60

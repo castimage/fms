@@ -1,4 +1,4 @@
-//! jwt验签，HS256，与pg pgjwt兼容，严格校验签名 + exp，leeway容忍，
+//! jwt验签，RS256，网关只持后端 RS256 公钥，严格校验签名 + exp，leeway容忍，
 //! iss/aud宽松校验，配置了才比对，`mw_auth`为安全链第三层，验签通过后剥离客户端
 //! `X-FMS-*`头、注入身份头、执行用户维度限流，`Claims`写入extensions
 //!
@@ -55,7 +55,7 @@ fn base64url_decode(s: &str) -> Option<Vec<u8>> {
     URL_SAFE_NO_PAD.decode(s).ok()
 }
 
-/// `Claims`，与`pgjwt.sign` 产出的payload一致，HS256
+/// `Claims`，后端 RS256 产出的 payload
 /// sub = 用户id uuid文本，role = 角色，exp = unix秒，iss/aud可选，宽松校验
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Claims {
@@ -88,8 +88,7 @@ pub enum AuthError {
 /// 从`Authorization: Bearer`头验签，严格校验签名 + exp，`leeway`容忍，
 /// iss/aud仅在expected_* 配置为Some时比对。
 ///
-/// 与pg `pgjwt.sign` 产出的HS256 jwt兼容(`Claims`字段对齐)，网关与后端共用
-/// 同一`jwt_secret`，验签通过即后端可采信的身份。
+/// 网关只持有后端 RS256 公钥，私钥不下发网关，验签通过即后端可采信的身份。
 ///
 /// 校验顺序，先判缺头(`Missing`)，随后非 "Bearer " 前缀/空token/解析失败/sub非uuid
 /// 属 (`Malformed`)，再验 exp过期(`Expired`)，随后签名不匹配(`InvalidSignature`，显式映射
@@ -97,12 +96,12 @@ pub enum AuthError {
 /// `InvalidAudience`)。错误语义，所有失败均不泄露密钥/载荷细节，仅返回分类变体。
 ///
 /// `leeway`取max，0防负数配置，关闭jsonwebtoken库默认aud校验
-/// (audiences=`None`会误拒pgjwt省略aud的签发)，改由下方手动宽松比对，
+/// (audiences=`None`会误拒省略aud的签发)，改由下方手动宽松比对，
 /// expected_* 为`None`即不校验，宽松，为`Some`则必须逐字符相等，严格。
 ///
 /// `header`，`Authorization`头值(`None` = 无认证头，含 "Bearer " 前缀)
 ///
-/// `secret`，`jwt_secret`，HS256对称密钥，启动期已做强密钥校验
+/// `public_key_pem`，后端 RS256 公钥 PEM，启动期校验非空且为公钥格式
 ///
 /// `expected_iss`，配置的iss(`None` = 不校验，`Some` = `claims.iss`必须相等)
 ///
@@ -113,7 +112,7 @@ pub enum AuthError {
 /// 返回验签通过的`Claims`，sub/role/exp/iss/aud，供注入身份头与限流使用
 pub fn verify_jwt(
     header: Option<&str>,
-    secret: &[u8],
+    public_key_pem: &[u8],
     expected_iss: Option<&str>,
     expected_aud: Option<&str>,
     leeway_secs: i64,
@@ -127,12 +126,14 @@ pub fn verify_jwt(
         return Err(AuthError::Malformed);
     }
 
-    let mut validation = Validation::new(Algorithm::HS256);
+    let mut validation = Validation::new(Algorithm::RS256);
     validation.leeway = leeway_secs.max(0) as u64;
-    // 关闭库默认aud校验(audiences=None会误拒)，由下方手动宽松比对，pgjwt签发可能省略aud
+    // 关闭库默认aud校验，由下方手动宽松比对
     validation.validate_aud = false;
 
-    let data = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation).map_err(
+    let decoding_key = DecodingKey::from_rsa_pem(public_key_pem)
+        .map_err(|_| AuthError::Malformed)?;
+    let data = decode::<Claims>(token, &decoding_key, &validation).map_err(
         |e| match e.kind() {
             ErrorKind::ExpiredSignature => AuthError::Expired,
             ErrorKind::InvalidIssuer => AuthError::InvalidIssuer,
@@ -161,12 +162,12 @@ pub fn verify_jwt(
 /// 校验 access 类型，refresh 令牌不得访问业务接口与 WebSocket。
 pub fn verify_access_jwt(
     header: Option<&str>,
-    secret: &[u8],
+    public_key_pem: &[u8],
     expected_iss: Option<&str>,
     expected_aud: Option<&str>,
     leeway_secs: i64,
 ) -> Result<Claims, AuthError> {
-    let claims = verify_jwt(header, secret, expected_iss, expected_aud, leeway_secs)?;
+    let claims = verify_jwt(header, public_key_pem, expected_iss, expected_aud, leeway_secs)?;
     let token = header
         .and_then(|h| h.strip_prefix("Bearer "))
         .filter(|t| !t.is_empty())
@@ -217,7 +218,7 @@ pub fn is_anonymous_path(path: &str) -> bool {
 /// 响应携带`Retry-After`。
 /// 失败分类，缺失/格式非法/签名不符则 40100，过期则 40101，iss/aud不符则 40100。
 ///
-/// `state`，全局状态(取`auth.jwt_secret`、iss/aud、leeway、`allowed_roles`、限流配置)
+/// `state`，全局状态(取`auth.jwt_public_key`、iss/aud、leeway、`allowed_roles`、限流配置)
 ///
 /// `req`，http请求
 pub async fn mw_auth(
@@ -249,7 +250,7 @@ pub async fn mw_auth(
             .and_then(|v| v.to_str().ok())
             && let Ok(claims) = verify_access_jwt(
                 Some(hdr),
-                state.cfg.auth.jwt_secret.as_bytes(),
+                state.cfg.auth.jwt_public_key.as_bytes(),
                 state.cfg.auth.expected_iss.as_deref(),
                 state.cfg.auth.expected_aud.as_deref(),
                 state.cfg.auth.leeway_secs,
@@ -308,7 +309,7 @@ pub async fn mw_auth(
 
     let claims = match verify_access_jwt(
         auth_header.as_deref(),
-        auth_cfg.jwt_secret.as_bytes(),
+        auth_cfg.jwt_public_key.as_bytes(),
         auth_cfg.expected_iss.as_deref(),
         auth_cfg.expected_aud.as_deref(),
         auth_cfg.leeway_secs,
@@ -460,6 +461,47 @@ pub async fn mw_auth(
 }
 
 #[cfg(test)]
+pub(crate) const TEST_JWT_PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCeyKLl27lQX32E
+GRQ/+URneD8UnqFmB3c6M/JTO6mzT1cnrV6AAkcoKM1TTRJFMvbgxKh/hDt1NYys
+YTHUXou1mRmWAQttBe+ONfLUnWRsfmrZx4QJMqBt3rJ1MbS8ApRSFEOpa7TNaRr7
+GGvHcniAFLPxzxwRIqKItM/004MpspzUayFZqkA8Gc8VW4ER0OKqxED9ObEubOss
+M/8nWVtcYA7KB6XtVeANAF1Cn22khgnfADrfVD/s5XWiwwm+jSRnsmqKym5vKun9
+jmJPzNZZT5l7kGaeMNz2aKTfdE8skAUK09VPT6wWnLeUt/IYfrUTkx8IX46pRfyS
+SOyG4SHxAgMBAAECggEAGDvXniymdYgtbZovnK1G7bfM1jEjwaEFZw0DQLAhcAF9
+nsuiBE1/Xgy5fFY4ofZroYBs6xFbyxbCLT5O+Zz4cQiN1CFoBLAG5iCBEEbOoJRm
+wG2SpEi6yCoDTfRTzkINMGhxWeEwtg0C64HIU/y6PBTCJfdjJDuyAhqpMTI67tkF
+qJToleK2TMx2j7FoCUTr9be/sykTwckuSkn3bKyfAYQBtaHQkhWIbkVTvMqccpCA
+Dj2KNU7OdhZm+F/JXH1VVWyur+LYZGWADFJLZ+G2MTWHY2zxDU2nAYhQFzPGfleu
+zD/r6SRGIW4tcZbP83nPPfNTkGspt2w+Bw9lIXUrFQKBgQDek8iCHPuIHit5FnDW
+4gnySN0/rpSyaoYwwhUjgd7khyr8SwCXtIGd7arxCo62i3gtjneG9Pom+KMg7KOA
+8eLxt1ynXB6ZNO1RoyA1vAn/IadnfqHHBzbxVPUiMM8DqzZpxY35gpX1ML2ujDIE
+Nv2kib0x9RY5JKVuyByHVrbmtwKBgQC2oIezjAIBhkrdvhRL0AxIz3yDxVRpBKFS
+4hlJLCT604a8rh2dou5IY7FoTwF0f2oepwSeGs0SXuMnXVFw4ziS1a9QJfBF05Xx
+X7PW6wIU5qrmxuCrxChDZ6kHWTUs3+645tRe3Xe+PhGjTZG9Zf5WaGDUKWx6z4Ze
+QP7kig1UlwKBgFfJ4Eb5mXg5thnfcQhARX4LoUBx4nJws5bdpirIGZr3eUvjZUtw
+xcL9r/O8n0d+wRru21Qeod/nJ6hfzamZPlLqaKAWJHd3Obd+aMDo9uRraLTYbISs
+4s3THZCrwasHx8F2SyZDjFQWMmp7H2ssKWTRcw8WRPqq6plEUoRK/n8HAoGABaJy
+TWHWdgGUsb65lZU3q89rAg3Giu7vo0UCjrVj9rEsCQo+M6zhOS6KPLOjUdrUhVmV
+1OLyzMxMqdxBNQBtsGoTXJ+vCBh9GdNgExNxHv/26ePc7q/ApkO+fVGNSHMoRGAq
+0Tp4BVCY7rbn9jX9YOEbi7Azfp6EgMf0lUyFGMUCgYAlDzZBHOzoLOBH2xBgcmZr
+o4UzehKFk3YaYyhnjOYUtEcm7Sy3ofXK3PObZx8w46uGzpC5dzL6aD5cJ7Q3o9Jm
+vZ6rLat8sy3yzaN9Kv3UnKE99ho1eL34KXUj/5gFebTMY2+yGdU8edf22af4Pe1M
+vZx8aBndwNZVwBrzhU9njw==
+-----END PRIVATE KEY-----"#;
+
+#[cfg(test)]
+pub(crate) const TEST_JWT_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnsii5du5UF99hBkUP/lE
+Z3g/FJ6hZgd3OjPyUzups09XJ61egAJHKCjNU00SRTL24MSof4Q7dTWMrGEx1F6L
+tZkZlgELbQXvjjXy1J1kbH5q2ceECTKgbd6ydTG0vAKUUhRDqWu0zWka+xhrx3J4
+gBSz8c8cESKiiLTP9NODKbKc1GshWapAPBnPFVuBEdDiqsRA/TmxLmzrLDP/J1lb
+XGAOygel7VXgDQBdQp9tpIYJ3wA631Q/7OV1osMJvo0kZ7Jqispubyrp/Y5iT8zW
+WU+Ze5BmnjDc9mik33RPLJAFCtPVT0+sFpy3lLfyGH61E5MfCF+OqUX8kkjshuEh
+8QIDAQAB
+-----END PUBLIC KEY-----"#;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::state::test_state;
@@ -467,24 +509,25 @@ mod tests {
     use jsonwebtoken::{EncodingKey, Header, encode};
     use tower::ServiceExt;
 
-    fn sign_token(claims: &Claims, secret: &[u8]) -> String {
-        sign_token_with_type(claims, secret, "access")
+
+    fn sign_token(claims: &Claims, _secret: &[u8]) -> String {
+        sign_token_with_type(claims, _secret, "access")
     }
 
-    fn sign_token_with_type(claims: &Claims, secret: &[u8], token_type: &str) -> String {
+    fn sign_token_with_type(claims: &Claims, _secret: &[u8], token_type: &str) -> String {
         let mut payload = serde_json::to_value(claims).expect("测试载荷序列化");
         payload["type"] = serde_json::Value::String(token_type.to_string());
         encode(
-            &Header::new(Algorithm::HS256),
+            &Header::new(Algorithm::RS256),
             &payload,
-            &EncodingKey::from_secret(secret),
+            &EncodingKey::from_rsa_pem(TEST_JWT_PRIVATE_KEY.as_bytes()).expect("测试私钥"),
         )
         .expect("测试 token 签发")
     }
 
     #[test]
     fn verify_valid_token() {
-        let secret = b"test-secret";
+        let secret = TEST_JWT_PUBLIC_KEY.as_bytes();
         let claims = Claims {
             sub: Uuid::now_v7(),
             role: "operator".to_string(),
@@ -507,7 +550,7 @@ mod tests {
 
     #[test]
     fn refresh_token_not_accepted_as_access() {
-        let secret = b"test-secret";
+        let secret = TEST_JWT_PUBLIC_KEY.as_bytes();
         let claims = Claims {
             sub: Uuid::now_v7(),
             role: "operator".to_string(),
@@ -536,7 +579,7 @@ mod tests {
 
     #[test]
     fn expired_token_rejected() {
-        let secret = b"test-secret";
+        let secret = TEST_JWT_PUBLIC_KEY.as_bytes();
         let claims = Claims {
             sub: Uuid::now_v7(),
             role: "viewer".to_string(),
@@ -552,7 +595,7 @@ mod tests {
 
     #[test]
     fn tampered_signature_rejected() {
-        let secret = b"test-secret";
+        let secret = TEST_JWT_PUBLIC_KEY.as_bytes();
         let claims = Claims {
             sub: Uuid::now_v7(),
             role: "auditor".to_string(),
@@ -575,7 +618,7 @@ mod tests {
 
     #[test]
     fn issuer_and_audience_strict_when_configured() {
-        let secret = b"test-secret";
+        let secret = TEST_JWT_PUBLIC_KEY.as_bytes();
         let claims = Claims {
             sub: Uuid::now_v7(),
             role: "report".to_string(),
@@ -1310,3 +1353,4 @@ mod tests {
         assert_eq!(token_exp_secs("eyJhIjoxfQ.!!!.sig"), None);
     }
 }
+
