@@ -1,11 +1,16 @@
 package net.castimage.fms_backend.Utils;
 
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyFactory;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -52,6 +57,25 @@ class JwtRsaTest {
         } finally {
             Files.deleteIfExists(otherKey);
         }
+    }
+
+    @Test
+    void nonRs256AlgorithmRejected() throws Exception {
+        String token = Jwts.builder()
+                .content("{\"sub\":\"x\",\"exp\":4102444800}")
+                .signWith(privateKey(), Jwts.SIG.RS512)
+                .compact();
+        assertThrows(IllegalArgumentException.class, () -> JwtRsa.verify(token, KEY));
+    }
+
+    private static PrivateKey privateKey() throws Exception {
+        String pem = Files.readString(Path.of(KEY), StandardCharsets.US_ASCII);
+        String body = pem
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s", "");
+        byte[] der = Base64.getDecoder().decode(body);
+        return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
     }
 
     @Test

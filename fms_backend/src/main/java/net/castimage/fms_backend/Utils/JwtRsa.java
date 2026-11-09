@@ -1,6 +1,8 @@
 package net.castimage.fms_backend.Utils;
 
 import com.alibaba.fastjson2.JSON;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 
@@ -70,11 +72,14 @@ public final class JwtRsa {
             throw new IllegalArgumentException("令牌为空");
         }
         try {
-            return JSON.toJSONString(Jwts.parser()
+            Jws<Claims> parsed = Jwts.parser()
                     .verifyWith(keys(privateKeyPath).publicKey())
                     .build()
-                    .parseSignedClaims(token)
-                    .getPayload());
+                    .parseSignedClaims(token);
+            if (!Jwts.SIG.RS256.getId().equals(parsed.getHeader().getAlgorithm())) {
+                throw new IllegalArgumentException("JWT 算法非 RS256");
+            }
+            return JSON.toJSONString(parsed.getPayload());
         } catch (JwtException | IllegalArgumentException e) {
             throw new IllegalArgumentException("令牌验签失败", e);
         }
