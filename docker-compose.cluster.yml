@@ -61,8 +61,9 @@ x-backend-env: &backend-env
   # 写事务与非事务查询走主库，由 RoutingDataSource 按事务只读标志路由
   FMS_DATASOURCE_RO_ENABLED: "true"
   FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
-  # RS256 私钥只读挂载，网关只持公钥
+  # RS256 私钥与配对公钥只读挂载，网关只持公钥
   FMS_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
+  FMS_JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
   # 与网关共享的请求签名密钥（FMS_SIGN_SECRET/FMS_RGW_SIGN_SECRET 同值）
   FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
   # 恒为 false，签名校验必须前置网关，禁止绕过
@@ -244,8 +245,9 @@ services:
     restart: unless-stopped
     environment: *backend-env
     volumes:
-      # RS256 私钥只读挂载，两个后端实例共用同一私钥文件
+      # RS256 私钥与配对公钥只读挂载，两个后端实例共用同一组密钥
       - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       # 附件存储命名卷，两实例挂同一命名卷，单机共享可行，多机需换共享存储，
       # 见文件末的运维约束一节
       - fms-files:/app/data/files
@@ -277,6 +279,7 @@ services:
     environment: *backend-env
     volumes:
       - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       - fms-files:/app/data/files
     depends_on:
       fms-pgbouncer:

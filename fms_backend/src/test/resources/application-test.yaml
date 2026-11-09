@@ -14,6 +14,7 @@ spring:
 fms:
   jwt:
     private-key-path: src/test/resources/jwt-test-private.txt
+    public-key-path: src/test/resources/jwt-test-public.txt
   session-store: in-memory                # 不依赖 redis（WsNotifyRedisBridge 走 no-op 广播器）
   datasource-ro:
     enabled: false                        # 单源直连，不测读写分离路由

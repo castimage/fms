@@ -22,6 +22,8 @@ public class JwtKeyStartupValidator {
      */
     @PostConstruct
     public void validate() {
-        JwtRsa.validate(fmsProperties.getJwt().getPrivateKeyPath());
+        JwtRsa.validate(
+                fmsProperties.getJwt().getPrivateKeyPath(),
+                fmsProperties.getJwt().getPublicKeyPath());
     }
 }

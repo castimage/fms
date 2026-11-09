@@ -96,6 +96,7 @@ fms:
       mark-on-login: true             # 登录命中弱密码即标记 requirePasswordChange
   jwt:
     private-key-path: ${FMS_JWT_PRIVATE_KEY_PATH:}  # 后端只读挂载的 PKCS#8 PEM 私钥，网关只持对应公钥
+    public-key-path: ${FMS_JWT_PUBLIC_KEY_PATH:}    # 后端只读挂载的公钥，启动期与私钥做配对校验
     issuer: fms                       # 与 fms_rgw expected_iss 对齐
     audience: fms-gateway             # 与 fms_rgw expected_aud 对齐
     access-ttl: 2h                    # access token 有效期（会话 TTL 已配置化）

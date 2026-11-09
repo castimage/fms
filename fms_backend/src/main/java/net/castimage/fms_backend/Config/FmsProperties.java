@@ -158,6 +158,9 @@ public class FmsProperties {
         /** PKCS#8 PEM 私钥文件，后端只读挂载，私钥不下发网关 */
         private String privateKeyPath;
 
+        /** 网关使用的 RSA 公钥文件，后端只读挂载，用于启动期公私钥配对校验 */
+        private String publicKeyPath;
+
         /** 签发者，与 fms_rgw expected_iss 对齐 */
         private String issuer = "fms";
 

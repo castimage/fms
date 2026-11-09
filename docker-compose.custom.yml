@@ -42,6 +42,7 @@ x-backend-env: &backend-env
   FMS_DATASOURCE_RO_ENABLED: "true"
   FMS_DATASOURCE_RO_URL: jdbc:postgresql://fms-pgbouncer-ro:6432/fms?prepareThreshold=0
   FMS_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
+  FMS_JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
   FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
   FMS_SECURITY_BYPASS_GATEWAY: "false"
   FMS_INTERNAL_TOKEN: ${FMS_INTERNAL_TOKEN:-}
@@ -215,6 +216,7 @@ services:
     environment: *backend-env
     volumes:
       - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       - fms-files:/app/data/files
     depends_on:
       fms-pgbouncer:

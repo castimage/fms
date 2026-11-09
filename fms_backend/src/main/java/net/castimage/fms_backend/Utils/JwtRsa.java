@@ -11,8 +11,10 @@ import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -79,12 +81,42 @@ public final class JwtRsa {
     }
 
     /**
-     * 启动期校验私钥可加载，失败直接抛 IllegalStateException，由 Spring 启动阶段终止进程。
+     * 启动期校验私钥与网关公钥成对，二者 modulus/exponent 任一不一致即终止启动。
      *
      * @param privateKeyPath PKCS#8 PEM 私钥路径
+     * @param publicKeyPath 网关使用的 RSA 公钥路径
      */
-    public static void validate(String privateKeyPath) {
-        keys(privateKeyPath);
+    public static void validate(String privateKeyPath, String publicKeyPath) {
+        KeyMaterial keys = keys(privateKeyPath);
+        PublicKey configured = loadPublic(publicKeyPath);
+        if (!(keys.publicKey() instanceof RSAPublicKey derived)
+                || !(configured instanceof RSAPublicKey expected)
+                || !derived.getModulus().equals(expected.getModulus())
+                || !derived.getPublicExponent().equals(expected.getPublicExponent())) {
+            throw new IllegalStateException("JWT 公私钥不匹配: " + publicKeyPath);
+        }
+    }
+
+    private static PublicKey loadPublic(String publicKeyPath) {
+        if (publicKeyPath == null || publicKeyPath.isBlank()) {
+            throw new IllegalStateException("fms.jwt.public-key-path 未配置");
+        }
+        try {
+            String pem = Files.readString(Path.of(publicKeyPath), StandardCharsets.US_ASCII);
+            String body = pem
+                    .replace("-----BEGIN PUBLIC KEY-----", "")
+                    .replace("-----END PUBLIC KEY-----", "")
+                    .replaceAll("\\s", "");
+            byte[] der = Base64.getDecoder().decode(body);
+            PublicKey publicKey = KeyFactory.getInstance("RSA")
+                    .generatePublic(new X509EncodedKeySpec(der));
+            if (!(publicKey instanceof RSAPublicKey)) {
+                throw new IllegalStateException("JWT 公钥必须是 RSA 公钥");
+            }
+            return publicKey;
+        } catch (Exception e) {
+            throw new IllegalStateException("JWT 公钥加载失败: " + publicKeyPath, e);
+        }
     }
 
     private static KeyMaterial keys(String privateKeyPath) {

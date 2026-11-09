@@ -207,8 +207,9 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://fms-pgbouncer:6432/fms?prepareThreshold=0
       SPRING_DATASOURCE_USERNAME: fms_app
       SPRING_DATASOURCE_PASSWORD: ${FMS_DB_PASSWORD:?请在 .env 设置 FMS_DB_PASSWORD}
-      # RS256 私钥只读挂载，网关只持公钥
+      # RS256 私钥与配对公钥只读挂载，网关只持公钥
       FMS_JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
+      FMS_JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
       # 与网关共享的请求签名密钥（FMS_SIGN_SECRET/FMS_RGW_SIGN_SECRET 同值）
       FMS_SIGN_SECRET: ${FMS_SIGN_SECRET:?请在 .env 设置 FMS_SIGN_SECRET}
       # 恒为 false，签名校验必须前置网关，禁止绕过
@@ -238,8 +239,9 @@ services:
       FMS_SMTP_PASSWORD: ${FMS_SMTP_PASSWORD:-}
       FMS_SMTP_FROM: ${FMS_SMTP_FROM:-}
     volumes:
-      # RS256 私钥只读挂载，私钥不下发网关
+      # RS256 私钥与配对公钥只读挂载，私钥不下发网关
       - ./deploy/secrets/jwt_private.pem:/run/secrets/jwt_private.pem:ro
+      - ./deploy/secrets/jwt_public.pem:/run/secrets/jwt_public.pem:ro
       # 附件存储命名卷，文件存储模块，上传字节持久化，容器重建不丢
       - fms-files:/app/data/files
     depends_on:
