@@ -78,6 +78,13 @@ pub fn resolve_jwt_public_key(cfg: &mut Config) -> Result<(), ConfigError> {
             "JWT 公钥不是 PEM 公钥",
         )));
     }
+    // 启动期实际解析 RSA 公钥，截断或损坏的 PEM 不能等到首个 JWT 请求才暴露
+    jsonwebtoken::DecodingKey::from_rsa_pem(cfg.auth.jwt_public_key.as_bytes()).map_err(|e| {
+        ConfigError::Io(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("JWT 公钥解析失败: {e}"),
+        ))
+    })?;
     Ok(())
 }
 
@@ -1075,6 +1082,21 @@ mod tests {
         assert_eq!(cfg.log.pgmq.endpoint, "/internal/log-batch");
         assert_eq!(cfg.log.pgmq.token, "t0k3n");
         assert_eq!(cfg.log.pgmq.timeout_secs, 10);
+    }
+
+    #[test]
+    fn resolve_jwt_public_key_accepts_valid_pem() {
+        let mut cfg = Config::default();
+        cfg.auth.jwt_public_key = include_str!("../tests/jwt-test-public.txt").to_string();
+        resolve_jwt_public_key(&mut cfg).expect("有效 RSA 公钥应通过启动校验");
+    }
+
+    #[test]
+    fn resolve_jwt_public_key_rejects_malformed_pem() {
+        let mut cfg = Config::default();
+        cfg.auth.jwt_public_key =
+            "-----BEGIN PUBLIC KEY-----\nnot-a-valid-rsa-key\n-----END PUBLIC KEY-----".to_string();
+        assert!(resolve_jwt_public_key(&mut cfg).is_err());
     }
 
     #[test]
