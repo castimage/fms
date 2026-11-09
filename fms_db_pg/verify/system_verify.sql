@@ -971,10 +971,10 @@ BEGIN;
 SET LOCAL fms.user_id  = '00000000-0000-7000-0000-000000000001';
 SET LOCAL fms.org_ids  = '00000000-0000-7000-0000-000000000010';
 SET LOCAL fms.dept_ids = '00000000-0000-7000-0000-000000000020,00000000-0000-7000-0000-000000000021';
-SET ROLE fms_operator;
+SET ROLE fms_admin;                     -- IMMV 维护断言读内部对象，避免视图过滤干扰
 
 -- 基线，夹具插入前先读一次，断言按基线与增量比较，期望值不写死具体数值
--- IMMV 读取统一经 rpt.v_* security_invoker 视图，不直接访问内部表
+-- 内部 IMMV 只在 admin 角色下读取，视图可达性由 grants_check 单独覆盖
 -- 目标分组可能已承载他数据，业务种子与 API 生成的凭证都算，故一律按增量判定
 \set b_ba1001 0
 \set b_ba6001 0
@@ -982,32 +982,33 @@ SET ROLE fms_operator;
 \set b_ar 0
 \set b_cf 0
 \set b_c1 0
-SELECT COALESCE((SELECT actual_amount FROM rpt.v_budget_actual
+SELECT COALESCE((SELECT actual_amount FROM rpt.budget_actual
                   WHERE company_id = '00000000-0000-7000-0000-000000000010'
                     AND period = '2026-08'
                     AND account_id = '00000000-0000-7000-0000-000000000100'
                     AND dept_id = '00000000-0000-7000-0000-000000000020'), 0) AS b_ba1001,
-       COALESCE((SELECT actual_amount FROM rpt.v_budget_actual
+       COALESCE((SELECT actual_amount FROM rpt.budget_actual
                   WHERE company_id = '00000000-0000-7000-0000-000000000010'
                     AND period = '2026-08'
                     AND account_id = '00000000-0000-7000-0000-00000000010e'
                     AND dept_id = '00000000-0000-7000-0000-000000000021'), 0) AS b_ba6001,
-       COALESCE((SELECT amount FROM rpt.v_dept_expense
+       COALESCE((SELECT amount FROM rpt.dept_expense
                   WHERE company_id = '00000000-0000-7000-0000-000000000010'
                     AND period = '2026-08'
                     AND dept_id = '00000000-0000-7000-0000-000000000020'
                     AND account_id = '00000000-0000-7000-0000-000000000100'), 0) AS b_de1001,
-       COALESCE((SELECT paid_amount FROM rpt.v_ar_aging_paid
+       COALESCE((SELECT paid_amount FROM rpt.ar_aging_paid
                   WHERE invoice_id = '00000000-0000-7000-0000-00000000cccc'), 0) AS b_ar,
-       COALESCE((SELECT income FROM rpt.v_cash_flow_daily
+       COALESCE((SELECT income FROM rpt.cash_flow_daily
                   WHERE company_id = '00000000-0000-7000-0000-000000000010'
                     AND trx_date = DATE '2026-08-09'), 0) AS b_cf,
-       COALESCE((SELECT count(*) FROM rpt.v_budget_actual
+       COALESCE((SELECT count(*) FROM rpt.budget_actual
                   WHERE company_id = '00000000-0000-7000-0000-000000000010'
                     AND period = '2026-08'
                     AND account_id = '00000000-0000-7000-0000-000000000100'
                     AND dept_id = '00000000-0000-7000-0000-000000000020'), 0) AS b_c1 \gset
 
+SET ROLE fms_operator;
 INSERT INTO gl.vouchers
     (id, company_id, period, voucher_date, status, source_type, created_by,
      approved_by, total_debit, total_credit)
@@ -1044,6 +1045,8 @@ INSERT INTO cash.transactions (company_id, bank_account_id, direction, amount, t
 VALUES ('00000000-0000-7000-0000-000000000010',
         '019fe2de-8c97-7d49-bb65-18a7bb305be2', 'IN', 88.00, DATE '2026-08-09');
 
+SET ROLE fms_admin;                     -- 断言读内部 IMMV
+
 -- 事务内断言，budget_actual 1001/020 较基线 +500，6001/021 较基线 -500，dept_expense 020/1001 较基线 +500，
 -- ar_aging_paid 较基线 +500，cash_flow_daily 较基线 +88，且 1001/020 分组行数较基线 +1（新组刷新未产生重复分组），同事务可见
 -- 子查询按 immv 全分组键（company_id,period,account_id,dept_id）过滤，同一科目可能有多分组（含 dept_id NULL 的行），仅按 account_id 过滤会返回多行报错
@@ -1059,27 +1062,27 @@ SELECT COALESCE((v_ba1001 = :b_ba1001::numeric + 500.00
        format('budget_actual 1001/020=%s（基线 %s）、6001/021=%s（基线 %s）、dept_expense=%s（基线 %s）、ar_aging_paid=%s（基线 %s）、cash_flow_daily=%s（基线 %s）、组数=%s（基线 %s）',
               v_ba1001, :b_ba1001, v_ba6001, :b_ba6001, v_de1001, :b_de1001,
               v_ar, :b_ar, v_cf, :b_cf, v_c1, :b_c1) AS detail
-FROM (SELECT (SELECT actual_amount FROM rpt.v_budget_actual
+FROM (SELECT (SELECT actual_amount FROM rpt.budget_actual
                WHERE company_id = '00000000-0000-7000-0000-000000000010'
                  AND period = '2026-08'
                  AND account_id = '00000000-0000-7000-0000-000000000100'
                  AND dept_id = '00000000-0000-7000-0000-000000000020')  AS v_ba1001,
-             (SELECT actual_amount FROM rpt.v_budget_actual
+             (SELECT actual_amount FROM rpt.budget_actual
                WHERE company_id = '00000000-0000-7000-0000-000000000010'
                  AND period = '2026-08'
                  AND account_id = '00000000-0000-7000-0000-00000000010e'
                  AND dept_id = '00000000-0000-7000-0000-000000000021')  AS v_ba6001,
-             (SELECT amount FROM rpt.v_dept_expense
+             (SELECT amount FROM rpt.dept_expense
                WHERE company_id = '00000000-0000-7000-0000-000000000010'
                  AND period = '2026-08'
                  AND dept_id = '00000000-0000-7000-0000-000000000020'
                  AND account_id = '00000000-0000-7000-0000-000000000100')  AS v_de1001,
-             (SELECT paid_amount FROM rpt.v_ar_aging_paid
+             (SELECT paid_amount FROM rpt.ar_aging_paid
                WHERE invoice_id = '00000000-0000-7000-0000-00000000cccc')  AS v_ar,
-             (SELECT income FROM rpt.v_cash_flow_daily
+             (SELECT income FROM rpt.cash_flow_daily
                WHERE company_id = '00000000-0000-7000-0000-000000000010'
                  AND trx_date = DATE '2026-08-09')                          AS v_cf,
-             (SELECT count(*) FROM rpt.v_budget_actual
+             (SELECT count(*) FROM rpt.budget_actual
                WHERE company_id = '00000000-0000-7000-0000-000000000010'
                  AND period = '2026-08'
                  AND account_id = '00000000-0000-7000-0000-000000000100'
