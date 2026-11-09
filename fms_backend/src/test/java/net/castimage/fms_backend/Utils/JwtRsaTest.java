@@ -2,6 +2,7 @@ package net.castimage.fms_backend.Utils;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -15,6 +16,17 @@ class JwtRsaTest {
                 + "\"role\":\"operator\",\"exp\":4102444800,\"type\":\"access\"}";
         String token = JwtRsa.sign(payload, KEY);
         assertEquals(payload, JwtRsa.verify(token, KEY));
+    }
+
+    @Test
+    void validateConfiguredKey() {
+        assertDoesNotThrow(() -> JwtRsa.validate(KEY));
+    }
+
+    @Test
+    void validateMissingKeyRejected() {
+        assertThrows(IllegalStateException.class,
+                () -> JwtRsa.validate("src/test/resources/no-such-jwt-key.pem"));
     }
 
     @Test

@@ -78,6 +78,15 @@ public final class JwtRsa {
         }
     }
 
+    /**
+     * 启动期校验私钥可加载，失败直接抛 IllegalStateException，由 Spring 启动阶段终止进程。
+     *
+     * @param privateKeyPath PKCS#8 PEM 私钥路径
+     */
+    public static void validate(String privateKeyPath) {
+        keys(privateKeyPath);
+    }
+
     private static KeyMaterial keys(String privateKeyPath) {
         if (privateKeyPath == null || privateKeyPath.isBlank()) {
             throw new IllegalStateException("fms.jwt.private-key-path 未配置");
