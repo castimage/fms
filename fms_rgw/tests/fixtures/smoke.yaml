@@ -1,0 +1,28 @@
+# accept_smoke.rs 使用的可提交 YAML 夹具
+server:
+  listen: "0.0.0.0:18080"
+tls:
+  allow_insecure_fallback: true
+upstream:
+  base_url: "http://127.0.0.1:18099"
+auth:
+  jwt_public_key: ""
+  expected_iss: "fms"
+  expected_aud: "fms-gateway"
+  leeway_secs: 60
+  allowed_roles:
+    - "operator"
+    - "viewer"
+    - "auditor"
+    - "report"
+    - "admin"
+sign:
+  sign_secret: "smoke-test-sign-secret-0123456789abcdef0123456789"
+cors:
+  allowed_origins:
+    - "http://localhost:5173"
+    - "https://fms.local"
+static:
+  dir: "./web"
+log:
+  level: "info"

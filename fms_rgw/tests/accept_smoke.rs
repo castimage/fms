@@ -1,9 +1,9 @@
 //! `tests/accept_smoke.rs`，临时YAML配置冒烟
 //!
-//! 从验收专用临时YAML(`target-verify/smoke/smoke.yaml`，`allow_insecure_fallback`=true、
-//! 强密钥、cors白名单)经`config::load_from`(`noyalib`解析路径)加载，
-//! 真实tcp端口启动`fms_rgw::serve`，随后就绪轮询，再做断言，
-//!GET `/healthz` 应回 200
+//! 从提交在 `tests/fixtures/smoke.yaml` 的 YAML 夹具（`allow_insecure_fallback`=true、
+//! 强密钥、cors白名单）经 `config::load_from`（`noyalib` 解析路径）加载，
+//! 真实 tcp 端口启动 `fms_rgw::serve`，随后就绪轮询，再做断言，
+//! GET `/healthz` 应回 200
 
 //!伪造jwt，垃圾串 + 错误密钥签发打`/api/gl/vouchers` 应 401 且不达上游
 
@@ -18,13 +18,12 @@ use common::*;
 async fn smoke_healthz_and_fake_jwt() {
     //临时YAML配置(noyalib解析，tls降级开、强密钥、cors白名单)
 
-    // 路径以CARGO_MANIFEST_DIR为锚(跨机器可移植，本地Windows与服务器Linux
-    // 均解析到仓库内target-verify/smoke/smoke.yaml)
+    // 路径以 CARGO_MANIFEST_DIR 为锚，夹具随源码提交，干净 clone 可直接运行
     let mut cfg = fms_rgw::config::load_from(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target-verify/smoke/smoke.yaml"
+        "/tests/fixtures/smoke.yaml"
     )))
-    .expect("临时 YAML 配置解析失败");
+    .expect("YAML 夹具解析失败");
     assert!(
         cfg.tls.allow_insecure_fallback,
         "YAML 必须解析出 allow_insecure_fallback=true"
@@ -45,6 +44,14 @@ async fn smoke_healthz_and_fake_jwt() {
     // upstream指向无监听端口(冒烟不需要真后端，401/healthz均不达上游)
     cfg.upstream.base_url = "http://127.0.0.1:18099".to_string();
 
+    // 动态取空闲端口，避免固定端口在 CI 或 Windows 保留端口段被占用
+    let port = {
+        let probe = std::net::TcpListener::bind(("127.0.0.1", 0))
+            .expect("冒烟：无法分配临时监听端口");
+        probe.local_addr().expect("冒烟：无法读取临时端口").port()
+    };
+    cfg.server.listen = format!("127.0.0.1:{port}");
+
     //启动网关(tls证书缺失 + allow_insecure_fallback=true 则 WARN 降级明文)
 
     let state = fms_rgw::build_state(cfg).expect("AppState 构建失败");
@@ -54,7 +61,6 @@ async fn smoke_healthz_and_fake_jwt() {
 
     //就绪轮询(raw tcp打/healthz，连接被拒=尚未绑定，非致命探测重试)
 
-    let port: u16 = 18080;
     let mut ready = false;
     for _ in 0..100 {
         let (status, _) = raw_http_probe(
