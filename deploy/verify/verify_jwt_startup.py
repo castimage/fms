@@ -53,12 +53,14 @@ def main():
 
     env_text = docker_output([
         "docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", container])
+    network = docker_output([
+        "docker", "inspect", "-f", "{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}", container])
     tmp = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False, encoding="utf-8")
     try:
         tmp.write(env_text + "\n")
         tmp.close()
         backend = run([
-            "docker", "run", "--rm", "--network", "none",
+            "docker", "run", "--rm", "--network", network,
             "--env-file", tmp.name,
             "-e", "FMS_JWT_PRIVATE_KEY_PATH=/run/secrets/no-such-jwt-private.pem",
             "-e", "FMS_JWT_PUBLIC_KEY_PATH=/run/secrets/no-such-jwt-public.pem",
@@ -70,7 +72,7 @@ def main():
     if backend.returncode == 0 or ("JWT 私钥加载失败" not in backend.stdout and
                                    "fms.jwt.private-key-path 未配置" not in backend.stdout):
         failures.append("后端坏私钥未按预期退出: rc=%s out=%s" %
-                        (backend.returncode, backend.stdout[-300:]))
+                        (backend.returncode, backend.stdout[-1000:]))
     else:
         print("PASS backend.bad_private_key rc=%s" % backend.returncode)
 
