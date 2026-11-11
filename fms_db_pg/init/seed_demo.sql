@@ -1,6 +1,6 @@
 -- FMS 财务系统（init/seed_demo），演示数据，全部幂等，INSERT ... ON CONFLICT DO NOTHING 或 DO 块存在性守卫
 
--- 演示数据为可选加载，用于系统演示和测试，所有用户初始密码 Fms@ca5T1ma93
+-- 演示数据为可选加载，用于系统演示和测试，所有用户初始密码只保留 CHANGE_ME_DEMO_PASSWORD 占位，部署后必须改密
 -- 种子行携带固定 uuid 常量，v7 版本位可读可预期，显式 id 直插即可，种子以超级用户写入绕过 rls 属设计预期
 
 -- 内容分两部分，身份与凭据部分为六类适用人群各自的账号与凭据，附带数据部分为这些人群演示所需的底账行与交易行
@@ -65,8 +65,8 @@ INSERT INTO um.users
 SELECT u.login_name,
        encode(hmac(u.login_name, (SELECT value->>'v' FROM sec.app_secrets WHERE code = 'pgcrypto.blind_key'), 'sha256'), 'hex'),
        crypt(u.pwd, gen_salt('bf', 10)), 'ACTIVE', '00000000-0000-7000-0000-000000000010', false, 0
-  FROM (VALUES ('operator01', 'Fms@ca5T1ma93'), ('viewer01', 'Fms@ca5T1ma93'),
-               ('auditor01', 'Fms@ca5T1ma93'), ('report01', 'Fms@ca5T1ma93')) AS u(login_name, pwd)
+  FROM (VALUES ('operator01', 'CHANGE_ME_DEMO_PASSWORD'), ('viewer01', 'CHANGE_ME_DEMO_PASSWORD'),
+               ('auditor01', 'CHANGE_ME_DEMO_PASSWORD'), ('report01', 'CHANGE_ME_DEMO_PASSWORD')) AS u(login_name, pwd)
 ON CONFLICT (login_name) DO NOTHING;
 
 -- 演示用户联系方式加密写入（pgp_sym_encrypt aes256 + hmac 盲索引）
@@ -199,7 +199,7 @@ ON CONFLICT (user_id, dept_id) DO UPDATE SET deleted_at = NULL, updated_at = now
 -- 判存守卫为手工单跑本文件的兜底，ON CONFLICT 命中同一盲索引时复活状态与有效期，重复执行幂等
 DO $$
 DECLARE
-    v_key text := 'fms_f27018a578be274a6f64eb097ed6de9bab39b1944e78eda146d5ceba28e4ef01';
+    v_key text := 'fms_CHANGE_ME_API_KEY';
     v_uid uuid;
 BEGIN
     IF to_regclass('um.api_keys') IS NULL THEN

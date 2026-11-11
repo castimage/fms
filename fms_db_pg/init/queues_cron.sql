@@ -330,7 +330,7 @@ SELECT 'queues_cron' AS file_name,
        -- cron.job 仅存在于 postgres 库（cron.database_name），静态引用 cron.job 在 fms 库解析必失败（CASE 分支亦在解析期求值），故一律经 dblink 计数
        -- dblink 连本机 unix socket（/var/run/postgresql，peer 认证），硬编码外网 ip 会连到异机
        (SELECT t.c FROM dblink(
-          'host=/var/run/postgresql port=5432 dbname=postgres user=postgres password=jjh20040707',
+          'host=/var/run/postgresql port=5432 dbname=postgres user=postgres',
           'SELECT count(*) FROM cron.job
              WHERE database = ''fms''
                AND jobname IN (''voucher-number-check'',''fa-depreciation'',

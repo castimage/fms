@@ -11,7 +11,7 @@ spring:
   datasource:
     url: jdbc:postgresql://127.0.0.1:5432/fms
     username: fms_app                 # 唯一运行时连接角色（沙箱空壳：无任何业务表权限）
-    password: "${FMS_DB_PASSWORD:FmsApp_r7Xk#9mQ2vLpZ4sD}"   # 部署与测试须以环境变量覆盖，未设置时连接即失败（fail-fast）
+    password: "${FMS_DB_PASSWORD:}"   # 部署与测试须以环境变量覆盖，未设置时连接即失败（fail-fast）
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: fms-hikari

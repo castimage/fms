@@ -4,4 +4,4 @@ server:
 
 spring:
   datasource:
-    password: "FmsApp_r7Xk#9mQ2vLpZ4sD"
+    password: "${FMS_DB_PASSWORD:}"

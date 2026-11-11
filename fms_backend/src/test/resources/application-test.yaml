@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:postgresql://127.0.0.1:15432/fms?prepareThreshold=0
     username: fms_app
-    password: ${FMS_TEST_DB_PASSWORD:FmsApp_r7Xk#9mQ2vLpZ4sD}
+    password: ${FMS_TEST_DB_PASSWORD:}
     hikari:
       maximum-pool-size: 5
       connection-init-sql: "RESET ALL"    # 连接归池复位沙箱会话（SET ROLE/GUC 不跨用例残留）

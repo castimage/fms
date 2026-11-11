@@ -11,7 +11,7 @@ server:
   # 请求体上限（Content-Length 声明与实际缓冲双重校验，超限 413；WS 握手复用）：
   # 须与后端 fms.security.max-body-bytes 对齐，且恒大于 fms.file.max-size-bytes（8MB 留 multipart 余量）
   max_body_bytes: 10485760
-  # ip 白名单（ip/CIDR 列表，如 ["10.0.0.0/8", "192.168.1.5"]）：空=放行全部，
+  # ip 白名单（ip/CIDR 列表，如 ["10.0.0.0/8", "192.0.2.0/24"]）：空=放行全部，
   # 非空=仅白名单来源可访问 /api，其余 403 fail-closed；判定用真实对端 ip，伪造 XFF/X-Real-IP 不绕过；
   # /healthz 与静态资源豁免；生产可经 FMS_RGW_IP_ALLOWLIST（逗号分隔）注入，避免提交运维网段
   ip_allowlist: []

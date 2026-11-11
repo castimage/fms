@@ -276,7 +276,7 @@ pub struct ServerCfg {
     /// 如果要批量导入或附件上传场景则需调大，要与后端`fms.security.max-body-bytes`对齐，
     /// 而且必须大于`fms.file.max-size-bytes`，8mb留multipart余量
     pub max_body_bytes: usize,
-    /// ip访问白名单，ip或cidr文本列表，如["10.0.0.0/8", "192.168.1.5"]
+    /// ip访问白名单，ip或cidr文本列表，如["10.0.0.0/8", "192.0.2.0/24"]
     ///
     /// 留空则不启用，全部来源放行。启用后非白名单来源直接拒绝，安全链最前一环，
     /// 返回403 fail-closed，用真实客户端ip，对端ip判定，因此`XFF`/`X-Real-IP`伪造不影响

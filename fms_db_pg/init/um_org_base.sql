@@ -31,7 +31,7 @@ REVOKE ALL ON TABLE sec.app_secrets FROM PUBLIC;
 -- （api_keys key_hash / id_card_hash / bank_accounts 等）全部失配不可解密，
 -- 防覆盖仅限本首写段，后文 master_key/blind_key 写入为 DO UPDATE（重放收敛回本文件声明常量）。
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
-    ('pgcrypto.blind_key', '{"v":"FMS_BLIND_2026_9c4e2f7a1b6d4c3e8f5a2b7d9c4e6f8a1b3d5c7e9f"}'::jsonb,
+    ('pgcrypto.blind_key', '{"v":"CHANGE_ME_BLIND_KEY"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now())
 ON CONFLICT (code) DO NOTHING;
 
@@ -356,7 +356,7 @@ CREATE TABLE IF NOT EXISTS um.users (
     company_id         uuid        NOT NULL,
     login_name         varchar(64) NOT NULL,
     login_name_hash    char(64)    NOT NULL,      -- 盲索引，hmac(login_name, pgcrypto.blind_key)，兼容列，详见下方列注释
-    pass_hash          varchar(100) NOT NULL,     -- bcrypt（种子为正式演示哈希，口令 Fms@ca5T1ma93，生产由应用改密流程覆盖）
+    pass_hash          varchar(100) NOT NULL,     -- bcrypt（种子为正式演示哈希，口令占位，首次登录必须改密，生产由应用改密流程覆盖）
     display_name       varchar(128),
     email_encrypted    bytea,                     -- pgp_sym_encrypt 列加密
     email_hash         char(64),                  -- 盲索引，等值查询
@@ -670,7 +670,7 @@ GRANT SELECT ON um.users, sec.app_secrets TO fms_pgaudit_role;
 DO $$
 DECLARE
     v_old_key text;
-    v_new_key text := 'FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c';
+    v_new_key text := 'CHANGE_ME_MASTER_KEY';
     v_plain   text;
     v_cnt     int := 0;
 BEGIN
@@ -697,9 +697,9 @@ END $$;
 -- 密钥权威写入点，master_key/blind_key 重放时收敛回本文件声明常量，防重放覆盖已旋转值；
 -- pgcrypto.blind_key（盲索引 hmac 密钥）必须带密钥，纯 digest 可被持库只读者对低熵值离线字典爆破
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at) VALUES
-    ('pgcrypto.master_key', '{"v":"FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c"}'::jsonb,
+    ('pgcrypto.master_key', '{"v":"CHANGE_ME_MASTER_KEY"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now()),
-    ('pgcrypto.blind_key', '{"v":"FMS_BLIND_2026_9c4e2f7a1b6d4c3e8f5a2b7d9c4e6f8a1b3d5c7e9f"}'::jsonb,
+    ('pgcrypto.blind_key', '{"v":"CHANGE_ME_BLIND_KEY"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now())
 ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 

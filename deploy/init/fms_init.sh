@@ -86,7 +86,7 @@ for f in $INIT_SCRIPTS; do
     if [ "$f" = "seed_system.sql" ] && [ -n "${FMS_MASTER_KEY:-}" ]; then
         MK_ESCAPED=$(printf '%s' "${FMS_MASTER_KEY}" | sed "s/'/''/g")
         if psql -v ON_ERROR_STOP=1 -U postgres -d fms \
-            -c "INSERT INTO sec.app_secrets (code, value, updated_at) VALUES ('pgcrypto.master_key', jsonb_build_object('v', '${MK_ESCAPED}'), now()) ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now() WHERE sec.app_secrets.value->>'v' = 'FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c'" \
+            -c "INSERT INTO sec.app_secrets (code, value, updated_at) VALUES ('pgcrypto.master_key', jsonb_build_object('v', '${MK_ESCAPED}'), now()) ON CONFLICT (code) DO UPDATE SET value = EXCLUDED.value, updated_at = now() WHERE sec.app_secrets.value->>'v' = 'CHANGE_ME_MASTER_KEY'" \
             > /tmp/fms_init_mk.log 2>&1; then
             echo "[fms-init] PASS: pgcrypto.master_key 已注入外部密钥（FMS_MASTER_KEY）"
         else

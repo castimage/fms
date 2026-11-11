@@ -2,7 +2,7 @@
 
 -- 内容，um.params 系统参数 / sec.app_secrets 应用机密 / rbac 8 角色 + 12 权限 + role_perm / admin 用户，系统管理员
 
--- 设计，系统预置数据为系统运行必需，不含任何演示/测试数据，admin 用户为系统管理员，初始密码 Fms@ca5T1ma93
+-- 设计，系统预置数据为系统运行必需，不含任何演示/测试数据，admin 用户为系统管理员，初始密码使用 CHANGE_ME_ADMIN_PASSWORD 占位，首次登录必须改密
 -- 种子行携带固定 uuid 常量，v7 版本位可读可预期，显式 id 直插即可，种子以超级用户写入绕过 rls 属设计预期
 
 SET ROLE fms_admin;
@@ -39,7 +39,7 @@ ON CONFLICT (code) DO NOTHING;
 -- 密钥仅首写（ON CONFLICT DO NOTHING），重放不覆盖已部署/已旋转的 master_key
 INSERT INTO sec.app_secrets (code, value, updated_by, updated_at)
 VALUES
-    ('pgcrypto.master_key', '{"v":"FMS_MK_2026_8d3f9a2c6b7e4f1a9d5c8e2b7f4a6d3c"}'::jsonb,
+    ('pgcrypto.master_key', '{"v":"CHANGE_ME_MASTER_KEY"}'::jsonb,
      '00000000-0000-7000-0000-000000000001', now())    -- 列加密主密钥，已旋转，仅首写
 ON CONFLICT (code) DO NOTHING;
 
@@ -164,14 +164,14 @@ SELECT '00000000-0000-7000-0000-000000000010', r.id, p.id
  WHERE r.code = 'viewer'
 ON CONFLICT (role_id, perm_id) DO UPDATE SET deleted_at = NULL, updated_at = now();
 
--- admin 用户（系统管理员，初始密码 Fms@ca5T1ma93，must_change_pwd=true）
+-- admin 用户（系统管理员，初始密码使用 CHANGE_ME_ADMIN_PASSWORD 占位，首次登录必须改密，must_change_pwd=true）
 INSERT INTO um.users
     (id, login_name, login_name_hash, pass_hash, status, company_id,
      must_change_pwd, failed_login_count)
 VALUES
     ('00000000-0000-7000-0000-000000000001', 'admin',
      encode(hmac('admin', (SELECT value->>'v' FROM sec.app_secrets WHERE code = 'pgcrypto.blind_key'), 'sha256'), 'hex'),
-     '$2a$10$ydOv7xNBjXgsaseYNBAN0.gdzFytMufMa5bityvvMsDpV5hS1HVZm',  -- bcrypt 哈希（口令 Fms@ca5T1ma93）
+     crypt('CHANGE_ME_ADMIN_PASSWORD', gen_salt('bf', 10)),  -- 占位口令，首次登录必须改密
      'ACTIVE', '00000000-0000-7000-0000-000000000010', true, 0)
 ON CONFLICT (login_name) DO NOTHING;
 

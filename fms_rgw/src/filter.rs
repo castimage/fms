@@ -1266,10 +1266,10 @@ x'; drop table users;--\r\n\
 
     #[test]
     fn ip_allowed_match_and_reject() {
-        let nets = parse_allowlist(&["10.0.0.0/8".to_string(), "192.168.1.5".to_string()]).unwrap();
+        let nets = parse_allowlist(&["10.0.0.0/8".to_string(), "192.0.2.5".to_string()]).unwrap();
         assert!(ip_allowed(Some("10.0.0.1"), &nets));
-        assert!(ip_allowed(Some("192.168.1.5"), &nets), "精确 IP 命中");
-        assert!(!ip_allowed(Some("192.168.1.6"), &nets));
+        assert!(ip_allowed(Some("192.0.2.5"), &nets), "精确 IP 命中");
+        assert!(!ip_allowed(Some("192.0.2.6"), &nets));
         assert!(!ip_allowed(Some("8.8.8.8"), &nets));
     }
 
