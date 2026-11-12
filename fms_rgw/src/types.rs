@@ -19,12 +19,16 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 
-/// 请求上下文，由`mw_trace`创建并写入`req.extensions`
+/// 请求上下文，由`mw_access_log`提前创建，`mw_trace`复用，避免重复解析和格式化traceId
 #[derive(Clone)]
 pub struct TraceCtx {
     pub trace_id: String,
     pub started: Instant,
 }
+
+/// 客户端对端ip缓存，`mw_access_log`先提取一次，限流和代理复用，避免重复分配
+#[derive(Clone)]
+pub(crate) struct ClientIp(pub Option<String>);
 
 /// 缓冲后的请求体，由`mw_sign`写入`req.extensions`，≤10MB，utf-8已校验
 #[derive(Clone)]
@@ -165,8 +169,12 @@ pub fn extract_client_ip(req: &Request<Body>) -> Option<String> {
     extract_client_ip_from_ext(req.extensions())
 }
 
-/// 从extensions读取对端地址，req拆分为parts后extensions仍在parts上
+/// 从extensions读取对端地址，优先复用`mw_access_log`写入的缓存，req拆分为parts后
+/// extensions仍在parts上，无缓存时回退`ConnectInfo`，兼容单独调用中间件的测试
 pub(crate) fn extract_client_ip_from_ext(ext: &Extensions) -> Option<String> {
+    if let Some(cached) = ext.get::<ClientIp>() {
+        return cached.0.clone();
+    }
     ext.get::<axum::extract::connect_info::ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip().to_string())
         .filter(|s| !s.is_empty())
@@ -212,7 +220,20 @@ pub async fn mw_trace(
         .map(|s| s.0)
         .unwrap_or_else(|| trace_sampled(state.cfg.trace.sample_rate));
 
-    let trace_id = if sampled {
+    // mw_access_log已在最外层生成TraceCtx，直接复用，避免重复解析和格式化uuid，
+    // 单独调用trace中间件的测试没有该扩展，保留原来的生成和透传逻辑
+    let cached = req.extensions().get::<TraceCtx>().cloned();
+    let trace_id = if let Some(ctx) = cached.as_ref() {
+        if sampled {
+            if let Ok(hv) = HeaderValue::from_str(&ctx.trace_id) {
+                req.headers_mut().insert("x-trace-id", hv);
+            }
+            ctx.trace_id.clone()
+        } else {
+            req.headers_mut().remove("x-trace-id");
+            String::new()
+        }
+    } else if sampled {
         let id = req
             .headers()
             .get("x-trace-id")
@@ -232,7 +253,7 @@ pub async fn mw_trace(
 
     let ctx = TraceCtx {
         trace_id,
-        started: Instant::now(),
+        started: cached.map(|c| c.started).unwrap_or_else(Instant::now),
     };
     // TraceCtx写入extensions供内层读取
     req.extensions_mut().insert(ctx);
@@ -429,6 +450,16 @@ mod tests {
             "",
             "复用外层未采样判定：不透传客户端 traceId"
         );
+    }
+
+    #[test]
+    fn extract_client_ip_reuses_cached_peer() {
+        let addr: std::net::SocketAddr = "10.0.0.8:54321".parse().unwrap();
+        let mut req = Request::builder().uri("/x").body(Body::empty()).unwrap();
+        req.extensions_mut()
+            .insert(axum::extract::connect_info::ConnectInfo(addr));
+        req.extensions_mut().insert(ClientIp(Some("10.0.0.9".to_string())));
+        assert_eq!(extract_client_ip(&req), Some("10.0.0.9".to_string()));
     }
 
     #[test]

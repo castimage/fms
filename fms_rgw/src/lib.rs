@@ -433,6 +433,10 @@ pub async fn serve_with_shutdown(
                     Ok(v) => v,
                     Err(e) => { warn!(error = %e, "accept 失败，继续监听"); continue; }
                 };
+                // 小响应与签名链路对首包延迟敏感，关闭Nagle合并，降低并发下的排队尾延迟
+                if let Err(e) = stream.set_nodelay(true) {
+                    warn!(peer = %peer, error = %e, "设置 TCP_NODELAY 失败，继续处理连接");
+                }
                 // 连接数上限保护(Semaphore兼作in-flight计数)
                 let permit = match Arc::clone(&conn_sem).try_acquire_owned() {
                     Ok(p) => p,

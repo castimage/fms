@@ -19,7 +19,7 @@
 use crate::config::{LogCfg, LogPgmqCfg};
 use crate::headers::{apply_security_headers, inject_trace, strip_client_fms_headers};
 use crate::state::AppState;
-use crate::types::{LogUserSlot, TraceCtx, TraceSampled, extract_client_ip, gen_trace_id, now_secs, trace_sampled};
+use crate::types::{ClientIp, LogUserSlot, TraceCtx, TraceSampled, extract_client_ip, gen_trace_id, now_secs, trace_sampled};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::header::USER_AGENT;
@@ -477,14 +477,38 @@ pub async fn mw_access_log(
         .map(|t| t.started)
         .unwrap_or_else(Instant::now);
     let ip = extract_client_ip(&req);
-    let ua = req
-        .headers()
-        .get(USER_AGENT)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| truncate(s, state.logger.ua_max_len));
-    let method = req.method().as_str().to_string();
+    // 一次提取对端ip与trace上下文，内层trace、限流和代理复用，避免重复分配
+    req.extensions_mut().insert(ClientIp(ip.clone()));
+    req.extensions_mut().insert(TraceCtx {
+        trace_id: trace_id.clone(),
+        started,
+    });
+    // 健康探针等高频非审计路径不构造日志字段，trace、安全头和业务处理照常执行
+    let skip_log = state
+        .cfg
+        .log
+        .skip_paths
+        .iter()
+        .any(|prefix| req.uri().path().starts_with(prefix));
+    let ua = if skip_log {
+        None
+    } else {
+        req.headers()
+            .get(USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| truncate(s, state.logger.ua_max_len))
+    };
+    let method = if skip_log {
+        String::new()
+    } else {
+        req.method().as_str().to_string()
+    };
     // ws握手token脱敏见log_path，防jwt落盘泄露，截断长度取配置
-    let path = log_path(req.uri(), state.logger.path_max_len);
+    let path = if skip_log {
+        String::new()
+    } else {
+        log_path(req.uri(), state.logger.path_max_len)
+    };
 
     // 用户槽，本层先于mw_auth执行，验签后user经槽回填(见types::LogUserSlot)
     let user_slot = LogUserSlot::default();
@@ -505,24 +529,26 @@ pub async fn mw_access_log(
         inject_trace(resp.headers_mut(), &trace_id);
     }
 
-    // 访问日志(user = 验签通过的claims.sub，来自槽回填，未认证/匿名路径为None)
-    let status = resp.status().as_u16();
-    let user = user_slot.0.lock().ok().and_then(|g| g.clone());
-    let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let entry = AccessLogEntry {
-        ts: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
-        req_id: trace_id,
-        method,
-        path,
-        status,
-        latency_ms,
-        ip,
-        user,
-        ua,
-    };
+    if !skip_log {
+        // 访问日志的user取验签通过的claims.sub，来自槽回填，未认证或匿名路径为空
+        let status = resp.status().as_u16();
+        let user = user_slot.0.lock().ok().and_then(|g| g.clone());
+        let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let entry = AccessLogEntry {
+            ts: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
+            req_id: trace_id,
+            method,
+            path,
+            status,
+            latency_ms,
+            ip,
+            user,
+            ua,
+        };
 
-    // 提交，确定性采样 + 有界通道try_send，非阻塞，满则丢弃计数，请求路径零阻塞
-    state.logger.submit(entry);
+        // 确定性采样后经有界通道try_send提交，非阻塞，满则丢弃计数，请求路径零阻塞
+        state.logger.submit(entry);
+    }
     resp
 }
 
@@ -617,6 +643,31 @@ mod tests {
 
     async fn echo_ok() -> &'static str {
         "ok"
+    }
+
+    #[tokio::test]
+    async fn mw_access_log_skips_configured_path() {
+        let mut cfg = Config::default();
+        cfg.auth.jwt_public_key = crate::auth::TEST_JWT_PUBLIC_KEY.to_string();
+        cfg.sign.sign_secret = "test-sign-secret".to_string();
+        cfg.cors.allowed_origins = vec!["https://fms.example.com".to_string()];
+        cfg.log.skip_paths = vec!["/healthz".to_string()];
+        let state = test_state_with(cfg);
+        let mut rx = take_rx(&state.logger);
+        let app = axum::Router::new()
+            .route("/healthz", axum::routing::get(echo_ok))
+            .route_layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                mw_access_log,
+            ))
+            .with_state(state);
+        let resp = app
+            .clone()
+            .oneshot(Request::builder().uri("/healthz").body(Body::empty()).unwrap())
+            .await
+            .expect("oneshot");
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        assert!(rx.try_recv().is_err(), "跳过路径不得提交访问日志");
     }
 
     #[tokio::test]

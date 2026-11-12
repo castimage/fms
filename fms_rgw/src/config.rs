@@ -171,6 +171,14 @@ fn apply_env_overrides_with(cfg: &mut Config, get_env: &dyn Fn(&str) -> Option<S
         // pgmq投递内部token(X-FMS-Int-Token)，yaml留空，经环境变量注入
         cfg.log.pgmq.token = v;
     }
+    if let Some(v) = get_env("FMS_RGW_LOG_SKIP_PATHS") {
+        cfg.log.skip_paths = v
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
     override_u64(
         &mut cfg.log.pgmq.timeout_secs,
         "FMS_RGW_LOG_TIMEOUT",
@@ -379,7 +387,7 @@ pub struct UpstreamCfg {
     pub health_interval_secs: u64,
     /// 探测请求超时时间，默认2s
     pub health_timeout_secs: u64,
-    /// 上游连接池每host空闲连接上限，默认16
+    /// 上游连接池每host空闲连接上限，默认64
     pub pool_max_idle_per_host: usize,
 }
 
@@ -396,7 +404,7 @@ impl Default for UpstreamCfg {
             health_path: "/internal/health".to_string(),
             health_interval_secs: 5,
             health_timeout_secs: 2,
-            pool_max_idle_per_host: 16,
+            pool_max_idle_per_host: 64,
         }
     }
 }
@@ -736,6 +744,9 @@ pub struct LogCfg {
     /// 采样率(1 = 全量保审计，10 = 确定性采样1/10，`AtomicU64`请求序号% rate == 0
     /// 才记录，非随机数，审计可复现)，默认1
     pub sample_rate: u32,
+    /// 跳过访问日志的路径前缀，默认空，健康探针可配 `/healthz` 降噪，
+    /// 只跳过日志构造和落盘，不跳过trace、安全头或业务处理
+    pub skip_paths: Vec<String>,
     /// 后台sink批量flush条目数(攒批后一次`write_all` + 一次flush，
     /// 静态小文件高qps的关键)，默认100
     pub batch_size: usize,
@@ -760,6 +771,7 @@ impl Default for LogCfg {
             access_file: None,
             level: "info".to_string(),
             sample_rate: 1,
+            skip_paths: Vec::new(),
             batch_size: 100,
             batch_interval_ms: 500,
             channel_capacity: 10_000,
@@ -839,11 +851,12 @@ mod tests {
         assert_eq!(cfg.trace.sample_rate, 100, "trace 默认全量采样");
         assert_eq!(cfg.auth.logout_blacklist_ttl_secs, 7200);
         assert_eq!(cfg.ws.upgrade_timeout_secs, 10);
-        assert_eq!(cfg.upstream.pool_max_idle_per_host, 16);
+        assert_eq!(cfg.upstream.pool_max_idle_per_host, 64);
         assert_eq!(cfg.static_cfg.hash_max_age_secs, 31_536_000);
         assert_eq!(cfg.static_cfg.asset_max_age_secs, 3600);
         // 访问日志降噪默认值，采样全量保审计、pgmq默认关闭
         assert_eq!(cfg.log.sample_rate, 1, "默认全量采样保审计");
+        assert!(cfg.log.skip_paths.is_empty(), "默认不跳过任何访问日志");
         assert_eq!(cfg.log.batch_size, 100);
         assert_eq!(cfg.log.batch_interval_ms, 500);
         assert_eq!(cfg.log.channel_capacity, 10_000);
@@ -964,6 +977,7 @@ mod tests {
             "FMS_RGW_LOG_FILE" => Some("logs/env.jsonl".to_string()),
             "FMS_RGW_LOG_TOKEN" => Some("env-int-token".to_string()),
             "FMS_RGW_LOG_TIMEOUT" => Some("7".to_string()),
+            "FMS_RGW_LOG_SKIP_PATHS" => Some("/healthz, /internal/".to_string()),
             "FMS_RGW_TRACE_SAMPLE_RATE" => Some("100".to_string()),
             "FMS_RGW_RATELIMIT_SKIP_PATHS" => Some("/healthz, /favicon".to_string()),
             _ => None,
@@ -1010,6 +1024,11 @@ mod tests {
         assert_eq!(
             cfg.log.pgmq.timeout_secs, 7,
             "FMS_RGW_LOG_TIMEOUT 覆盖投递超时"
+        );
+        assert_eq!(
+            cfg.log.skip_paths,
+            vec!["/healthz", "/internal/"],
+            "FMS_RGW_LOG_SKIP_PATHS 逗号分隔覆盖"
         );
         assert_eq!(
             cfg.trace.sample_rate, 100,

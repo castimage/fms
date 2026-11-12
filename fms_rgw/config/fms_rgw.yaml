@@ -31,7 +31,7 @@ upstream:
   request_timeout_secs: 30
   idle_timeout_secs: 60
   # 连接池每 host 空闲连接上限，配合 idle_timeout_secs 控制复用与回收
-  pool_max_idle_per_host: 16
+  pool_max_idle_per_host: 64
   health_path: "/internal/health"
   health_interval_secs: 5
   health_timeout_secs: 2

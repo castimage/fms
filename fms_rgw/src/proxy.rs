@@ -1,4 +1,4 @@
-//! hyper上游反向代理，`UpstreamClient`连接池复用，idle 60s、每host 16条空闲，
+//! hyper上游反向代理，`UpstreamClient`连接池复用，idle 60s、每host 64条空闲，
 //! forward用`mw_sign`缓冲的`BufferedBody`重建上游请求(含`/api`前缀 + `X-Forwarded-For`/`Proto`)，
 //! 响应头到达即返回、响应体流式透传，流式阶段不设超时，不中断大报表下载，
 //! 熔断联动`is_ready`/record，非2xx透传原状态码，hop-by-hop头剥离。
