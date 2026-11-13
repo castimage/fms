@@ -8,7 +8,7 @@
 用法：
   python deploy/verify/verify_jwt_startup.py
 可选环境变量：
-  FMS_RGW_IMAGE           默认 fms_rgw:0.2.2
+  FMS_RGW_IMAGE           默认 fms_rgw:0.2.3
   FMS_BACKEND_IMAGE       默认从 fms-backend-1 镜像读取
   FMS_BACKEND_CONTAINER   默认 fms-backend-1
 """
@@ -32,7 +32,7 @@ def docker_output(cmd):
 
 
 def main():
-    gateway_image = os.getenv("FMS_RGW_IMAGE", "fms_rgw:0.2.2")
+    gateway_image = os.getenv("FMS_RGW_IMAGE", "fms_rgw:0.2.3")
     container = os.getenv("FMS_BACKEND_CONTAINER", "fms-backend-1")
     backend_image = os.getenv("FMS_BACKEND_IMAGE") or docker_output([
         "docker", "inspect", "-f", "{{.Config.Image}}", container])

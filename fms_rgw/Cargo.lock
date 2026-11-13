@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "fms_rgw"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "axum",
  "base64 0.23.1",
