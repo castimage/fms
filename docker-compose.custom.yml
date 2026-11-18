@@ -226,7 +226,7 @@ services:
       fms-redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -A fms-backend-healthcheck http://127.0.0.1:8081/internal/health"]
+      test: ["CMD-SHELL", "wget -q -T 10 -O- -U fms-backend-healthcheck http://127.0.0.1:8081/internal/health"]
       interval: 5s
       timeout: 10s
       retries: 5
